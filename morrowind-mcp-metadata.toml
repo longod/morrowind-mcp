@@ -1,0 +1,13 @@
+[package]
+name = "Morrowind MCP Server"
+description = "A server for Morrowind mod metadata, used by MCP and other tools."
+homepage = ""
+repository = "https://github.com/longod/morrowind-mcp"
+authors = ["longod"]
+version = "0.0.0"
+
+[dependencies.mwse]
+buildnumber = 5103
+
+[dependencies.mge-xe]
+version = ">=0.15.0"
