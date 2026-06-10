@@ -27,7 +27,7 @@ local function RunTest()
         end
 
         unitwind:spy(client, "send")
-        local ok, err = http.sendHttpResponse(client, statusLine, headers, body)
+        local ok, err = http.SendResponse(client, statusLine, headers, body)
         unitwind:expect(ok).toBe(true)
         unitwind:expect(client.send).toBeCalled()
         unitwind:expect(sent:sub(1, #statusLine)).toBe(statusLine)
@@ -54,16 +54,16 @@ local function RunTest()
             return nil, "unsupported pattern"
         end
 
-        local headers = http.readHeaders(client)
+        local headers = http.ReceiveHeader(client)
         unitwind:expect(headers).NOT.toBe(nil)
         unitwind:expect(headers["host"]).toBe("example.com")
         unitwind:expect(headers["content-length"]).toBe("5")
     end)
 
     unitwind:test("Test http.parseRequestMethod", function()
-        unitwind:expect(http.parseRequestMethod("GET / HTTP/1.1")).toBe("GET")
-        unitwind:expect(http.parseRequestMethod("PATCH /items/1 HTTP/1.1")).toBe("PATCH")
-        unitwind:expect(http.parseRequestMethod("INVALID_REQUEST_LINE")).toBe("INVALID_REQUEST_LINE")
+        unitwind:expect(http.ParseRequestMethod("GET / HTTP/1.1")).toBe("GET")
+        unitwind:expect(http.ParseRequestMethod("PATCH /items/1 HTTP/1.1")).toBe("PATCH")
+        unitwind:expect(http.ParseRequestMethod("INVALID_REQUEST_LINE")).toBe("INVALID_REQUEST_LINE")
     end)
 
     local function makeRequestClient(requestLine, body)
@@ -98,7 +98,7 @@ local function RunTest()
             local path = method == "GET" and "/" or "/resource"
             local requestLine = string.format("%s %s HTTP/1.1", method, path)
             local client = makeRequestClient(requestLine, "Hello")
-            local request = http.readHttpRequest(client)
+            local request = http.ReceiveRequest(client)
 
             unitwind:expect(request).NOT.toBe(nil)
             unitwind:expect(request.method).toBe(method)

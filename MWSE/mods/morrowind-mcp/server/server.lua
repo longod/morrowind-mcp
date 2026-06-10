@@ -59,6 +59,10 @@ function this.new(params)
     setmetatable(instance, { __index = this })
     ---@cast instance MCPServer
     instance.logger = require("morrowind-mcp.logger")
+    instance.requestHanders = {
+        ["GET"] = nil,
+        ["POST"] = nil,
+    }
     return instance
 end
 
@@ -81,6 +85,35 @@ function this.LoadTools(self)
 
 end
 
+function this:DumpRequest(request)
+    self.logger:debug("Request method: %s", request.method)
+    if request.headers then
+        self.logger:debug("Headers:")
+        for name, value in pairs(request.headers) do
+            self.logger:debug("  %s: %s", name, value)
+        end
+    end
+    if request.body then
+        self.logger:debug("Body (%d bytes): %s", #request.body, request.body)
+    end
+end
+
+function this:HandShake(request)
+end
+
+function this:Dispatch(request)
+    local handler = self.handlers[request.method]
+    if handler then
+        return handler(self, request)
+    else
+        self.logger:warn("No handler for method: %s", request.method)
+        return {
+            status = 404,
+            body = "Not Found",
+        }
+    end
+end
+
 --- @param e enterFrameEventData
 function this.Listen(self, e)
     --- @type LuaSocketTcpClient?
@@ -90,7 +123,7 @@ function this.Listen(self, e)
     end
 
     client:settimeout(5)
-    local request, err, partial = http.readHttpRequest(client)
+    local request, err, partial = http.ReceiveRequest(client)
     if not request then
         self.logger:error("Error reading HTTP request: %s", err)
         if partial and #partial > 0 then
@@ -100,15 +133,12 @@ function this.Listen(self, e)
         return
     end
 
-    self.logger:info("Received HTTP request: %s", request.requestLine)
-    for name, value in pairs(request.headers) do
-        self.logger:info("Header: %s=%s", name, value)
-    end
-    if #request.body > 0 then
-        self.logger:info("Body (%d bytes): %s", #request.body, request.body)
-    end
+    self:DumpRequest(request)
 
-    local success, sendErr = http.sendHttpResponse(client, "HTTP/1.1 200 OK", {
+    local response = self:Dispatch(request)
+
+
+    local success, sendErr = http.SendResponse(client, "HTTP/1.1 200 OK", {
         ["Content-Type"] = "text/event-stream",
         ["Cache-Control"] = "no-cache",
         ["Connection"] = "keep-alive",

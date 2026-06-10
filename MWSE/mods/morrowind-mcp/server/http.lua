@@ -11,9 +11,43 @@ function this.ltrim(str)
     return str:sub(i)
 end
 
+local function startswith(str, prefix)
+    return string.sub(str, 1, #prefix) == prefix
+end
+
+local function endswith(str, suffix)
+    return suffix == "" or string.sub(str, -string.len(suffix)) == suffix
+end
+
+--- @param requestLine string
+--- @return string?
+function this.ParseRequestMethod(requestLine)
+    if not endswith(requestLine, " HTTP/1.1") then
+        return nil
+    end
+    local sep = requestLine:find(" ", 1, true)
+    if not sep then
+        return nil
+    end
+    local method = requestLine:sub(1, sep - 1)
+    return method
+end
+
+---@param line string
+---@return string?, string?
+function this.ParseHeader(line)
+        local sep = line:find(":", 1, true)
+        if sep then
+            local name = line:sub(1, sep - 1):lower()
+            local value = this.ltrim(line:sub(sep + 1))
+            return name, value
+        end
+    return nil, nil
+end
+
 --- @param client LuaSocketTcpClient
 --- @return table<string, string>|nil, string?, string?
-function this.readHeaders(client)
+function this.ReceiveHeader(client)
     local headers = {}
     while true do
         local line, err, partial = client:receive("*l")
@@ -24,10 +58,8 @@ function this.readHeaders(client)
             break
         end
 
-        local sep = line:find(":", 1, true)
-        if sep then
-            local name = line:sub(1, sep - 1):lower()
-            local value = this.ltrim(line:sub(sep + 1))
+        local name, value = this.ParseHeader(line)
+        if name and value then
             headers[name] = value
         end
     end
@@ -36,13 +68,17 @@ end
 
 --- @param client LuaSocketTcpClient
 --- @return table<string, any>|nil, string?, string?
-function this.readHttpRequest(client)
+function this.ReceiveRequest(client)
     local requestLine, err, partial = client:receive("*l")
     if not requestLine then
         return nil, err, partial
     end
+    local method = this.ParseRequestMethod(requestLine)
+    if not method then
+        return nil, nil, nil
+    end
 
-    local headers, err, partial = this.readHeaders(client)
+    local headers, err, partial = this.ReceiveHeader(client)
     if not headers then
         return nil, err, partial
     end
@@ -56,32 +92,20 @@ function this.readHttpRequest(client)
         end
     end
 
-    local method = this.parseRequestMethod(requestLine)
-
     return {
-        requestLine = requestLine,
         method = method,
         headers = headers,
         body = body,
     }
 end
 
---- @param requestLine string
---- @return string
-function this.parseRequestMethod(requestLine)
-    local sep = requestLine:find(" ", 1, true)
-    if not sep then
-        return requestLine
-    end
-    return requestLine:sub(1, sep - 1)
-end
 
 --- @param client LuaSocketTcpClient
 --- @param statusLine string
 --- @param headers table<string, string>
 --- @param body string?
 --- @return number?, string?
-function this.sendHttpResponse(client, statusLine, headers, body)
+function this.SendResponse(client, statusLine, headers, body)
     local response = statusLine .. "\r\n"
     for name, value in pairs(headers) do
         response = response .. string.format("%s: %s\r\n", name, value)
