@@ -2,7 +2,7 @@ local this  = {}
 
 ---@param str string
 ---@return string
-local function ltrim(str)
+function this.ltrim(str)
     local i = 1
     local len = #str
     while i <= len and str:sub(i, i) == " " do
@@ -27,7 +27,7 @@ function this.readHeaders(client)
         local sep = line:find(":", 1, true)
         if sep then
             local name = line:sub(1, sep - 1):lower()
-            local value = ltrim(line:sub(sep + 1))
+            local value = this.ltrim(line:sub(sep + 1))
             headers[name] = value
         end
     end
@@ -56,13 +56,25 @@ function this.readHttpRequest(client)
         end
     end
 
+    local method = this.parseRequestMethod(requestLine)
+
     return {
         requestLine = requestLine,
+        method = method,
         headers = headers,
         body = body,
     }
 end
 
+--- @param requestLine string
+--- @return string
+function this.parseRequestMethod(requestLine)
+    local sep = requestLine:find(" ", 1, true)
+    if not sep then
+        return requestLine
+    end
+    return requestLine:sub(1, sep - 1)
+end
 
 --- @param client LuaSocketTcpClient
 --- @param statusLine string

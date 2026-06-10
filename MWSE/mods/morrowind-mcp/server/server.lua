@@ -1,6 +1,17 @@
 local base = require("morrowind-mcp.iserver")
-local http = require("morrowind-mcp.http")
+local http = require("morrowind-mcp.server.http")
 
+-- ---@type table<string, function>
+-- local methods = {
+--     ["server/discover"] = nil,
+--     ["prompts/list"] = nil,
+--     ["prompts/get"] = nil,
+-- }
+
+-- "server"
+-- "prompts"
+-- "list"
+-- "get"
 
 ---@class LuaSocketTcpClient
 ---@field settimeout fun(self: LuaSocketTcpClient, timeout: number, mode?: string): number?, string?
@@ -49,6 +60,25 @@ function this.new(params)
     ---@cast instance MCPServer
     instance.logger = require("morrowind-mcp.logger")
     return instance
+end
+
+function this.LoadTools(self)
+
+    local dataFiles = "Data Files\\"
+    local testDir = "MWSE\\mods\\morrowind-mcp\\tools"
+    local dir = dataFiles .. testDir
+
+    for file in lfs.dir(dir) do
+        if (string.endswith(file:lower(), ".lua")) then
+            local tool  = dofile(dir .. "\\" .. file) ---@type ITool
+            if tool and type(tool) == "table" then
+                self.tools[tool.name] = tool
+            else
+                self.logger:error("Failed to load tool from file: %s", file)
+            end
+        end
+    end
+
 end
 
 --- @param e enterFrameEventData

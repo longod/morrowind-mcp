@@ -10,7 +10,7 @@ this.defaultConfig = {
 
     ---@class Config.Development
     development = {
-        logLevel = "INFO",
+        logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,
     }
 }

@@ -27,12 +27,12 @@ local function OnModConfigReady(e)
             label = "Logging Level",
             description = "Set the logging level. TRACE is the most verbose, and NONE will disable logging.",
             options = {
-                { label = "TRACE", value = "TRACE" },
-                { label = "DEBUG", value = "DEBUG" },
-                { label = "INFO",  value = "INFO" },
-                { label = "WARN",  value = "WARN" },
-                { label = "ERROR", value = "ERROR" },
-                { label = "NONE",  value = "NONE" },
+                { label = "TRACE", value = mwse.logLevel.trace },
+                { label = "DEBUG", value = mwse.logLevel.debug },
+                { label = "INFO",  value = mwse.logLevel.info },
+                { label = "WARN",  value = mwse.logLevel.warn },
+                { label = "ERROR", value = mwse.logLevel.error },
+                { label = "NONE",  value = mwse.logLevel.none },
             },
             variable = mwse.mcm.createTableVariable({
                 id = "logLevel",
