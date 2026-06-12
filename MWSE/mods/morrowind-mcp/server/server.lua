@@ -1,5 +1,10 @@
 local base = require("morrowind-mcp.iserver")
 local http = require("morrowind-mcp.server.http")
+local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+
+local dataFiles = "Data Files\\"
+local modDir = "MWSE\\mods\\morrowind-mcp\\"
+
 
 -- ---@type table<string, function>
 -- local methods = {
@@ -49,8 +54,19 @@ local socket = require("socket")
 ---@field logger mwseLogger
 ---@field server LuaSocketTcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
+---@field requestHandlers table<string, fun(self: MCPServer, request: HttpRequest): table>
+---@field methodHandlers table<string, fun(self: MCPServer, params: table?): table>
+---@field prompts table<string, IPrompt>
+---@field resources table<string, IResource>
+---@field tools table<string, ITool>
 local this = {}
 setmetatable(this, { __index = base })
+
+-- this.returnedTypes = {
+--     complete = "complete",
+--     failed = "failed",
+--     progressing = "progressing",
+-- }
 
 ---@param params table?
 ---@return MCPServer
@@ -59,19 +75,46 @@ function this.new(params)
     setmetatable(instance, { __index = this })
     ---@cast instance MCPServer
     instance.logger = require("morrowind-mcp.logger")
-    instance.requestHanders = {
-        ["GET"] = nil,
-        ["POST"] = nil,
+    instance.requestHandlers = {
+        ["POST"] = instance.HandlePOST,
+    }
+    instance.methodHandlers = {
+        ["initialize"] = instance.HandleInitialize,
     }
     return instance
 end
 
+
+function this.LoadPrompts(self)
+    local dir = dataFiles .. modDir .. "tools"
+    for file in lfs.dir(dir) do
+        if (string.endswith(file:lower(), ".lua")) then
+            local prompt  = dofile(dir .. "\\" .. file) ---@type IPrompt
+            if prompt and type(prompt) == "table" then
+                self.prompts[prompt.name] = prompt
+            else
+                self.logger:error("Failed to load prompt from file: %s", file)
+            end
+        end
+    end
+end
+
+function this.LoadResources(self)
+    local dir = dataFiles .. modDir .. "resources"
+    for file in lfs.dir(dir) do
+        if (string.endswith(file:lower(), ".lua")) then
+            local res  = dofile(dir .. "\\" .. file) ---@type IResource
+            if res and type(res) == "table" then
+                self.resources[res.name] = res
+            else
+                self.logger:error("Failed to load resource from file: %s", file)
+            end
+        end
+    end
+end
+
 function this.LoadTools(self)
-
-    local dataFiles = "Data Files\\"
-    local testDir = "MWSE\\mods\\morrowind-mcp\\tools"
-    local dir = dataFiles .. testDir
-
+    local dir = dataFiles .. modDir .. "tools"
     for file in lfs.dir(dir) do
         if (string.endswith(file:lower(), ".lua")) then
             local tool  = dofile(dir .. "\\" .. file) ---@type ITool
@@ -82,31 +125,88 @@ function this.LoadTools(self)
             end
         end
     end
-
 end
 
+---@param request HttpRequest
 function this:DumpRequest(request)
-    self.logger:debug("Request method: %s", request.method)
+    self.logger:debug("Request: %s", request.method)
     if request.headers then
-        self.logger:debug("Headers:")
-        for name, value in pairs(request.headers) do
-            self.logger:debug("  %s: %s", name, value)
+        for index, value in ipairs(request.headers) do
+            self.logger:trace("%s", value)
         end
     end
     if request.body then
-        self.logger:debug("Body (%d bytes): %s", #request.body, request.body)
+        self.logger:debug("Body: %s", request.body)
     end
 end
 
-function this:HandShake(request)
+
+function this:HandleInitialize(params)
+    -- TODO reset state
+
+    self:LoadPrompts()
+    self:LoadResources()
+    self:LoadTools()
+    return {
+        status = 200,
+    }
 end
 
-function this:Dispatch(request)
-    local handler = self.handlers[request.method]
+---@param request HttpRequest
+---@return table
+function this:HandlePOST(request)
+    -- TODO check headers
+
+    if not request.body then
+        self.logger:warn("POST request without body")
+        return {
+            status = 400,
+            body = "Bad Request",
+        }
+    end
+
+    local jsonRpcRequest, err = jsonrpc.request(request.body)
+    if not jsonRpcRequest then
+        self.logger:error("Invalid JSON-RPC request: %s", err)
+        return {
+            status = 400,
+            body = "Bad Request",
+        }
+    end
+
+    -- unsplit / token
+    local handler = self.methodHandlers[jsonRpcRequest.method]
+    if not handler then
+        self.logger:warn("No handler for method: %s", jsonRpcRequest.method)
+        return {
+            status = 404,
+            body = "Not Found",
+        }
+    end
+
+    -- 複数フレームにわたって処理する場合stateが必要なので、resultを返すよりも、objectを返す方が良さそう
+    return handler(self, jsonRpcRequest.params)
+
+end
+
+---comment
+---@param request HttpRequest
+---@return table
+function this:HandleRequest(request)
+    local method = http.ParseRequestMethod(request.method)
+    if not method then
+        self.logger:warn("Invalid request object")
+        return {
+            status = 400,
+            body = "Bad Request",
+        }
+    end
+
+    local handler = self.requestHandlers[method]
     if handler then
         return handler(self, request)
     else
-        self.logger:warn("No handler for method: %s", request.method)
+        self.logger:warn("No handler for method: %s", method)
         return {
             status = 404,
             body = "Not Found",
@@ -119,14 +219,17 @@ function this.Listen(self, e)
     --- @type LuaSocketTcpClient?
     local client = self.server:accept()
     if not client then
+        self.logger:trace("no client")
         return
     end
+    self.logger:trace("client accepted")
 
-    client:settimeout(5)
+    local timeout = 10
+    client:settimeout(timeout)
     local request, err, partial = http.ReceiveRequest(client)
-    if not request then
+    if err then
         self.logger:error("Error reading HTTP request: %s", err)
-        if partial and #partial > 0 then
+        if partial then
             self.logger:debug("Partial data received: %s", partial)
         end
         client:close()
@@ -134,8 +237,7 @@ function this.Listen(self, e)
     end
 
     self:DumpRequest(request)
-
-    local response = self:Dispatch(request)
+    local response = self:HandleRequest(request)
 
 
     local success, sendErr = http.SendResponse(client, "HTTP/1.1 200 OK", {
@@ -163,7 +265,7 @@ function this.Launch(self)
     end
     self.server:settimeout(0)
     self.enterFrameCallback = function (e)
-            self:Listen(e)
+        self:Listen(e)
     end
 
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
