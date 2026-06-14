@@ -34,15 +34,6 @@ local strutil = require("morrowind-mcp.strutil")
 ---@field sleep fun(time:number): number
 ---@field connect fun(address: string, port: number, locaddr?: string, locport?: number, family?: string): LuaSocketTcpClient?, string?
 
-
-
----@class Http.Request
----@field method string
----@field endpoint string
----@field protocol string
----@field headers table<string, string>
----@field body string?
-
 ---@enum Http.RequestMethod
 this.method = {
     CONNECT = "CONNECT",
@@ -334,6 +325,12 @@ function this.ParseHeader(line)
     return nil, nil
 end
 
+---@class Http.Request
+---@field method string
+---@field endpoint string
+---@field protocol string
+---@field headers table<string, string>
+---@field body string?
 
 --- @param client LuaSocketTcpClient
 --- @return Http.Request?, string?, string?
@@ -386,20 +383,26 @@ function this.ReceiveRequest(client)
     return request, nil, nil
 end
 
+---@class Http.Result
+---@field index number?
+---@field error string?
+---@field lastIndex number?
+---@field response string
 
 ---@param client LuaSocketTcpClient
 ---@param responce_code Http.Response
 ---@param body string?
----@return table
+---@return Http.Result
 function this.SendResponse(client, responce_code, body)
-    local response = string.format("%s %d %s\n", this.protocol.HTTP1_1, responce_code.code, responce_code.message)
+    local response = string.format("%s %d %s\r\n", this.protocol.HTTP1_1, responce_code.code, responce_code.message)
     if body and #body > 0 then
-        response = response .. string.format("%s: %s\n", this.header.content_type, this.content_type_value.json)
-        response = response .. string.format("%s: %s\n", this.header.content_length, #body)
-        response = response .. "\n"
+        response = response .. string.format("%s: %s\r\n", this.header.content_type, this.content_type_value.json)
+        response = response .. string.format("%s: %s\r\n", this.header.content_length, #body)
+        response = response .. "\r\n"
         response = response .. body
     end
     local index, error, lastIndex = client:send(response)
+    ---@type Http.Result
     return {
         index = index,
         error = error,

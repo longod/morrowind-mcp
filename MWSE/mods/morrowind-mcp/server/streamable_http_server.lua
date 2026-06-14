@@ -143,7 +143,7 @@ function this:HandlePOST(request)
         return {
             status = 400,
             headers = { ["Content-Type"] = "application/json" },
-            body = jsonrpc.error(nil, jsonrpc.errorObject.invalid_request),
+            body = jsonrpc.error(nil, jsonrpc.error_code.invalid_request),
         }
     end
 
@@ -153,7 +153,7 @@ function this:HandlePOST(request)
         return {
             status = 400,
             headers = { ["Content-Type"] = "application/json" },
-            body = jsonrpc.error(nil, jsonrpc.errorObject.invalid_request, err), -- need?
+            body = jsonrpc.error(nil, jsonrpc.error_code.invalid_request, err), -- need?
         }
     end
 
@@ -163,7 +163,7 @@ function this:HandlePOST(request)
         return {
             status = 404,
             headers = { ["Content-Type"] = "application/json" },
-            body = jsonrpc.error(jsonRpcRequest.id, jsonrpc.errorObject.method_not_found),
+            body = jsonrpc.error(jsonRpcRequest.id, jsonrpc.error_code.method_not_found),
         }
     end
 

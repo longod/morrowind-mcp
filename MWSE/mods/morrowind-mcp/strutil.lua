@@ -26,10 +26,13 @@ function this.endswith(str, suffix)
 end
 
 
----@param str string
+---@param str string?
 ---@param token string
----@return string[]
+---@return string[]?
 function this.split(str, token)
+    if not str then
+        return nil
+    end
     if token == "" or token == nil then
         return { str }
     end

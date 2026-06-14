@@ -35,7 +35,7 @@ this.resultTypes = {
 
 
 --- -32000 to -32099	Server error -- Reserved for implementation-defined server-errors.
-this.errorObject = {
+this.error_code = {
     --- standard error code
     parse_error = { code = -32700, message = "Parse error" }, ---@type JsonRPC.ErrorObject Invalid JSON was received by the server. An error occurred on the server while parsing the JSON text.
     invalid_request = { code = -32600, message = "Invalid Request" }, ---@type JsonRPC.ErrorObject The JSON sent is not a valid Request object.
@@ -94,29 +94,33 @@ local function AddType(tbl, forceType)
 end
 
 ---@param str string
----@return JsonRPC.Request? json
+---@return JsonRPC.Request|JsonRPC.Notification? json
 ---@return JsonRPC.ErrorObject?
 function this.request(str)
-    local success, result = pcall(json.decode, str)
-    if success then
-        if result.jsonrpc ~= "2.0" then
-            return nil, this.errorObject.invalid_request
-        end
-        local t = type(result.id)
-        if t ~= "string" and t ~= "number" then
-            return nil, this.errorObject.invalid_request
-        end
-        if type(result.method) ~= "string" then
-            return nil, this.errorObject.invalid_request
-        end
-        if result.params and type(result.params) ~= "table" then
-            return nil, this.errorObject.invalid_request
-        end
-        -- typeがあったらキャストする？
-        return result
-    else
-        return nil, this.errorObject.parse_error
+    if not str then -- allow nil
+        return nil, nil
     end
+    local success, result = pcall(json.decode, str)
+    if not success or result == nil then
+        return nil, this.error_code.parse_error
+    end
+
+    if result.jsonrpc ~= "2.0" then
+        return nil, this.error_code.invalid_request
+    end
+    -- possible notification
+    -- local t = type(result.id)
+    -- if t ~= "string" and t ~= "number" then
+    --     return nil, this.error_code.invalid_request
+    -- end
+    if type(result.method) ~= "string" then
+        return nil, this.error_code.invalid_request
+    end
+    if result.params and type(result.params) ~= "table" then
+        return nil, this.error_code.invalid_request
+    end
+    -- typeがあったらキャストする？
+    return result
 end
 
 ---@param id string|number?

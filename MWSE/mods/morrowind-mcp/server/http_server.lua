@@ -30,10 +30,8 @@ local socket = require("socket")
 ---@field logger mwseLogger
 ---@field server LuaSocketTcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
----@field clients LuaSocketTcpClient[]
----@field eventQueue string[]
----@field requestHandlers table<string, fun(self: MwseHttpServer, request: Http.Request): table>
----@field methodHandlers table<string, fun(self: MwseHttpServer, params: table?): table>
+---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
+---@field methodHandlers table<string, fun(self: MwseHttpServer, params: table?): MethodResult>
 ---@field prompts table<string, IPrompt>
 ---@field resources table<string, IResource>
 ---@field tools table<string, ITool>
@@ -52,7 +50,9 @@ function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this })
     ---@cast instance MwseHttpServer
-    instance.logger = require("morrowind-mcp.logger")
+    if not instance.logger then
+        instance.logger = require("morrowind-mcp.logger")
+    end
     instance.requestHandlers = {
         ["POST"] = instance.OnPOST,
         ["GET"] = instance.OnGET,
@@ -60,8 +60,6 @@ function this.new(params)
     instance.methodHandlers = {
         ["initialize"] = instance.OnInitialize,
     }
-    instance.clients = {}
-    instance.eventQueue = {}
     return instance
 end
 
@@ -129,7 +127,23 @@ function this:DumpRequest(request)
     end
 end
 
+---@class ClientRequest
+---@field http_request Http.Request
+---@field json_request JsonRPC.Request|JsonRPC.Notification?
 
+---@class ServerResponce
+---@field http_responce Http.Response
+---@field json_result table?
+---@field json_error JsonRPC.ErrorObject?
+
+---@class MethodResult
+---@field http_responce Http.Response -- TODO simplify 200, 202, 400 or more?
+---@field result table?
+---@field error JsonRPC.ErrorObject?
+
+---comment
+---@param params table?
+---@return MethodResult
 function this:OnInitialize(params)
     -- TODO reset state
 
@@ -137,45 +151,41 @@ function this:OnInitialize(params)
     self:LoadResources()
     self:LoadTools()
     return {
-        initialized = true,
+        http_responce = http.response_code.ok,
     }
 end
 
----@param request Http.Request
----@return Http.Response?
+---@param request ClientRequest
+---@return ServerResponce?
 function this:OnPOST(request)
     -- TODO check headers
 
-    if not request.body then
-        self.logger:warn("POST request without body")
+    if not request.json_request then
         return {
-            status = 400,
-            headers = { ["Content-Type"] = "application/json" },
-            body = jsonrpc.error(nil, jsonrpc.errorObject.invalid_request),
+            http_responce = http.response_code.bad_request,
+            json_error = jsonrpc.error_code.invalid_request,
         }
     end
 
-    local jsonRpcRequest, err = jsonrpc.request(request.body)
-    if not jsonRpcRequest then
-        self.logger:error("Invalid JSON-RPC request: %s", err)
-        return {
-            status = 400,
-            headers = { ["Content-Type"] = "application/json" },
-            body = jsonrpc.error(nil, jsonrpc.errorObject.invalid_request, err), -- need?
-        }
-    end
-
-    local handler = self.methodHandlers[jsonRpcRequest.method]
+    local handler = self.methodHandlers[request.json_request.method]
     if not handler then
-        self.logger:warn("No handler for method: %s", jsonRpcRequest.method)
+        self.logger:warn("No handler for method: %s", request.json_request.method)
         return {
-            status = 404,
-            headers = { ["Content-Type"] = "application/json" },
-            body = jsonrpc.error(jsonRpcRequest.id, jsonrpc.errorObject.method_not_found),
+            http_responce = http.response_code.method_not_allowed, -- ?
+            json_error = jsonrpc.error_code.method_not_found,
         }
     end
 
-    local result = handler(self, jsonRpcRequest.params)
+    self.logger:info("handle method: %s", request.json_request.method)
+
+    local result = handler(self, request.json_request.params)
+
+    return {
+        http_responce = result.http_responce,
+        json_result = result.result,
+        json_error = result.error,
+    }
+
 
     --[[
     if type(result) == "table" and result.notify then
@@ -213,41 +223,42 @@ function this:OnPOST(request)
     --]]
 end
 
----@param request Http.Request
----@return Http.Response?
+---@param request ClientRequest
+---@return ServerResponce?
 function this:OnGET(request)
     -- server is supported SSE?
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
-    local contents = strutil.split(request.headers[http.header.content_type], ",")
-    for _, value in ipairs(contents) do
-         local content = strutil.ltrim(value:lower())
-         if content == http. content_type_value.event_stream then
-            return http.response_code.method_not_allowed -- no supported SSE
-         end
+    local contents = strutil.split(request.http_request.headers[http.header.accept], ",")
+    if contents then
+        for _, value in ipairs(contents) do
+            local content = strutil.ltrim(value:lower())
+            if content == http. content_type_value.event_stream then
+                -- no supported SSE
+                self.logger:info("No supported SSE")
+                return {
+                    http_responce = http.response_code.method_not_allowed,
+                    json_error = jsonrpc.error_code.method_not_found,
+                }
+            end
+        end
     end
+    -- TODO return
 end
 
----comment
----@param request Http.Request
----@return Http.Response?
+---@param request ClientRequest
+---@return ServerResponce?
 function this:HandleRequest(request)
-    return nil
-    -- local method = http.ParseRequestMethod(request.method)
-    -- if not method then
-    --     self.logger:warn("Invalid request object")
-    --     return {
-    --         status = 400,
-    --         body = "Bad Request",
-    --     }
-    -- end
+    local handler = self.requestHandlers[request.http_request.method]
+    if not handler then
+        self.logger:warn("No handler for request: %s", request.http_request.method)
+        return {
+            http_responce = http.response_code.not_implemented,
+            json_error = jsonrpc.error_code.internal_error,
+        }
+    end
 
-    -- local handler = self.requestHandlers[method]
-    -- if handler then
-    --     return handler(self, request)
-    -- else
-    --     self.logger:warn("No handler for method: %s", method)
-    --     return http.response_code.not_found
-    -- end
+    self.logger:trace("handle request: %s", request.http_request.method)
+    return handler(self, request)
 end
 
 --[[
@@ -382,46 +393,27 @@ function this:Listen(e)
         else
             self:DumpRequest(request)
 
-            local jsonRequest, jsonError = jsonrpc.request(request.body)
-            if jsonRequest and not jsonError then
-                local response = self:HandleRequest(request)
+            local json_request, json_error = jsonrpc.request(request.body)
+            local id = json_request and json_request.id or nil ---@type string|number?
+            if not json_error then
+                local response = self:HandleRequest({http_request = request,  json_request = json_request})
                 if response then
-                    local result = http.SendResponse(client, response, jsonrpc.result(jsonRequest.id) )
-                    self.logger:debug(result.response)
+                    if response.json_error then
+                        local result = http.SendResponse(client, response.http_responce, jsonrpc.error(id, response.json_error) )
+                        self.logger:error("json error: %d\n%s", response.http_responce.code, result.response)
+                    else
+                        local result = http.SendResponse(client, response.http_responce, jsonrpc.result(id, response.json_result) )
+                        self.logger:debug("success: %d\n%s", response.http_responce.code, result.response)
+                    end
                 else
-                    local result = http.SendResponse(client, http.response_code.internal_server_error, jsonrpc.error(jsonRequest.id, jsonrpc.errorObject.internal_error) )
-                    self.logger:error(result.response)
+                    local result = http.SendResponse(client, http.response_code.internal_server_error, jsonrpc.error(id, jsonrpc.error_code.internal_error) )
+                    self.logger:error("internal error: %s", result.response)
                 end
             else
-                local result = http.SendResponse(client, http.response_code.bad_request, jsonrpc.error(nil, jsonError))
-                self.logger:error(result.response)
+                local result = http.SendResponse(client, http.response_code.bad_request, jsonrpc.error(nil, json_error))
+                self.logger:error("request error: %s", result.response)
             end
 
-            -- normal request: dispatch through existing handlers and close connection
-
-            --[[
-            local status = 200
-            if response and response.status then status = response.status end
-            local reason = "OK"
-            if status == 400 then
-                reason = "Bad Request"
-            elseif status == 404 then
-                reason = "Not Found"
-            elseif status == 500 then
-                reason = "Internal Server Error"
-            end
-            local body = ""
-            if response and response.body then body = response.body end
-            local headers = (response and response.headers) or { ["Content-Type"] = "text/plain", ["Connection"] = "close" }
-            if headers["Connection"] == nil and headers["connection"] == nil then
-                headers["Connection"] = "close"
-            end
-            local statusLine = "HTTP/1.1 " .. tostring(status) .. " " .. reason
-            local success, sendErr = http.SendResponse(client, statusLine, headers, body)
-            if not success then
-                self.logger:error("Error sending response: %s", sendErr)
-            end
-            --]]
             pcall(function() client:close() end)
         end
     end
