@@ -59,6 +59,7 @@ function this.new(params)
     }
     instance.methodHandlers = {
         ["initialize"] = instance.OnInitialize,
+        ["notifications/initialized"] = instance.OnNotification,
     }
     return instance
 end
@@ -141,7 +142,7 @@ end
 ---@field result table?
 ---@field error JsonRPC.ErrorObject?
 
----comment
+--- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
 ---@param params table?
 ---@return MethodResult
 function this:OnInitialize(params)
@@ -150,8 +151,17 @@ function this:OnInitialize(params)
     self:LoadPrompts()
     self:LoadResources()
     self:LoadTools()
+
     return {
         http_responce = http.response_code.ok,
+    }
+end
+
+---@param params table?
+---@return MethodResult
+function this:OnNotification(params)
+    return {
+        http_responce = http.response_code.accepted,
     }
 end
 
@@ -374,8 +384,6 @@ function this:Listen(e)
             self.logger:error(acceptErr)
             break
         end
-
-        self.logger:trace("client accepted")
 
         -- read the request with a short timeout to parse headers
         client:settimeout(5)

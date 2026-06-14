@@ -6,13 +6,17 @@ this.configPath = "morrowind-mcp"
 
 ---@class Config
 this.defaultConfig = {
-    port = 45024,
+    server = {
+        address = "localhost",
+        port = 45024,
+    },
 
     ---@class Config.Development
     development = {
         logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,
-    }
+        -- test
+    },
 }
 
 return this
