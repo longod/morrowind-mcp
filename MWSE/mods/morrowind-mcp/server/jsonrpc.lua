@@ -131,10 +131,12 @@ function this.result(id, params)
     local body = {
         jsonrpc = "2.0",
         id = id,
-        result = table.copy(params or {}),
+        result = table.copy(params or {__empty = true}),
     }
-    -- typeの追加
-    return json.encode(body, { indent = false })
+    -- TODO typeの追加
+    local encoded = json.encode(body, { indent = false })
+    encoded = string.gsub(encoded, '{"__empty":true}', '{}')
+    return encoded
 end
 
 ---@param id string|number?
@@ -153,7 +155,7 @@ function this.error(id, err, data)
     end
     if data then
         body.error.data = data
-        -- typeの追加
+        -- TODO typeの追加
     end
     return json.encode(body, { indent = false })
 end

@@ -50,4 +50,16 @@ function this.split(str, token)
     return parts
 end
 
+---@param str string
+---@param from string
+---@param to string
+---@return string
+function this.replace(str, from, to)
+    if not str or from == nil or from == "" then
+        return str
+    end
+    local escapedFrom = from:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+    return (str:gsub(escapedFrom, to or ""))
+end
+
 return this

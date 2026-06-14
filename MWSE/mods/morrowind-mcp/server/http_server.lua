@@ -400,18 +400,18 @@ function this:Listen(e)
                 if response then
                     if response.json_error then
                         local result = http.SendResponse(client, response.http_responce, jsonrpc.error(id, response.json_error) )
-                        self.logger:error("json error: %d\n%s", response.http_responce.code, result.response)
+                        self.logger:error("json error: %d\n%s", response.http_responce.code, string.gsub(result.response, "\r", ""))
                     else
                         local result = http.SendResponse(client, response.http_responce, jsonrpc.result(id, response.json_result) )
-                        self.logger:debug("success: %d\n%s", response.http_responce.code, result.response)
+                        self.logger:debug("success: %d\n%s", response.http_responce.code, string.gsub(result.response, "\r", ""))
                     end
                 else
                     local result = http.SendResponse(client, http.response_code.internal_server_error, jsonrpc.error(id, jsonrpc.error_code.internal_error) )
-                    self.logger:error("internal error: %s", result.response)
+                    self.logger:error("internal error: %s", string.gsub(result.response, "\r", ""))
                 end
             else
                 local result = http.SendResponse(client, http.response_code.bad_request, jsonrpc.error(nil, json_error))
-                self.logger:error("request error: %s", result.response)
+                self.logger:error("request error: %s", string.gsub(result.response, "\r", ""))
             end
 
             pcall(function() client:close() end)
@@ -424,8 +424,7 @@ function this:Start()
         self.logger:warn("MCP server is already running")
         return false
     end
-    -- self.server = socket.bind("localhost", "45024")
-    self.server = socket.bind("*", "45024")
+    self.server = socket.bind("localhost", "45024")
     if not self.server then
         self.logger:error("Failed to start MCP server on port 45024")
         return false

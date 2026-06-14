@@ -67,15 +67,21 @@ function this.Test()
 
     unitwind:test("error encodes JSON-RPC error with data", function()
         local errorJson = jsonrpc.error(1, jsonrpc.error_code.method_not_found, { reason = "missing" })
-        unitwind:expect(errorJson).toBe(json.encode({
-            jsonrpc = "2.0",
-            id = 1,
-            error = {
-                code = -32601,
-                message = "Method not found",
-                data = { reason = "missing" },
-            },
-        }, { indent = false }))
+        local actual = json.decode(errorJson)
+        local expected = json.decode(json.encode({
+        jsonrpc = "2.0",
+        id = 1,
+        error = {
+            code = -32601,
+            message = "Method not found",
+            data = { reason = "missing" },
+        },
+        }))
+        unitwind:expect(actual.jsonrpc).toBe("2.0")
+        unitwind:expect(actual.id).toBe(1)
+        unitwind:expect(actual.error.code).toBe(-32601)
+        unitwind:expect(actual.error.message).toBe("Method not found")
+        unitwind:expect(actual.error.data.reason).toBe("missing")
     end)
 
     unitwind:test("notification encodes JSON-RPC notification", function()
