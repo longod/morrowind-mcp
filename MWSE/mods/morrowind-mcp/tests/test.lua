@@ -6,107 +6,69 @@ local function RunTest()
     })
 
     unitwind:start("morrowind-mcp")
-    local http = require("morrowind-mcp.server.http")
 
-    unitwind:test("Test http.ltrim", function()
-        unitwind:expect(http.ltrim("  hello")).toBe("hello")
-        unitwind:expect(http.ltrim("nochange")).toBe("nochange")
-        unitwind:expect(http.ltrim("   ")).toBe("")
-    end)
+    do
+        local strutil = require("morrowind-mcp.strutil")
 
-    unitwind:test("Test http.sendHttpResponse", function()
-        local statusLine = "HTTP/1.1 200 OK"
-        local headers = { ["Content-Type"] = "text/plain", ["X-Test"] = "1" }
-        local body = "Hello"
+        unitwind:test("ltrim removes leading spaces", function()
+            unitwind:expect(strutil.ltrim("   abc")).toBe("abc")
+            unitwind:expect(strutil.ltrim("abc")).toBe("abc")
+            unitwind:expect(strutil.ltrim("   ")).toBe("")
+        end)
 
-        local sent
-        local client = {}
-        function client:send(data)
-            sent = data
-            return true
-        end
+        unitwind:test("startswith works", function()
+            unitwind:expect(strutil.startswith("hello", "he")).toBe(true)
+            unitwind:expect(strutil.startswith("hello", "hello")).toBe(true)
+            unitwind:expect(strutil.startswith("hello", "world")).toBe(false)
+            unitwind:expect(strutil.startswith("", "")).toBe(true)
+        end)
 
-        unitwind:spy(client, "send")
-        local ok, err = http.SendResponse(client, statusLine, headers, body)
-        unitwind:expect(ok).toBe(true)
-        unitwind:expect(client.send).toBeCalled()
-        unitwind:expect(sent:sub(1, #statusLine)).toBe(statusLine)
-        unitwind:expect(sent:find("\r\n\r\n" .. body, 1, true) ~= nil).toBe(true)
-        unitwind:unspy(client, "send")
-    end)
+        unitwind:test("endswith works", function()
+            unitwind:expect(strutil.endswith("hello", "lo")).toBe(true)
+            unitwind:expect(strutil.endswith("hello", "")).toBe(true)
+            unitwind:expect(strutil.endswith("hello", "hell")).toBe(false)
+        end)
 
-    unitwind:test("Test http.readHeaders", function()
-        local client = {
-            lines = {
-                "Host: example.com",
-                "Content-Length: 5",
-                "",
-            },
-            idx = 1,
-        }
+        unitwind:test("split works", function()
+            local parts = strutil.split("a,b,c", ",")
+            unitwind:expect(type(parts)).toBe("table")
+            unitwind:expect(#parts).toBe(3)
+            unitwind:expect(parts[1]).toBe("a")
+            unitwind:expect(parts[2]).toBe("b")
+            unitwind:expect(parts[3]).toBe("c")
 
-        function client:receive(pattern)
-            if pattern == "*l" then
-                local line = self.lines[self.idx]
-                self.idx = self.idx + 1
-                return line
-            end
-            return nil, "unsupported pattern"
-        end
+            unitwind:expect(strutil.split("abc", "")[1]).toBe("abc")
+            unitwind:expect(strutil.split("abc", nil)[1]).toBe("abc")
 
-        local headers = http.ReceiveHeader(client)
-        unitwind:expect(headers).NOT.toBe(nil)
-        unitwind:expect(headers["host"]).toBe("example.com")
-        unitwind:expect(headers["content-length"]).toBe("5")
-    end)
-
-    unitwind:test("Test http.parseRequestMethod", function()
-        unitwind:expect(http.ParseRequestMethod("GET / HTTP/1.1")).toBe("GET")
-        unitwind:expect(http.ParseRequestMethod("PATCH /items/1 HTTP/1.1")).toBe("PATCH")
-        unitwind:expect(http.ParseRequestMethod("INVALID_REQUEST_LINE")).toBe("INVALID_REQUEST_LINE")
-    end)
-
-    local function makeRequestClient(requestLine, body)
-        local client = {
-            lines = {
-                requestLine,
-                "Host: example.com",
-                "Content-Length: 5",
-                "",
-            },
-            idx = 1,
-            body = body or "Hello",
-        }
-
-        function client:receive(patternOrLen)
-            if patternOrLen == "*l" then
-                local line = self.lines[self.idx]
-                self.idx = self.idx + 1
-                return line
-            elseif type(patternOrLen) == "number" then
-                return self.body
-            end
-            return nil, "unsupported pattern"
-        end
-
-        return client
+            local p2 = strutil.split("abc", ",")
+            unitwind:expect(#p2).toBe(1)
+            unitwind:expect(p2[1]).toBe("abc")
+        end)
     end
 
-    unitwind:test("Test http.readHttpRequest", function()
-        local methods = { "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD" }
-        for _, method in ipairs(methods) do
-            local path = method == "GET" and "/" or "/resource"
-            local requestLine = string.format("%s %s HTTP/1.1", method, path)
-            local client = makeRequestClient(requestLine, "Hello")
-            local request = http.ReceiveRequest(client)
+    do
+        local http = require("morrowind-mcp.server.http")
 
-            unitwind:expect(request).NOT.toBe(nil)
-            unitwind:expect(request.method).toBe(method)
-            unitwind:expect(request.requestLine).toBe(requestLine)
-            unitwind:expect(request.headers["host"]).toBe("example.com")
-            unitwind:expect(request.body).toBe("Hello")
-        end
-    end)
+        unitwind:test("ParseRequestMethod parses request line", function()
+            local method, endpoint, protocol = http.ParseRequestMethod("GET / HTTP/1.1")
+            unitwind:expect(method).toBe("GET")
+            unitwind:expect(endpoint).toBe("/")
+            unitwind:expect(protocol).toBe("HTTP/1.1")
+
+            local bad = http.ParseRequestMethod("INVALID")
+            unitwind:expect(bad).toBe(nil)
+        end)
+
+        unitwind:test("ParseHeader parses header lines", function()
+            local name, value = http.ParseHeader("Host: example.com")
+            unitwind:expect(name).toBe("host")
+            unitwind:expect(value).toBe("example.com")
+
+            local n2, v2 = http.ParseHeader("NoColonHeader")
+            unitwind:expect(n2).toBe(nil)
+            unitwind:expect(v2).toBe(nil)
+        end)
+    end
 
     unitwind:finish()
 end

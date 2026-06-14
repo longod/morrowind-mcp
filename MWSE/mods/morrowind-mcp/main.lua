@@ -9,10 +9,10 @@ for file in lfs.dir(dir) do
     end
 end
 
-local server = require("morrowind-mcp.server.server").new()
+local server = require("morrowind-mcp.server.http_server").new()
 
 local function OnInitialized()
-    server:Launch()
+    server:Start()
 end
 
 event.register(tes3.event.initialized, OnInitialized)

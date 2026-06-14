@@ -15,3 +15,4 @@ function this.new(params)
 end
 
 return this
+
