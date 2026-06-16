@@ -25,7 +25,7 @@ local notificationMethod = "server/event"
 ---@type LuaSocketModule
 local socket = require("socket")
 
----@class MwseStreamableHttpServer : IServer
+---@class MwseStreamableHttpServer: IServer
 ---@field logger mwseLogger
 ---@field server LuaSocketTcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
@@ -33,9 +33,9 @@ local socket = require("socket")
 ---@field eventQueue string[]
 ---@field requestHandlers table<string, fun(self: MwseStreamableHttpServer, request: Http.Request): table>
 ---@field methodHandlers table<string, fun(self: MwseStreamableHttpServer, params: table?): table>
----@field prompts table<string, IPrompt>
----@field resources table<string, IResource>
----@field tools table<string, ITool>
+---@field prompts table<string, MCP.IPrompt>
+---@field resources table<string, MCP.IResource>
+---@field tools table<string, MCP.ITool>
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -50,8 +50,7 @@ setmetatable(this, { __index = base })
 ---@return MwseStreamableHttpServer
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this })
-    ---@cast instance MwseStreamableHttpServer
+    setmetatable(instance, { __index = this }) ---@cast instance MwseStreamableHttpServer
     instance.logger = require("morrowind-mcp.logger")
     instance.requestHandlers = {
         ["POST"] = instance.HandlePOST,
@@ -66,47 +65,7 @@ function this.new(params)
 end
 
 
-function this:LoadPrompts()
-    local dir = dataFiles .. modDir .. "tools"
-    for file in lfs.dir(dir) do
-        if string.endswith(file:lower(), ".lua") then
-            local prompt  = dofile(dir .. "\\" .. file) ---@type IPrompt
-            if prompt and type(prompt) == "table" then
-                self.prompts[prompt.name] = prompt
-            else
-                self.logger:error("Failed to load prompt from file: %s", file)
-            end
-        end
-    end
-end
 
-function this:LoadResources()
-    local dir = dataFiles .. modDir .. "resources"
-    for file in lfs.dir(dir) do
-        if string.endswith(file:lower(), ".lua") then
-            local res  = dofile(dir .. "\\" .. file) ---@type IResource
-            if res and type(res) == "table" then
-                self.resources[res.name] = res
-            else
-                self.logger:error("Failed to load resource from file: %s", file)
-            end
-        end
-    end
-end
-
-function this:LoadTools()
-    local dir = dataFiles .. modDir .. "tools"
-    for file in lfs.dir(dir) do
-        if string.endswith(file:lower(), ".lua") then
-            local tool  = dofile(dir .. "\\" .. file) ---@type ITool
-            if tool and type(tool) == "table" then
-                self.tools[tool.name] = tool
-            else
-                self.logger:error("Failed to load tool from file: %s", file)
-            end
-        end
-    end
-end
 
 ---@param request Http.Request
 function this:DumpRequest(request)
@@ -125,9 +84,6 @@ end
 function this:HandleInitialize(params)
     -- TODO reset state
 
-    self:LoadPrompts()
-    self:LoadResources()
-    self:LoadTools()
     return {
         initialized = true,
     }
@@ -360,6 +316,7 @@ function this:Listen(e)
 
             if this.IsSSE(request) then
                 -- SSE subscription request: send headers and keep client
+                --[[
                 local success, sendErr = http.SendResponse(client, "HTTP/1.1 200 OK", {
                     ["Content-Type"] = "text/event-stream",
                     ["Cache-Control"] = "no-cache",
@@ -371,8 +328,10 @@ function this:Listen(e)
                 else
                     self:AddClient(client)
                 end
+                --]]
             else
                 -- normal request: dispatch through existing handlers and close connection
+                --[[
                 local response = self:HandleRequest(request)
                 local status = 200
                 if response and response.status then status = response.status end
@@ -395,6 +354,7 @@ function this:Listen(e)
                 if not success then
                     self.logger:error("Error sending response: %s", sendErr)
                 end
+                --]]
                 pcall(function() client:close() end)
             end
         end

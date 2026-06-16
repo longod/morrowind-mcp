@@ -22,7 +22,6 @@ local notificationMethod = "server/event"
 -- "list"
 -- "get"
 
-
 ---@type LuaSocketModule
 local socket = require("socket")
 
@@ -32,9 +31,9 @@ local socket = require("socket")
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
 ---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
 ---@field methodHandlers table<string, fun(self: MwseHttpServer, params: table?): MethodResult>
----@field prompts table<string, IPrompt>
----@field resources table<string, IResource>
----@field tools table<string, ITool>
+---@field prompts table<string, MCP.IPrompt>
+---@field resources table<string, MCP.IResource>
+---@field tools table<string, MCP.ITool>
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -48,8 +47,7 @@ setmetatable(this, { __index = base })
 ---@return MwseHttpServer
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this })
-    ---@cast instance MwseHttpServer
+    setmetatable(instance, { __index = this }) ---@cast instance MwseHttpServer
     if not instance.logger then
         instance.logger = require("morrowind-mcp.logger")
     end
@@ -57,21 +55,31 @@ function this.new(params)
         ["POST"] = instance.OnPOST,
         ["GET"] = instance.OnGET,
     }
+    -- or split sub-category
     instance.methodHandlers = {
         ["initialize"] = instance.OnInitialize,
         ["notifications/initialized"] = instance.OnNotification,
+        ["logging/setLevel"] = instance.OnLogging,
+        ["prompts/list"] = instance.OnPromptsList,
+        ["resources/list"] = instance.OnResourcesList,
+        ["tools/list"] = instance.OnToolsList,
     }
+    instance:LoadPrompts()
+    instance:LoadResources()
+    instance:LoadTools()
     return instance
 end
 
 
 function this:LoadPrompts()
-    local dir = dataFiles .. modDir .. "tools"
+    self.prompts = {}
+    local dir = dataFiles .. modDir .. "prompts"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local prompt  = dofile(dir .. "\\" .. file) ---@type IPrompt
+            local prompt  = dofile(dir .. "\\" .. file) ---@type MCP.IPrompt
             if prompt and type(prompt) == "table" then
-                self.prompts[prompt.name] = prompt
+                local instance = prompt.new()
+                self.prompts[instance.definition.name] = instance
             else
                 self.logger:error("Failed to load prompt from file: %s", file)
             end
@@ -80,12 +88,14 @@ function this:LoadPrompts()
 end
 
 function this:LoadResources()
+    self.resources = {}
     local dir = dataFiles .. modDir .. "resources"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local res  = dofile(dir .. "\\" .. file) ---@type IResource
+            local res  = dofile(dir .. "\\" .. file) ---@type MCP.IResource
             if res and type(res) == "table" then
-                self.resources[res.name] = res
+                local instance = res.new()
+                self.resources[instance.definition.name] = instance
             else
                 self.logger:error("Failed to load resource from file: %s", file)
             end
@@ -94,12 +104,14 @@ function this:LoadResources()
 end
 
 function this:LoadTools()
+    self.tools = {}
     local dir = dataFiles .. modDir .. "tools"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local tool  = dofile(dir .. "\\" .. file) ---@type ITool
+            local tool = dofile(dir .. "\\" .. file) ---@type MCP.ITool
             if tool and type(tool) == "table" then
-                self.tools[tool.name] = tool
+                local instance = tool.new()
+                self.tools[instance.definition.name] = instance
             else
                 self.logger:error("Failed to load tool from file: %s", file)
             end
@@ -148,10 +160,122 @@ end
 function this:OnInitialize(params)
     -- TODO reset state
 
-    self:LoadPrompts()
-    self:LoadResources()
-    self:LoadTools()
+    local settings = require("morrowind-mcp.settings")
 
+    -- todo validation and set correct values
+
+    ---@type MethodResult
+    local reuslt = {
+        http_responce = http.response_code.ok,
+        result = {
+            ["protocolVersion"] = "2025-11-25",
+            ["capabilities"] = {
+                ["logging"] = {},
+                ["prompts"] = {
+                    -- ["listChanged"] = true,
+                },
+                ["resources"] = {
+                    -- ["subscribe"] = true,
+                    -- ["listChanged"] = true,
+                },
+                ["tools"] = {
+                    -- ["listChanged"] = true,
+                },
+                ["tasks"] = {
+                    ["list"] = {},
+                    ["cancel"] = {},
+                    ["requests"] = {
+                        ["tools"] = {
+                            ["call"] = {},
+                        },
+                    },
+                },
+            },
+            ["serverInfo"] = {
+                ["name"] = settings.modName,
+                ["title"] = settings.modName,
+                ["version"] = settings.version,
+                ["description"] = settings.description,
+                ["icons"] = {},
+                ["websiteUrl"] = "http://localhost:45024" -- or repository?
+            },
+            ["instructions"] = "Optional instructions for the client"
+        },
+    }
+    return reuslt
+end
+
+---@param params table?
+---@return MethodResult
+function this:OnPromptsList(params)
+    local list = {
+    }
+    -- TODO reserve
+
+    for name, value in pairs(self.prompts) do
+        if value:CanExecute({}) then
+            table.insert(list, value.definition)
+        end
+    end
+
+    ---@type MethodResult
+    return {
+        http_responce = http.response_code.ok,
+        result = {
+            prompts = list,
+        },
+    }
+end
+
+---@param params table?
+---@return MethodResult
+function this:OnResourcesList(params)
+    local list = {
+    }
+    -- TODO reserve
+
+    for name, value in pairs(self.resources) do
+        if value:CanExecute({}) then
+            table.insert(list, value.definition)
+        end
+    end
+
+    ---@type MethodResult
+    return {
+        http_responce = http.response_code.ok,
+        result = {
+            resources = list,
+        },
+    }
+end
+
+---@param params table?
+---@return MethodResult
+function this:OnToolsList(params)
+    local list = {
+    }
+
+    -- TODO reserve
+
+    for name, value in pairs(self.tools) do
+        if value:CanExecute({}) then
+            table.insert(list, value.definition)
+        end
+    end
+
+    ---@type MethodResult
+    return {
+        http_responce = http.response_code.ok,
+        result = {
+            tools = list,
+        },
+    }
+end
+
+---@param params table?
+---@return MethodResult
+function this:OnLogging(params)
+    -- TODO set log level for cliant logging
     return {
         http_responce = http.response_code.ok,
     }
@@ -181,7 +305,7 @@ function this:OnPOST(request)
     if not handler then
         self.logger:warn("No handler for method: %s", request.json_request.method)
         return {
-            http_responce = http.response_code.method_not_allowed, -- ?
+            http_responce = http.response_code.not_implemented, -- ?
             json_error = jsonrpc.error_code.method_not_found,
         }
     end
@@ -195,42 +319,6 @@ function this:OnPOST(request)
         json_result = result.result,
         json_error = result.error,
     }
-
-
-    --[[
-    if type(result) == "table" and result.notify then
-        local notify = result.notify
-        result.notify = nil
-        if type(notify) == "table" then
-            self:NotifyClients(notify.method, notify.params)
-        elseif type(notify) == "string" then
-            self:NotifyClients(notificationMethod, { message = notify })
-        end
-    end
-
-    if type(result) == "string" then
-        return {
-            status = 200,
-            headers = { ["Content-Type"] = "application/json", ["Connection"] = "close" },
-            body = result,
-        }
-    end
-
-    if type(result) == "table" and (result.status or result.body or result.headers) then
-        if not result.headers then
-            result.headers = { ["Content-Type"] = "application/json", ["Connection"] = "close" }
-        elseif not result.headers["Connection"] and not result.headers["connection"] then
-            result.headers["Connection"] = "close"
-        end
-        return result
-    end
-
-    return {
-        status = 200,
-        headers = { ["Content-Type"] = "application/json", ["Connection"] = "close" },
-        body = jsonrpc.result(jsonrpc.resultTypes.complete, jsonRpcRequest.id, result),
-    }
-    --]]
 end
 
 ---@param request ClientRequest
@@ -247,7 +335,7 @@ function this:OnGET(request)
                 self.logger:info("No supported SSE")
                 return {
                     http_responce = http.response_code.method_not_allowed,
-                    json_error = jsonrpc.error_code.method_not_found,
+                    -- json_error = jsonrpc.error_code.method_not_found,
                 }
             end
         end
@@ -270,107 +358,6 @@ function this:HandleRequest(request)
     self.logger:trace("handle request: %s", request.http_request.method)
     return handler(self, request)
 end
-
---[[
-function this:AddClient(client)
-    if #self.clients >= maxClients then
-        self.logger:warn("Max clients reached, rejecting new SSE client")
-        pcall(function() client:close() end)
-        return false
-    end
-
-    client:settimeout(0)
-    table.insert(self.clients, client)
-    self.logger:info("SSE client connected (total=%d)", #self.clients)
-    if #self.eventQueue > 0 then
-        self:BroadcastEvents()
-    end
-    return true
-end
-
-function this:RemoveClient(client)
-    for i, c in ipairs(self.clients) do
-        if c == client then
-            pcall(function() c:close() end)
-            table.remove(self.clients, i)
-            self.logger:info("SSE client disconnected (total=%d)", #self.clients)
-            return true
-        end
-    end
-    return false
-end
-
-function this:CloseAllClients()
-    for _, client in ipairs(self.clients) do
-        pcall(function() client:close() end)
-    end
-    self.clients = {}
-end
-
-function this:EnqueueEvent(event)
-    if type(event) == "table" then
-        table.insert(self.eventQueue, json.encode(event))
-    else
-        table.insert(self.eventQueue, tostring(event))
-    end
-
-    while #self.eventQueue > maxQueueSize do
-        table.remove(self.eventQueue, 1)
-    end
-end
-
-function this:SendEvent(event)
-    self:EnqueueEvent(event)
-    self:BroadcastEvents()
-end
-
-function this:NotifyClients(method, params)
-    self:SendEvent(jsonrpc.notification(method or notificationMethod, params))
-end
-
-function this:BroadcastEvents()
-    if not self.clients or #self.clients == 0 then
-        return
-    end
-
-    if not self.eventQueue or #self.eventQueue == 0 then
-        return
-    end
-
-    local events = self.eventQueue
-    self.eventQueue = {}
-
-    for i = #self.clients, 1, -1 do
-        local client = self.clients[i]
-        local shouldRemove = false
-        for _, ev in ipairs(events) do
-            local sse = "data: " .. tostring(ev) .. "\n\n"
-            local ok, err = client:send(sse)
-            if not ok then
-                self.logger:debug("client send error, removing: %s", tostring(err))
-                shouldRemove = true
-                break
-            end
-        end
-        if shouldRemove then
-            self:RemoveClient(client)
-        end
-    end
-end
-
----@param request HttpRequest
-function this.IsSSE(request)
-    -- if http.ParseRequestMethod(request.method) == "GET" then
-        for _, h in ipairs(request.headers) do
-            local low = h:lower()
-            if low:find("accept:") and low:find("text/event-stream") then -- FIXME compare
-                return true
-            end
-        end
-    -- end
-    return false
-end
---]]
 
 --- @param e enterFrameEventData
 function this:Listen(e)

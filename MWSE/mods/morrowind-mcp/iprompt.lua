@@ -1,16 +1,17 @@
----@class IPrompt
----@field name string
+---@class MCP.IPrompt
+---@field definition MCP.PromptDefinition
 local this = {}
 
----@protected
+---@class MCP.PromptDefinition: MCP.PrimitiveDefinition
+
 ---@param params table?
----@return IPrompt
+---@return MCP.IPrompt
 function this.new(params)
     local instance = {}
     if params then
         table.copymissing(instance, table.deepcopy(params))
     end
-    ---@type IPrompt
+    ---@type MCP.IPrompt
     setmetatable(instance, { __index = this })
     return instance
 end

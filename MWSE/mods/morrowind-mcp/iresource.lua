@@ -1,16 +1,18 @@
----@class IResource
----@field name string
+---@class MCP.IResource
+---@field definition MCP.ResourceDefinition
 local this = {}
 
----@protected
+
+---@class MCP.ResourceDefinition: MCP.PrimitiveDefinition
+
 ---@param params table?
----@return IResource
+---@return MCP.IResource
 function this.new(params)
     local instance = {}
     if params then
         table.copymissing(instance, table.deepcopy(params))
     end
-    ---@type IResource
+    ---@type MCP.IResource
     setmetatable(instance, { __index = this })
     return instance
 end
