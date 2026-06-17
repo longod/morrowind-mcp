@@ -1,49 +1,16 @@
 local this = {}
 
--- TODO move to server.lua or anyway
----@enum JsonRPC.ResultType
-this.resultTypes = {
-    complete = "complete",
-    input_required = "input_required",
-}
-
----@class JsonRPC.Request
----@field jsonrpc string
----@field id string|number
----@field method string
----@field params table?
-
----@class JsonRPC.Result
----@field jsonrpc string
----@field id string|number
----@field result table?
-
----@class JsonRPC.Notification
----@field jsonrpc string
----@field method string
----@field params table?
-
----@class JsonRPC.ErrorObject
----@field code integer
----@field message string
----@field data any
-
----@class JsonRPC.Error
----@field jsonrpc string
----@field id string|number?
----@field error JsonRPC.ErrorObject
-
-
 --- -32000 to -32099	Server error -- Reserved for implementation-defined server-errors.
+---@enum MCP.JSONRPCErrorCode
 this.error_code = {
     --- standard error code
-    parse_error = { code = -32700, message = "Parse error" }, ---@type JsonRPC.ErrorObject Invalid JSON was received by the server. An error occurred on the server while parsing the JSON text.
-    invalid_request = { code = -32600, message = "Invalid Request" }, ---@type JsonRPC.ErrorObject The JSON sent is not a valid Request object.
-    method_not_found = { code = -32601, message = "Method not found" }, ---@type JsonRPC.ErrorObject The method does not exist / is not available.
-    invalid_params = { code = -32602, message = "Invalid params" }, ---@type JsonRPC.ErrorObject Invalid method parameter(s).
-    internal_error = { code = -32603, message = "Internal error" }, ---@type JsonRPC.ErrorObject Internal JSON-RPC error.
+    parse_error = { code = -32700, message = "Parse error" }, ---@type MCP.Error Invalid JSON was received by the server. An error occurred on the server while parsing the JSON text.
+    invalid_request = { code = -32600, message = "Invalid Request" }, ---@type MCP.Error The JSON sent is not a valid Request object.
+    method_not_found = { code = -32601, message = "Method not found" }, ---@type MCP.Error The method does not exist / is not available.
+    invalid_params = { code = -32602, message = "Invalid params" }, ---@type MCP.Error Invalid method parameter(s).
+    internal_error = { code = -32603, message = "Internal error" }, ---@type MCP.Error Internal JSON-RPC error.
     --- mcp
-    header_mismatch = { code = -32001, message = "Header mismatch" }, ---@type JsonRPC.ErrorObject https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http#server-validation
+    header_mismatch = { code = -32001, message = "Header mismatch" }, ---@type MCP.Error https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http#server-validation
 }
 
 ---@param tbl table
@@ -112,8 +79,8 @@ end
 local dummy_object = this.object()
 
 ---@param str string
----@return JsonRPC.Request|JsonRPC.Notification? json
----@return JsonRPC.ErrorObject?
+---@return MCP.JSONRPCRequest|MCP.JSONRPCNotification? json
+---@return MCP.Error?
 function this.request(str)
     if not str then -- allow nil
         return nil, nil
@@ -145,7 +112,7 @@ end
 ---@param params table?
 ---@return string
 function this.result(id, params)
-    ---@type JsonRPC.Result
+    ---@type MCP.JSONRPCResultResponse
     local body = {
         jsonrpc = "2.0",
         id = id,
@@ -157,11 +124,11 @@ function this.result(id, params)
 end
 
 ---@param id string|number?
----@param err JsonRPC.ErrorObject
+---@param err MCP.Error
 ---@param data any?
 ---@return string
 function this.error(id, err, data)
-    ---@type JsonRPC.Error
+    ---@type MCP.JSONRPCErrorResponse
     local body = {
         jsonrpc = "2.0",
         id = id,
@@ -179,11 +146,11 @@ function this.error(id, err, data)
 end
 
 --- maybe server should not use notification.
----@param method string
+---@param method MCP.Method
 ---@param params table?
 ---@return string
 function this.notification(method, params)
-    ---@type JsonRPC.Notification
+    ---@type MCP.JSONRPCNotification
     local body = {
         jsonrpc = "2.0",
         method = method,

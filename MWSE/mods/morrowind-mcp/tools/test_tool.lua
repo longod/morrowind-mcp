@@ -31,7 +31,22 @@ function this:CanExecute(params)
     return true
 end
 
+---comment
+---@param params table
+---@return MCP.CallToolResult
 function this:Execute(params)
+    local menu = tes3.onMainMenu()
+    -- todo generator?
+    ---@type MCP.TextContent
+    local content = {
+        type = "text",
+        text = tostring(menu),
+    }
+
+    ---@type MCP.CallToolResult
+    return {
+        content = { content },
+    }
 end
 
 

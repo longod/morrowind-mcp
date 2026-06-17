@@ -30,30 +30,7 @@ local this = {}
 ---@field properties table<MCP.JSONSchema2020-12>
 ---@field required string[]?
 
-
----https://modelcontextprotocol.io/specification/2025-11-25/basic#icons
----@class MCP.Icon
----@field src string
----@field mimeType MCP.IconMimeType?
----@field sizes string[]? ["48x48", "any"] ...
----@field theme MCP.Theme?
-
----@enum MCP.IconMimeType
-local icon_mimetype = {
-    apng = "image/apng", -- Animated Portable Network Graphics
-    avif = "image/avif", -- AV1 Image File Format
-    gif = "image/gif", -- Graphics Interchange Format
-    jpeg = "image/jpeg", -- Joint Photographic Expert Group image
-    png = "image/png",  -- Portable Network Graphics
-    svg = "image/svg+xml", -- Scalable Vector Graphics
-    webp = "image/webp", -- Web Picture format
-}
-
----@enum MCP.Theme
-local theme = {
-    light = "light",
-    dark = "dark",
-}
+--- https://modelcontextprotocol.io/specification/2025-11-25/schema
 
 ---@param params table?
 ---@return MCP.ITool

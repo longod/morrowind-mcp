@@ -29,6 +29,7 @@ local socket = require("socket")
 ---@field logger mwseLogger
 ---@field server LuaSocketTcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
+---@field httpHeaders table<string, string> must headers
 ---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
 ---@field methodHandlers table<string, fun(self: MwseHttpServer, params: table?): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
@@ -51,6 +52,7 @@ function this.new(params)
     if not instance.logger then
         instance.logger = require("morrowind-mcp.logger")
     end
+    instance.httpHeaders = {}
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
         [http.method.GET] = instance.OnGET,
@@ -143,18 +145,18 @@ end
 
 ---@class ClientRequest
 ---@field http_request Http.Request
----@field json_request JsonRPC.Request|JsonRPC.Notification?
+---@field json_request MCP.JSONRPCRequest|MCP.JSONRPCNotification?
 
 ---@class ServerResponce
 ---@field http_responce Http.Response
 ---@field http_headers table<string, string>?
 ---@field json_result table?
----@field json_error JsonRPC.ErrorObject?
+---@field json_error MCP.Error?
 
 ---@class MethodResult
 ---@field http_responce Http.Response -- TODO simplify 200, 202, 400 or more?
 ---@field result table?
----@field error JsonRPC.ErrorObject?
+---@field error MCP.Error?
 
 --- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
 ---@param params table?
@@ -165,6 +167,7 @@ function this:OnInitialize(params)
     local settings = require("morrowind-mcp.settings")
 
     -- todo validation and set correct values
+    local protocolVersion = "2025-11-25"
 
     ---@type MethodResult
     local reuslt = {
@@ -210,9 +213,7 @@ end
 ---@param params table?
 ---@return MethodResult
 function this:OnPromptsList(params)
-    local list = {
-    }
-    -- TODO reserve
+    local list = jsonrpc.array(table.size(self.prompts))
 
     for name, value in pairs(self.prompts) do
         if value:CanExecute({}) then
@@ -232,9 +233,7 @@ end
 ---@param params table?
 ---@return MethodResult
 function this:OnResourcesList(params)
-    local list = {
-    }
-    -- TODO reserve
+    local list = jsonrpc.array(table.size(self.resources))
 
     for name, value in pairs(self.resources) do
         if value:CanExecute({}) then
@@ -254,10 +253,8 @@ end
 ---@param params table?
 ---@return MethodResult
 function this:OnToolsList(params)
-    local list = {
-    }
 
-    -- TODO reserve
+    local list = jsonrpc.array(table.size(self.tools))
 
     for name, value in pairs(self.tools) do
         if value:CanExecute({}) then
@@ -361,7 +358,7 @@ function this:OnOPTIONS(request)
         [http.header.access_control_allow_methods] = "POST, GET, OPTIONS",
         [http.header.access_control_allow_headers] = table.concat(
         {
-          http.header.authorization,
+          --http.header.authorization,
           http.header.content_type,
           --http.header.x_requested_with,
         },
@@ -372,7 +369,7 @@ function this:OnOPTIONS(request)
     return {
         http_responce = http.response_code.no_content,
         http_headers = cros,
-        -- json_error = jsonrpc.error_code.method_not_found,
+            -- json_error = jsonrpc.error_code.method_not_found,
     }
 end
 
