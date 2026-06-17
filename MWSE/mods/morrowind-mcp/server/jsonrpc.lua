@@ -93,6 +93,24 @@ local function AddType(tbl, forceType)
     return tbl
 end
 
+---@param reserved number?
+---@return table
+function this.object(reserved)
+    local t = table.new(0, reserved or 0)
+    setmetatable(t, { __jsontype = "object" })
+    return t
+end
+
+---@param reserved number?
+---@return table
+function this.array(reserved)
+    local t = table.new(reserved or 0, 0)
+    setmetatable(t, { __jsontype = "array" })
+    return t
+end
+
+local dummy_object = this.object()
+
 ---@param str string
 ---@return JsonRPC.Request|JsonRPC.Notification? json
 ---@return JsonRPC.ErrorObject?
@@ -131,11 +149,10 @@ function this.result(id, params)
     local body = {
         jsonrpc = "2.0",
         id = id,
-        result = table.copy(params or {__empty = true}),
+        result = params or dummy_object,
     }
-    -- TODO typeの追加
+    -- TODO typeの追加... deepcopyがいる？
     local encoded = json.encode(body, { indent = false })
-    encoded = string.gsub(encoded, '{"__empty":true}', '{}')
     return encoded
 end
 
@@ -148,18 +165,20 @@ function this.error(id, err, data)
     local body = {
         jsonrpc = "2.0",
         id = id,
-        error = table.copy(err),
+        error = err,
     }
     if id then
         body.id = id
     end
     if data then
+        body.error = table.deepcopy(body.error) -- const original table
         body.error.data = data
         -- TODO typeの追加
     end
     return json.encode(body, { indent = false })
 end
 
+--- maybe server should not use notification.
 ---@param method string
 ---@param params table?
 ---@return string
@@ -170,8 +189,7 @@ function this.notification(method, params)
         method = method,
     }
     if params then
-        body.params = table.copy(params)
-        -- typeの追加
+        body.params = params
     end
     return json.encode(body, { indent = false })
 

@@ -9,7 +9,7 @@ this.configPath = "morrowind-mcp"
 this.defaultConfig = {
     server = {
         address = "localhost",
-        port = 45024,
+        port = 33427, -- 3E427
     },
 
     ---@class Config.Development

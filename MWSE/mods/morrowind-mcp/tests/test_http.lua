@@ -72,7 +72,7 @@ function this.Test()
             end,
         }
 
-        local result = http.SendResponse(client, http.response_code.ok, '{"ok":true}')
+        local result = http.SendResponse(client, http.response_code.ok, nil, '{"ok":true}')
         unitwind:expect(result.index).toBe(#sentData)
         unitwind:expect(result.error).toBe(nil)
         unitwind:expect(result.lastIndex).toBe(#sentData)

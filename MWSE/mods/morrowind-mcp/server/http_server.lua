@@ -52,8 +52,9 @@ function this.new(params)
         instance.logger = require("morrowind-mcp.logger")
     end
     instance.requestHandlers = {
-        ["POST"] = instance.OnPOST,
-        ["GET"] = instance.OnGET,
+        [http.method.POST] = instance.OnPOST,
+        [http.method.GET] = instance.OnGET,
+        [http.method.OPTIONS] = instance.OnOPTIONS,
     }
     -- or split sub-category
     instance.methodHandlers = {
@@ -146,6 +147,7 @@ end
 
 ---@class ServerResponce
 ---@field http_responce Http.Response
+---@field http_headers table<string, string>?
 ---@field json_result table?
 ---@field json_error JsonRPC.ErrorObject?
 
@@ -170,23 +172,23 @@ function this:OnInitialize(params)
         result = {
             ["protocolVersion"] = "2025-11-25",
             ["capabilities"] = {
-                ["logging"] = {},
+                ["logging"] = jsonrpc.object(),
                 ["prompts"] = {
-                    -- ["listChanged"] = true,
+                    ["listChanged"] = false,
                 },
                 ["resources"] = {
-                    -- ["subscribe"] = true,
-                    -- ["listChanged"] = true,
+                    ["subscribe"] = false,
+                    ["listChanged"] = false,
                 },
                 ["tools"] = {
-                    -- ["listChanged"] = true,
+                    ["listChanged"] = false,
                 },
                 ["tasks"] = {
-                    ["list"] = {},
-                    ["cancel"] = {},
+                    ["list"] = jsonrpc.object(),
+                    ["cancel"] = jsonrpc.object(),
                     ["requests"] = {
                         ["tools"] = {
-                            ["call"] = {},
+                            ["call"] = jsonrpc.object(),
                         },
                     },
                 },
@@ -196,7 +198,7 @@ function this:OnInitialize(params)
                 ["title"] = settings.modName,
                 ["version"] = settings.version,
                 ["description"] = settings.description,
-                ["icons"] = {},
+                ["icons"] = jsonrpc.array(),
                 ["websiteUrl"] = "http://localhost:45024" -- or repository?
             },
             ["instructions"] = "Optional instructions for the client"
@@ -295,6 +297,7 @@ function this:OnPOST(request)
     -- TODO check headers
 
     if not request.json_request then
+        ---@type ServerResponce
         return {
             http_responce = http.response_code.bad_request,
             json_error = jsonrpc.error_code.invalid_request,
@@ -304,6 +307,7 @@ function this:OnPOST(request)
     local handler = self.methodHandlers[request.json_request.method]
     if not handler then
         self.logger:warn("No handler for method: %s", request.json_request.method)
+        ---@type ServerResponce
         return {
             http_responce = http.response_code.not_implemented, -- ?
             json_error = jsonrpc.error_code.method_not_found,
@@ -314,6 +318,7 @@ function this:OnPOST(request)
 
     local result = handler(self, request.json_request.params)
 
+    ---@type ServerResponce
     return {
         http_responce = result.http_responce,
         json_result = result.result,
@@ -333,6 +338,7 @@ function this:OnGET(request)
             if content == http. content_type_value.event_stream then
                 -- no supported SSE
                 self.logger:info("No supported SSE")
+                ---@type ServerResponce
                 return {
                     http_responce = http.response_code.method_not_allowed,
                     -- json_error = jsonrpc.error_code.method_not_found,
@@ -341,6 +347,33 @@ function this:OnGET(request)
         end
     end
     -- TODO return
+end
+
+---@param request ClientRequest
+---@return ServerResponce?
+function this:OnOPTIONS(request)
+    -- Streamable http
+
+    -- Handle OPTIONS requests for CORS preflight
+    -- https://github.com/modelcontextprotocol/python-sdk/issues/1079
+    local cros = {
+        [http.header.access_control_allow_origin] = "*", -- or request hosts?
+        [http.header.access_control_allow_methods] = "POST, GET, OPTIONS",
+        [http.header.access_control_allow_headers] = table.concat(
+        {
+          http.header.authorization,
+          http.header.content_type,
+          --http.header.x_requested_with,
+        },
+        ", "),
+    }
+
+    ---@type ServerResponce
+    return {
+        http_responce = http.response_code.no_content,
+        http_headers = cros,
+        -- json_error = jsonrpc.error_code.method_not_found,
+    }
 end
 
 ---@param request ClientRequest
@@ -391,21 +424,21 @@ function this:Listen(e)
             local json_request, json_error = jsonrpc.request(request.body)
             local id = json_request and json_request.id or nil ---@type string|number?
             if not json_error then
-                local response = self:HandleRequest({http_request = request,  json_request = json_request})
+                local response = self:HandleRequest({http_request = request, json_request = json_request})
                 if response then
                     if response.json_error then
-                        local result = http.SendResponse(client, response.http_responce, jsonrpc.error(id, response.json_error) )
+                        local result = http.SendResponse(client, response.http_responce, response.http_headers, jsonrpc.error(id, response.json_error) )
                         self.logger:error("json error: %d\n%s", response.http_responce.code, string.gsub(result.response, "\r", ""))
                     else
-                        local result = http.SendResponse(client, response.http_responce, jsonrpc.result(id, response.json_result) )
+                        local result = http.SendResponse(client, response.http_responce, response.http_headers, jsonrpc.result(id, response.json_result) )
                         self.logger:debug("success: %d\n%s", response.http_responce.code, string.gsub(result.response, "\r", ""))
                     end
                 else
-                    local result = http.SendResponse(client, http.response_code.internal_server_error, jsonrpc.error(id, jsonrpc.error_code.internal_error) )
+                    local result = http.SendResponse(client, http.response_code.internal_server_error, nil, jsonrpc.error(id, jsonrpc.error_code.internal_error) )
                     self.logger:error("internal error: %s", string.gsub(result.response, "\r", ""))
                 end
             else
-                local result = http.SendResponse(client, http.response_code.bad_request, jsonrpc.error(nil, json_error))
+                local result = http.SendResponse(client, http.response_code.bad_request, nil, jsonrpc.error(nil, json_error))
                 self.logger:error("request error: %s", string.gsub(result.response, "\r", ""))
             end
 

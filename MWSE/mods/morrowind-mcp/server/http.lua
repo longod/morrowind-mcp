@@ -391,10 +391,17 @@ end
 
 ---@param client LuaSocketTcpClient
 ---@param responce_code Http.Response
+---@param headers table<string, string>?
 ---@param body string?
 ---@return Http.Result
-function this.SendResponse(client, responce_code, body)
+function this.SendResponse(client, responce_code, headers, body)
     local response = string.format("%s %d %s\r\n", this.protocol.HTTP1_1, responce_code.code, responce_code.message)
+    if headers then
+        for name, value in pairs(headers) do
+            response = response .. string.format("%s: %s\r\n", name, value)
+        end
+    end
+    -- response = response .. string.format("%s: %s\r\n", this.header.connection, "close") -- test
     if body and #body > 0 then
         response = response .. string.format("%s: %s\r\n", this.header.content_type, this.content_type_value.json)
         response = response .. string.format("%s: %s\r\n", this.header.content_length, #body)
