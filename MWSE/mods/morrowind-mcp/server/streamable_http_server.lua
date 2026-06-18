@@ -22,14 +22,14 @@ local notificationMethod = "server/event"
 -- "get"
 
 
----@type LuaSocketModule
+---@type Socket.Module
 local socket = require("socket")
 
----@class MwseStreamableHttpServer: IServer
+---@class MwseStreamableHttpServer: MCP.IServer
 ---@field logger mwseLogger
----@field server LuaSocketTcpServer?
+---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
----@field clients LuaSocketTcpClient[]
+---@field clients Socket.TcpClient[]
 ---@field eventQueue string[]
 ---@field requestHandlers table<string, fun(self: MwseStreamableHttpServer, request: Http.Request): table>
 ---@field methodHandlers table<string, fun(self: MwseStreamableHttpServer, params: table?): table>
@@ -288,7 +288,7 @@ end
 
 --- @param e enterFrameEventData
 function this:Listen(e)
-    --- @type LuaSocketTcpClient?
+    --- @type Socket.TcpClient?
     -- accept as many new clients as available (non-blocking accept)
     while true do
         local client, acceptErr = self.server:accept()
@@ -366,9 +366,9 @@ function this:Start()
         self.logger:warn("MCP server is already running")
         return false
     end
-    self.server = socket.bind("localhost", "45024")
+    self.server = socket.bind("localhost", "33427")
     if not self.server then
-        self.logger:error("Failed to start MCP server on port 45024")
+        self.logger:error("Failed to start MCP server on port 33427")
         return false
     end
 
@@ -380,7 +380,7 @@ function this:Start()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
-    self.logger:info("server started on port 45024")
+    self.logger:info("server started on port 33427")
     return true
 end
 

@@ -22,12 +22,12 @@ local notificationMethod = "server/event"
 -- "list"
 -- "get"
 
----@type LuaSocketModule
+---@type Socket.Module
 local socket = require("socket")
 
----@class MwseHttpServer : IServer
+---@class MwseHttpServer : MCP.IServer
 ---@field logger mwseLogger
----@field server LuaSocketTcpServer?
+---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
 ---@field httpHeaders table<string, string> must headers
 ---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
@@ -148,13 +148,13 @@ end
 ---@field json_request MCP.JSONRPCRequest|MCP.JSONRPCNotification?
 
 ---@class ServerResponce
----@field http_responce Http.Response
+---@field http_responce Http.ResponseStatusCodes
 ---@field http_headers table<string, string>?
 ---@field json_result table?
 ---@field json_error MCP.Error?
 
 ---@class MethodResult
----@field http_responce Http.Response -- TODO simplify 200, 202, 400 or more?
+---@field http_responce Http.ResponseStatusCodes -- TODO simplify 200, 202, 400 or more?
 ---@field result table?
 ---@field error MCP.Error?
 
@@ -202,7 +202,7 @@ function this:OnInitialize(params)
                 ["version"] = settings.version,
                 ["description"] = settings.description,
                 ["icons"] = jsonrpc.array(),
-                ["websiteUrl"] = "http://localhost:45024" -- or repository?
+                ["websiteUrl"] = "http://localhost:33427" -- or repository?
             },
             ["instructions"] = "Optional instructions for the client"
         },
@@ -332,7 +332,7 @@ function this:OnGET(request)
     if contents then
         for _, value in ipairs(contents) do
             local content = strutil.ltrim(value:lower())
-            if content == http. content_type_value.event_stream then
+            if content == http. content_type.event_stream then
                 -- no supported SSE
                 self.logger:info("No supported SSE")
                 ---@type ServerResponce
@@ -391,7 +391,7 @@ end
 
 --- @param e enterFrameEventData
 function this:Listen(e)
-    --- @type LuaSocketTcpClient?
+    --- @type Socket.TcpClient?
     -- accept as many new clients as available (non-blocking accept)
     while true do
         local client, acceptErr = self.server:accept()
@@ -449,9 +449,9 @@ function this:Start()
         self.logger:warn("MCP server is already running")
         return false
     end
-    self.server = socket.bind("localhost", "45024")
+    self.server = socket.bind("localhost", "33427")
     if not self.server then
-        self.logger:error("Failed to start MCP server on port 45024")
+        self.logger:error("Failed to start MCP server on port 33427")
         return false
     end
     self.server:settimeout(0)
@@ -463,7 +463,7 @@ function this:Start()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
-    self.logger:info("server started on port 45024")
+    self.logger:info("server started on port 33427")
     return true
 end
 

@@ -1,7 +1,7 @@
 local settings = require("morrowind-mcp.settings")
-local config = nil ---@type Config
+local config = nil ---@type MCP.MWSEConfig
 
----@return Config
+---@return MCP.MWSEConfig
 local function Load()
     config = config or mwse.loadConfig(settings.configPath, settings.defaultConfig)
     return config

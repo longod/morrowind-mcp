@@ -4,35 +4,55 @@ local strutil = require("morrowind-mcp.strutil")
 -- https://defold.com/ref/stable/socket-lua/
 --- lua socket meta data
 
----@class LuaSocketTcpClient
----@field settimeout fun(self: LuaSocketTcpClient, timeout: number, mode?: string): number?, string?
----@field receive fun(self: LuaSocketTcpClient, pattern?: string|number, prefix?: string): string?, string?, string?
----@field send fun(self: LuaSocketTcpClient, data: string, i?: number, j?: number): number?, string?, number?
----@field close fun(self: LuaSocketTcpClient): number?, string?
----@field setpeername fun(self: LuaSocketTcpClient, host: string, port: number): number?, string?
----@field getpeername fun(self: LuaSocketTcpClient): string?, string?
----@field setoption fun(self: LuaSocketTcpClient, name: string, value: any): number?, string?
+---@class Socket.TcpClient
+---@field settimeout fun(self: Socket.TcpClient, timeout: number, mode?: string): number?, string?
+---@field receive fun(self: Socket.TcpClient, pattern?: string|number, prefix?: string): string?, string?, string?
+---@field send fun(self: Socket.TcpClient, data: string, i?: number, j?: number): number?, string?, number?
+---@field close fun(self: Socket.TcpClient): number?, string?
+---@field setpeername fun(self: Socket.TcpClient, host: string, port: number): number?, string?
+---@field getpeername fun(self: Socket.TcpClient): string?, string?
+---@field setoption fun(self: Socket.TcpClient, name: string, value: any): number?, string?
 
----@class LuaSocketTcpServer
----@field accept fun(self: LuaSocketTcpServer): LuaSocketTcpClient? , string?
----@field settimeout fun(self: LuaSocketTcpServer, timeout: number, mode?: string): number?, string?
----@field close fun(self: LuaSocketTcpServer): number?, string?
----@field getsockname fun(self: LuaSocketTcpServer): string?, string?
----@field setoption fun(self: LuaSocketTcpServer, name: string, value: any): number?, string?
+---@class Socket.TcpServer
+---@field accept fun(self: Socket.TcpServer): Socket.TcpClient? , string?
+---@field settimeout fun(self: Socket.TcpServer, timeout: number, mode?: string): number?, string?
+---@field close fun(self: Socket.TcpServer): number?, string?
+---@field getsockname fun(self: Socket.TcpServer): string?, string?
+---@field setoption fun(self: Socket.TcpServer, name: string, value: any): number?, string?
 
----@class LuaSocketTcpMaster
----@field bind fun(self: LuaSocketTcpMaster, address: string, port: number): LuaSocketTcpServer?, string?
----@field connect fun(self: LuaSocketTcpMaster, address: string, port: number): LuaSocketTcpClient?, string?
----@field listen fun(self: LuaSocketTcpMaster, backlog: number): number?, string?
----@field close fun(self: LuaSocketTcpMaster): number?, string?
----@field settimeout fun(self: LuaSocketTcpMaster, timeout: number, mode?: string): number?, string?
+---@class Socket.TcpMaster
+---@field bind fun(self: Socket.TcpMaster, address: string, port: number): Socket.TcpServer?, string?
+---@field connect fun(self: Socket.TcpMaster, address: string, port: number): Socket.TcpClient?, string?
+---@field listen fun(self: Socket.TcpMaster, backlog: number): number?, string?
+---@field close fun(self: Socket.TcpMaster): number?, string?
+---@field settimeout fun(self: Socket.TcpMaster, timeout: number, mode?: string): number?, string?
 
----@class LuaSocketModule
----@field bind fun(host: string, port: number|string): LuaSocketTcpServer?, string?
----@field tcp fun(): LuaSocketTcpMaster?, string?
+---@class Socket.Module
+---@field bind fun(host: string, port: number|string): Socket.TcpServer?, string?
+---@field tcp fun(): Socket.TcpMaster?, string?
 ---@field select fun(recvt: table?, sendt: table?, timeout?: number): table, table, string?
 ---@field sleep fun(time:number): number
----@field connect fun(address: string, port: number, locaddr?: string, locport?: number, family?: string): LuaSocketTcpClient?, string?
+---@field connect fun(address: string, port: number, locaddr?: string, locport?: number, family?: string): Socket.TcpClient?, string?
+
+
+---@class Http.Request
+---@field method Http.RequestMethod
+---@field endpoint string
+---@field protocol Http.Protocol
+---@field headers table<Http.Header|Http.MCPHeader, string>
+---@field body string?
+
+---@class Http.Result
+---@field index number?
+---@field error string?
+---@field lastIndex number?
+---@field response string
+
+
+---@class Http.ResponseStatusCodes
+---@field code integer
+---@field message string
+
 
 ---@enum Http.RequestMethod
 this.method = {
@@ -219,24 +239,26 @@ this.header = {
     x_robots_tag = "x-robots-tag",
 }
 
+---@enum Http.MCPHeader
 this.mcp_header = {
     mcp_protocol_version ="MCP-Protocol-Version",
     mcp_method ="Mcp-Method",
     mcp_name = "Mcp-Name"
 }
 
-this.connection_type_value = {
+---@enum Http.ConnectionType
+this.connection_type = {
     keep = "keep-alive",
 }
-this.content_type_value = {
+
+---@enum Http.ContentType
+this.content_type = {
     json = "application/json",
     event_stream = "text/event-stream",
 }
 
----@class Http.Response
----@field code integer
----@field message string
 
+---@enum Http.ResponseCode
 this.response_code = {
     continue = { code = 100, message = "Continue" },
     switching_protocols = { code = 101, message = "Switching Protocols" },
@@ -264,7 +286,7 @@ this.response_code = {
     payment_required = { code = 402, message = "Payment Required" },
     forbidden = { code = 403, message = "Forbidden" },
     not_found = { code = 404, message = "Not Found" },
-    method_not_allowed = { code = 405, message = "Method Not Allowed" }, ---@type Http.Response
+    method_not_allowed = { code = 405, message = "Method Not Allowed" }, ---@type Http.ResponseStatusCodes
     not_acceptable = { code = 406, message = "Not Acceptable" },
     proxy_authentication_required = { code = 407, message = "Proxy Authentication Required" },
     request_timeout = { code = 408, message = "Request Timeout" },
@@ -325,14 +347,7 @@ function this.ParseHeader(line)
     return nil, nil
 end
 
----@class Http.Request
----@field method string
----@field endpoint string
----@field protocol string
----@field headers table<string, string>
----@field body string?
-
---- @param client LuaSocketTcpClient
+--- @param client Socket.TcpClient
 --- @return Http.Request?, string?, string?
 function this.ReceiveRequest(client)
     local requestLine, err, partial = client:receive("*l")
@@ -383,15 +398,10 @@ function this.ReceiveRequest(client)
     return request, nil, nil
 end
 
----@class Http.Result
----@field index number?
----@field error string?
----@field lastIndex number?
----@field response string
 
----@param client LuaSocketTcpClient
----@param responce_code Http.Response
----@param headers table<string, string>?
+---@param client Socket.TcpClient
+---@param responce_code Http.ResponseStatusCodes
+---@param headers table<Http.Header|Http.MCPHeader, string>?
 ---@param body string?
 ---@return Http.Result
 function this.SendResponse(client, responce_code, headers, body)
@@ -403,7 +413,7 @@ function this.SendResponse(client, responce_code, headers, body)
     end
     -- response = response .. string.format("%s: %s\r\n", this.header.connection, "close") -- test
     if body and #body > 0 then
-        response = response .. string.format("%s: %s\r\n", this.header.content_type, this.content_type_value.json)
+        response = response .. string.format("%s: %s\r\n", this.header.content_type, this.content_type.json)
         response = response .. string.format("%s: %s\r\n", this.header.content_length, #body)
         response = response .. "\r\n"
         response = response .. body

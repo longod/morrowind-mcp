@@ -1,5 +1,8 @@
 # Morrowind Model Context Protocol Server (Morrowind MCP)
 
+Morrowind Model Context Protocol Server (Morrowind MCP) connects Morrowind to external LLM AIs (such as ChatGPT, Claude, Copilot, or Gemini) using MCP standard.
+
+This allows the AI to learn about the world of Morrowind and interact with it.
 
 ## MCP configuration
 
@@ -19,7 +22,7 @@
 
 https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
-### Others (Claude, ChatGPT, Gemini...)
+### Others
 
 ```json
 {
@@ -35,7 +38,7 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 ## Development
 
 ```sh
-npx @modelcontextprotocol/inspector@latest
+npx @modelcontextprotocol/inspector --config tests/mcp.json
 ```
 
 https://github.com/modelcontextprotocol/inspector

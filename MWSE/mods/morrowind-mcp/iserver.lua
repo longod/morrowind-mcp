@@ -1,11 +1,11 @@
----@class IServer
+---@class MCP.IServer
 local this = {}
 
 ---@protected
 ---@param params table?
----@return IServer
+---@return MCP.IServer
 function this.new(params)
-    ---@type IServer
+    ---@type MCP.IServer
     local instance = {}
     if params then
         table.copymissing(instance, table.deepcopy(params))

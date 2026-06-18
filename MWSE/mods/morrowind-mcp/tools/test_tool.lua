@@ -2,10 +2,10 @@
 local base = require("morrowind-mcp.itool")
 
 
----@param def MCP.ToolDefinition
-local function AddTypes(def)
-    -- recursive, input, outputSchema
-end
+-- ---@param def MCP.Tool
+-- local function AddTypes(def)
+--     -- recursive, input, outputSchema
+-- end
 
 ---@class MCP.TestTool: MCP.ITool
 local this = {}

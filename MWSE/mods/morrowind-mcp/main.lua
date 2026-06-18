@@ -20,11 +20,16 @@ local function Test()
         os.exit(0)
     end
 end
-Test()
+
+local runTest = true
+if runTest then
+    Test()
+end
 
 local server = require("morrowind-mcp.server.http_server").new()
 
-local function OnInitialized()
+---@param e initializedEventData
+local function OnInitialized(e)
     server:Start()
 end
 

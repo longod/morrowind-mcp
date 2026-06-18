@@ -1,8 +1,6 @@
 ---@class MCP.IPrompt
----@field definition MCP.PromptDefinition
+---@field definition MCP.Prompt
 local this = {}
-
----@class MCP.PromptDefinition: MCP.PrimitiveDefinition
 
 ---@param params table?
 ---@return MCP.IPrompt

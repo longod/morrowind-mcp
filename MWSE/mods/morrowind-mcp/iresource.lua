@@ -1,9 +1,6 @@
 ---@class MCP.IResource
----@field definition MCP.ResourceDefinition
+---@field definition MCP.Resource
 local this = {}
-
-
----@class MCP.ResourceDefinition: MCP.PrimitiveDefinition
 
 ---@param params table?
 ---@return MCP.IResource

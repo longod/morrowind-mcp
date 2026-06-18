@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "my-http-server": {
+      "type": "streamable-http",
+      "url": "http://localhost:33427"
+    }
+  }
+}
