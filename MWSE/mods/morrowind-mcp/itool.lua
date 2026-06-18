@@ -24,7 +24,7 @@ end
 
 ---@public
 ---@param params table
----@return table?
+---@return MCP.CallToolResult?
 function this:Execute(params)
 end
 

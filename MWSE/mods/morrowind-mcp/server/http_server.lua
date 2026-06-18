@@ -2,6 +2,7 @@ local base = require("morrowind-mcp.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.strutil")
+local mcp = require("morrowind-mcp.mcp")
 
 local dataFiles = "Data Files\\"
 local modDir = "MWSE\\mods\\morrowind-mcp\\"
@@ -60,12 +61,13 @@ function this.new(params)
     }
     -- or split sub-category
     instance.methodHandlers = {
-        ["initialize"] = instance.OnInitialize,
-        ["notifications/initialized"] = instance.OnNotification,
-        ["logging/setLevel"] = instance.OnLogging,
-        ["prompts/list"] = instance.OnPromptsList,
-        ["resources/list"] = instance.OnResourcesList,
-        ["tools/list"] = instance.OnToolsList,
+        [mcp.method.initialize] = instance.OnInitialize,
+        [mcp.method.notifications_initialized] = instance.OnNotification,
+        [mcp.method.logging_setlevel] = instance.OnLogging,
+        [mcp.method.prompts_list] = instance.OnPromptsList,
+        [mcp.method.resources_list] = instance.OnResourcesList,
+        [mcp.method.tools_list] = instance.OnToolsList,
+        [mcp.method.tools_call] = instance.OnToolsCall,
     }
     instance:LoadPrompts()
     instance:LoadResources()
@@ -155,7 +157,7 @@ end
 
 ---@class MethodResult
 ---@field http_responce Http.ResponseStatusCodes -- TODO simplify 200, 202, 400 or more?
----@field result table?
+---@field result MCP.Result?
 ---@field error MCP.Error?
 
 --- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
@@ -268,6 +270,39 @@ function this:OnToolsList(params)
         result = {
             tools = list,
         },
+    }
+end
+
+---@param params MCP.CallToolRequestParams?
+---@return MethodResult
+function this:OnToolsCall(params)
+    if not params or not params.name then
+        return {
+            http_responce = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local tool = self.tools[params.name]
+    if not tool then
+        return {
+            http_responce = http.response_code.bad_request,
+            error = jsonrpc.error_code.method_not_found,
+        }
+    end
+    if not tool:CanExecute(params) then
+        return {
+            http_responce = http.response_code.forbidden,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local result = tool:Execute(params)
+
+    ---@type MethodResult
+    return {
+        http_responce = http.response_code.ok,
+        result = result,
     }
 end
 

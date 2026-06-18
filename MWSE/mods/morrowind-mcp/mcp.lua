@@ -17,41 +17,44 @@
 ---@alias MCP.PrimitiveValueMap table<string, MCP.PrimitiveValue>
 
 ---@enum MCP.Method
-local Method = {
-    completionComplete = "completion/complete",
-    elicitationCreate = "elicitation/create",
+local method = {
+    completion_complete = "completion/complete",
+    elicitation_create = "elicitation/create",
     initialize = "initialize",
-    loggingSetLevel = "logging/setLevel",
-    notificationsCancelled = "notifications/cancelled",
-    notificationsInitialized = "notifications/initialized",
-    notificationsTasksStatus = "notifications/tasks/status",
-    notificationsMessage = "notifications/message",
-    notificationsProgress = "notifications/progress",
-    notificationsPromptsListChanged = "notifications/prompts/list_changed",
-    notificationsResourcesListChanged = "notifications/resources/list_changed",
-    notificationsResourcesUpdated = "notifications/resources/updated",
-    notificationsRootsListChanged = "notifications/roots/list_changed",
-    notificationsToolsListChanged = "notifications/tools/list_changed",
-    notificationsElicitationComplete = "notifications/elicitation/complete",
+    logging_setlevel = "logging/setLevel",
+    notifications_cancelled = "notifications/cancelled",
+    notifications_initialized = "notifications/initialized",
+    notifications_tasks_status = "notifications/tasks/status",
+    notifications_message = "notifications/message",
+    notifications_progress = "notifications/progress",
+    notifications_prompts_listchanged = "notifications/prompts/list_changed",
+    notifications_resources_listchanged = "notifications/resources/list_changed",
+    notifications_resources_updated = "notifications/resources/updated",
+    notifications_roots_listchanged = "notifications/roots/list_changed",
+    notifications_tools_listchanged = "notifications/tools/list_changed",
+    notifications_elicitation_complete = "notifications/elicitation/complete",
     ping = "ping",
-    tasksGet = "tasks/get",
-    tasksResult = "tasks/result",
-    tasksList = "tasks/list",
-    tasksCancel = "tasks/cancel",
-    promptsGet = "prompts/get",
-    promptsList = "prompts/list",
-    resourcesList = "resources/list",
-    resourcesRead = "resources/read",
-    resourcesSubscribe = "resources/subscribe",
-    resourcesTemplatesList = "resources/templates/list",
-    resourcesUnsubscribe = "resources/unsubscribe",
-    rootsList = "roots/list",
-    samplingCreateMessage = "sampling/createMessage",
-    toolsCall = "tools/call",
-    toolsList = "tools/list",
+    tasks_get = "tasks/get",
+    tasks_result = "tasks/result",
+    tasks_list = "tasks/list",
+    tasks_cancel = "tasks/cancel",
+    prompts_get = "prompts/get",
+    prompts_list = "prompts/list",
+    resources_list = "resources/list",
+    resources_read = "resources/read",
+    resources_subscribe = "resources/subscribe",
+    resources_templates_list = "resources/templates/list",
+    resources_unsubscribe = "resources/unsubscribe",
+    roots_list = "roots/list",
+    sampling_createmessage = "sampling/createMessage", -- why camelCase?
+    tools_call = "tools/call",
+    tools_list = "tools/list",
 }
 
+---@alias MCP.Meta table<string, any>
+
 ---@class MCP.Result
+---@field _meta MCP.Meta?
 
 ---@class MCP.Error
 ---@field code integer
@@ -91,25 +94,25 @@ local Method = {
 ---@alias MCP.Role "user"|"assistant"
 
 ---@enum MCP.MimeType
-local MimeType = {
-    imageApng = "image/apng",
-    imageAvif = "image/avif",
-    imageGif = "image/gif",
-    imageJpeg = "image/jpeg",
-    imagePng = "image/png",
-    imageSvgXml = "image/svg+xml",
-    imageWebp = "image/webp",
-    audioAac = "audio/aac",
-    audioFlac = "audio/flac",
-    audioMpeg = "audio/mpeg",
-    audioOgg = "audio/ogg",
-    audioWav = "audio/wav",
-    textPlain = "text/plain",
-    applicationJson = "application/json",
+local mime_type = {
+    image_apng = "image/apng",
+    image_avif = "image/avif",
+    image_gif = "image/gif",
+    image_jpeg = "image/jpeg",
+    image_png = "image/png",
+    image_svg_xml = "image/svg+xml",
+    image_webp = "image/webp",
+    audio_aac = "audio/aac",
+    audio_flac = "audio/flac",
+    audio_mpeg = "audio/mpeg",
+    audio_ogg = "audio/ogg",
+    audio_wav = "audio/wav",
+    text_plain = "text/plain",
+    application_json = "application/json",
 }
 
 ---@enum MCP.LoggingLevel
-local LoggingLevel = {
+local logging_level = {
     debug = "debug",
     info = "info",
     notice = "notice",
@@ -919,7 +922,7 @@ local LoggingLevel = {
 ---@field isError boolean?
 
 return {
-    LoggingLevel = LoggingLevel,
-    Method = Method,
-    MimeType = MimeType,
+    logging_level = logging_level,
+    method = method,
+    mime_type = mime_type,
 }
