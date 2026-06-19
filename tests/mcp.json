@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "my-http-server": {
+    "morrowind-mcp": {
       "type": "streamable-http",
       "url": "http://localhost:33427"
     }

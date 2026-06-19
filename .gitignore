@@ -41,3 +41,4 @@ luac.out
 
 meta.ini
 .vscode/
+tests/node_modules/
