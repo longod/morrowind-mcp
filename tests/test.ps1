@@ -31,22 +31,11 @@ if (-not $Result.TcpTestSucceeded) {
 
 # Write-Host "Running tests..." -ForegroundColor Cyan
 
-$TestResult = 0
-
-$Methods = @(
-    "tools/list",
-    "resources/list",
-    "prompts/list",
-    "resources/templates/list"
-)
-# "tools/call", "--tool-name", "-tool-arg",
-# "resources/read", "--uri"
-# "prompts/get", "--prompt-name",
-# "logging/setLevel", "--log-level", "debug",
-
+# Workaround for Inspector issue/PR #1337:
+# https://github.com/modelcontextprotocol/inspector/issues/1334
 # https://github.com/modelcontextprotocol/inspector/pull/1337
-# Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94
-# all tests always failed! FIX IT NOW!
+# "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" が混在しても
+# stdout が有効 JSON かつ実エラーが無ければ成功扱いにする。
 function Invoke-MCPInspector {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
@@ -62,28 +51,91 @@ function Invoke-MCPInspector {
     if ($Arguments) { $commandArguments += $Arguments }
 
     Write-Host "[RUN] $($Arguments -join ' ')" -ForegroundColor Cyan
-    # Keep inspector output visible without leaking it into function return values.
-    & npx @commandArguments 2>&1 | ForEach-Object { Write-Host $_ }
-    $result = $LASTEXITCODE
-    if ($result -ne 0) {
+    # 判定のために標準出力(JSON本体)と標準エラー(エラーメッセージ)を分離して取得する。
+    $stdoutFile = [System.IO.Path]::GetTempFileName()
+    $stderrFile = [System.IO.Path]::GetTempFileName()
+
+    try {
+        & npx.cmd @commandArguments 1> $stdoutFile 2> $stderrFile
+        $result = [int]$LASTEXITCODE
+
+        $stdoutText = if (Test-Path $stdoutFile) { Get-Content -Path $stdoutFile -Raw } else { "" }
+        $stderrText = if (Test-Path $stderrFile) { Get-Content -Path $stderrFile -Raw } else { "" }
+
+        if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
+            $stderrText -split "`r?`n" | ForEach-Object { if ($_ -ne "") { Write-Host $_ } }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
+            $stdoutText -split "`r?`n" | ForEach-Object { if ($_ -ne "") { Write-Host $_ } }
+        }
+
+        # Inspector の既知問題で出るノイズ行を定義する。
+        $assertionPattern = "Assertion failed: !\(handle->flags & UV_HANDLE_CLOSING\)"
+        $knownExitLinePattern = "^Failed with exit code:\s*3221226505\s*$"
+        $hasKnownAssertion = $stderrText -match $assertionPattern
+
+        # stdout が正しい JSON として読めるなら、MCP メソッド自体は成功しているとみなせる。
+        $hasValidJson = $false
+        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
+            try {
+                $null = $stdoutText | ConvertFrom-Json -ErrorAction Stop
+                $hasValidJson = $true
+            } catch {
+                $hasValidJson = $false
+            }
+        }
+
+        # 既知ノイズを除いた stderr が残る場合は、実際の失敗(例: Method not found)と判定する。
+        $filteredStderrLines = @()
+        if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
+            $filteredStderrLines = $stderrText -split "`r?`n" | Where-Object {
+                $_ -and
+                $_ -notmatch $assertionPattern -and
+                $_ -notmatch $knownExitLinePattern
+            }
+        }
+        $hasRealStderrError = $filteredStderrLines.Count -gt 0
+
+        # TODO 成功は、jsonの精査も行いたい
+        if ($result -eq 0) {
+            Write-Host "[PASSED]" -ForegroundColor Green
+            return 0
+        }
+
+        # Issue/PR #1337 のワークアラウンド:
+        # exit code は 1 でも、stdout が有効 JSON かつ stderr が既知ノイズのみなら成功扱いにする。
+        if ($result -eq 1 -and $hasKnownAssertion -and $hasValidJson -and -not $hasRealStderrError) {
+            Write-Host "[PASSED] (Known UV handle assertion ignored)" -ForegroundColor Green
+            return 0
+        }
+
         Write-Host "[FAILED] $result" -ForegroundColor Red
-    } else {
-        Write-Host "[PASSED]" -ForegroundColor Green
+        return $result
     }
-    return [int]$result
+    finally {
+        Remove-Item -Path $stdoutFile -ErrorAction SilentlyContinue
+        Remove-Item -Path $stderrFile -ErrorAction SilentlyContinue
+    }
 }
 
-# test log level
-$TestResult = $TestResult -bor (Invoke-MCPInspector "--method" "logging/setLevel" "--log-level" "trace")
+# TODO 成功を期待するテストのみなので、失敗を期待するテストも欲しい。無効な引数などで通信は成功するが、内容がエラーになることを確認する。
+# TODO luaからテストケースをある程度自動生成したい
+$TestCases = @(
+    @("--method", "logging/setLevel", "--log-level", "trace"),
+    @("--method", "tools/list"),
+    @("--method", "resources/list"),
+    @("--method", "prompts/list"),
+    @("--method", "resources/templates/list"),
+    @("--method", "tools/call", "--tool-name", "test_tool"), # no args
+    @("--method", "tools/call", "--tool-name", "test_tool", "--tool-arg", "arg1=value1", "--tool-arg", "arg2=value2"),
+    @("--method", "resources/read", "--uri", "placeholder"),
+    @("--method", "prompts/get", "--prompt-name", "placeholder")
+)
 
-# test list
-foreach ($method in $Methods) {
-    $TestResult = $TestResult -bor (Invoke-MCPInspector "--method" $method)
+$TestResult = 0
+foreach ($Test in $TestCases) {
+    $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
 }
-
-# TODO test tool/call
-# TODO test resources/read
-# TODO test prompts/get
 
 Write-Host "Stopping the server..." -ForegroundColor Cyan
 Start-Process "./stop_server.bat" -Wait -NoNewWindow
