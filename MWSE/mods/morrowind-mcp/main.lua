@@ -19,8 +19,7 @@ local function Test()
     end
 end
 
-local runTest = true
-if runTest then
+if require("morrowind-mcp.config").development.unitTest then
     Test()
 end
 

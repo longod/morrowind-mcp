@@ -55,6 +55,14 @@ local function OnModConfigReady(e)
                 logger.logToConsole = config.development.logToConsole
             end
         })
+        dev:createOnOffButton({
+            label = "Unit Test",
+            description = "Run unit tests on startup.",
+            variable = mwse.mcm.createTableVariable({
+                id = "unitTest",
+                table = config.development,
+            }),
+        })
     end
 
 end

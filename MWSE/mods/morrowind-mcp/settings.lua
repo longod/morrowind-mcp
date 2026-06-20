@@ -16,7 +16,7 @@ this.defaultConfig = {
     development = {
         logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,
-        -- test
+        unitTest = false,
     },
 }
 
