@@ -1,23 +1,25 @@
+$MaxWaitSeconds = 10
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
 $ExitCode = 0
 $CreatedSentinel = $false
 
 Push-Location $ScriptDir
 try {
-    $StartScriptPath = ".\start_server_mo2.bat"
-    $StopScriptPath = ".\stop_server.bat"
+    $StartScriptPath = ".\start_server_mo2.ps1"
+    $StopScriptPath = ".\stop_server.ps1"
     # Sentinel file toggles exit-after-tests behavior in Lua.
     $SentinelPath = ".\..\MWSE\mods\morrowind-mcp\.exit-after-tests"
-    $MaxWaitSeconds = 30
 
     # start script is mandatory; stop script is optional fallback on timeout.
     if (-not (Test-Path -LiteralPath $StartScriptPath)) {
-        Write-Host "[ERROR] start_server_mo2.bat was not found: $StartScriptPath" -ForegroundColor Red
+        Write-Host "[ERROR] $StartScriptPath was not found." -ForegroundColor Red
         exit 1
     }
     $HasStopScript = Test-Path -LiteralPath $StopScriptPath
     if (-not $HasStopScript) {
-        Write-Host "[WARN] stop_server.bat was not found: $StopScriptPath. Forced stop will be skipped." -ForegroundColor Yellow
+        Write-Host "[WARN] $StopScriptPath was not found. Forced stop will be skipped." -ForegroundColor Yellow
     }
 
     $SentinelDir = Split-Path -Parent $SentinelPath
@@ -37,7 +39,11 @@ try {
     }
 
     & $StartScriptPath
-    $ExitCode = [int]$LASTEXITCODE
+    $StartExitCode = [int]$LASTEXITCODE
+    if ($StartExitCode -ne 0) {
+        Write-Host "[WARN] $StartScriptPath exited non-zero: start=$StartExitCode" -ForegroundColor Yellow
+    }
+    $ExitCode = $StartExitCode
 
     # Wait briefly for process appearance because MO2 launch is asynchronous.
     $processName = "Morrowind"
@@ -64,7 +70,7 @@ try {
         if (-not $stoppedInTime) {
             if ($HasStopScript) {
                 # Prevent hanging forever when sentinel did not trigger exit.
-                Write-Host "[WARN] Morrowind is still running after timeout. Running stop_server.bat..." -ForegroundColor Yellow
+                Write-Host "[WARN] Morrowind is still running after timeout. Running $StopScriptPath" -ForegroundColor Yellow
                 & $StopScriptPath
                 for ($i = 0; $i -lt 10; $i++) {
                     if (-not (Get-Process -Name $processName -ErrorAction SilentlyContinue)) {

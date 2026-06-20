@@ -43,3 +43,4 @@ meta.ini
 .exit-after-tests
 .vscode/
 tests/node_modules/
+mwmcp.local.json

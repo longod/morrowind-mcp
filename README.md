@@ -22,6 +22,12 @@ This allows the AI to learn about the world of Morrowind and interact with it.
 
 https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
+### Shared root config
+
+Tests and agent-oriented tooling resolve host/port from [mwmcp.defaults.json](mwmcp.defaults.json), [mwmcp.local.json](mwmcp.local.json), and `MWMCP_SERVER_*` environment variables.
+
+Local development overrides can be placed in [mwmcp.local.json](mwmcp.local.json). The default values live in [mwmcp.defaults.json](mwmcp.defaults.json).
+
 ### Others
 
 ```json
@@ -38,8 +44,10 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 ## Development
 
 ```sh
-npx @modelcontextprotocol/inspector --config tests/mcp.json
+npx @modelcontextprotocol/inspector --cli http://localhost:33427 --transport http
 ```
+
+Test scripts are located under [tests/](tests/) and use [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1) and [tests/stop_server.ps1](tests/stop_server.ps1).
 
 https://github.com/modelcontextprotocol/inspector
 

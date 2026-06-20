@@ -1,0 +1,13 @@
+{
+  "server": {
+    "address": "localhost",
+    "port": 33427
+  },
+  "paths": {
+    "mo2ExeFile": "C:/Modding/MO2/ModOrganizer.exe",
+    "mo2Application": "Morrowind",
+    "mo2Profile": "Portable",
+    "morrowindInstallDir": "C:/Morrowind",
+    "mwseConfigDir": "C:/Morrowind/Data Files/MWSE/config"
+  }
+}

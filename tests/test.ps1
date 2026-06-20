@@ -1,35 +1,16 @@
-
-$TargetIP = "localhost"
-$TargetPort = 33427
 $MaxTry = 10
 $IntervalSeconds = 3
-$McpJson = "mcp.json"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Push-Location $ScriptDir
+. (Join-Path $ScriptDir "mwmcp_config.ps1")
 
-Write-Host "Starting the server..." -ForegroundColor Cyan
-Start-Process "./start_server_mo2.bat" -NoNewWindow
-
-$ProgressPreference = 'SilentlyContinue' # Suppress progress from Test-NetConnection
-for ($TryCount = 1; $TryCount -le $MaxTry; $TryCount++) {
-    # Test network connection and suppress warning/information logs
-    $Result = Test-NetConnection -ComputerName $TargetIP -Port $TargetPort -WarningAction Ignore -InformationAction Ignore
-    if ($Result.TcpTestSucceeded) {
-        Write-Host "[SUCCESS] Started server is responding on ${TargetIP}:${TargetPort}." -ForegroundColor Green
-        break
-    }
-    if ($TryCount -lt $MaxTry) {
-        Start-Sleep -Seconds $IntervalSeconds
-    }
+try {
+    $Config = Get-MwmcpConfig
 }
-if (-not $Result.TcpTestSucceeded) {
-    Write-Host "[ERROR] Failed to connect to the server at ${TargetIP}:${TargetPort}." -ForegroundColor Red
-    Pop-Location
-    exit -1
+catch {
+    Write-Host "[ERROR] Failed to resolve configuration: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
 }
-
-# Write-Host "Running tests..." -ForegroundColor Cyan
 
 # Workaround for Inspector issue/PR #1337:
 # https://github.com/modelcontextprotocol/inspector/issues/1334
@@ -46,7 +27,9 @@ function Invoke-MCPInspector {
         "--yes",
         "@modelcontextprotocol/inspector",
         "--cli",
-        "--config", $McpJson
+        $Config.Connection.url,
+        "--transport",
+        "http"
     )
     if ($Arguments) { $commandArguments += $Arguments }
 
@@ -80,7 +63,8 @@ function Invoke-MCPInspector {
             try {
                 $null = $stdoutText | ConvertFrom-Json -ErrorAction Stop
                 $hasValidJson = $true
-            } catch {
+            }
+            catch {
                 $hasValidJson = $false
             }
         }
@@ -118,28 +102,81 @@ function Invoke-MCPInspector {
     }
 }
 
-# TODO 成功を期待するテストのみなので、失敗を期待するテストも欲しい。無効な引数などで通信は成功するが、内容がエラーになることを確認する。
-# TODO luaからテストケースをある程度自動生成したい
-$TestCases = @(
-    @("--method", "logging/setLevel", "--log-level", "trace"),
-    @("--method", "tools/list"),
-    @("--method", "resources/list"),
-    @("--method", "prompts/list"),
-    @("--method", "resources/templates/list"),
-    @("--method", "tools/call", "--tool-name", "test_tool"), # no args
-    @("--method", "tools/call", "--tool-name", "test_tool", "--tool-arg", "arg1=value1", "--tool-arg", "arg2=value2"),
-    @("--method", "resources/read", "--uri", "placeholder"),
-    @("--method", "prompts/get", "--prompt-name", "placeholder")
-)
+$TargetIP = $Config.Connection.host
+$TargetPort = [int]$Config.Connection.port
 
-$TestResult = 0
-foreach ($Test in $TestCases) {
-    $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
+$ExitCode = 0
+
+Push-Location $ScriptDir
+try {
+    $StartScriptPath = ".\start_server_mo2.ps1"
+    $StopScriptPath = ".\stop_server.ps1"
+    if (-not (Test-Path -LiteralPath $StartScriptPath)) {
+        Write-Host "[ERROR] $StartScriptPath was not found." -ForegroundColor Red
+        $ExitCode = 1
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $StopScriptPath)) {
+        Write-Host "[ERROR] $StopScriptPath was not found." -ForegroundColor Red
+        $ExitCode = 1
+        return
+    }
+
+    & $StartScriptPath
+    $StartExitCode = [int]$LASTEXITCODE
+    if ($StartExitCode -ne 0) {
+        Write-Host "[WARN] $StartScriptPath exited non-zero: start=$StartExitCode" -ForegroundColor Yellow
+    }
+    $ExitCode = $StartExitCode
+
+    $ProgressPreference = 'SilentlyContinue' # Suppress progress from Test-NetConnection
+    for ($TryCount = 1; $TryCount -le $MaxTry; $TryCount++) {
+        # Test network connection and suppress warning/information logs
+        $Result = Test-NetConnection -ComputerName $TargetIP -Port $TargetPort -WarningAction Ignore -InformationAction Ignore
+        if ($Result.TcpTestSucceeded) {
+            Write-Host "[INFO] Started server is responding on ${TargetIP}:${TargetPort}." -ForegroundColor Green
+            break
+        }
+        if ($TryCount -lt $MaxTry) {
+            Start-Sleep -Seconds $IntervalSeconds
+        }
+    }
+    if (-not $Result.TcpTestSucceeded) {
+        Write-Host "[ERROR] Failed to connect to the server at ${TargetIP}:${TargetPort}." -ForegroundColor Red
+        $ExitCode = $ExitCode -bor 1
+        return
+    }
+
+    # TODO 成功を期待するテストのみなので、失敗を期待するテストも欲しい。無効な引数などで通信は成功するが、内容がエラーになることを確認する。
+    # TODO luaからテストケースをある程度自動生成したい
+    $TestCases = @(
+        @("--method", "logging/setLevel", "--log-level", "trace"),
+        @("--method", "tools/list"),
+        @("--method", "resources/list"),
+        @("--method", "prompts/list"),
+        @("--method", "resources/templates/list"),
+        @("--method", "tools/call", "--tool-name", "test_tool"), # no args
+        @("--method", "tools/call", "--tool-name", "test_tool", "--tool-arg", "arg1=value1", "--tool-arg", "arg2=value2"),
+        @("--method", "resources/read", "--uri", "placeholder"),
+        @("--method", "prompts/get", "--prompt-name", "placeholder")
+    )
+
+    $TestResult = 0
+    foreach ($Test in $TestCases) {
+        $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
+    }
+
+    $ExitCode = $ExitCode -bor $TestResult
+
+    Write-Host "[INFO] Stopping the server..." -ForegroundColor Cyan
+    & $StopScriptPath
+    if ([int]$LASTEXITCODE -ne 0) {
+        Write-Host "[WARN] $StopScriptPath exit code: $LASTEXITCODE" -ForegroundColor Yellow
+    }
+}
+finally {
+    Pop-Location
 }
 
-Write-Host "Stopping the server..." -ForegroundColor Cyan
-Start-Process "./stop_server.bat" -Wait -NoNewWindow
-
-Pop-Location
-
-exit $TestResult
+exit $ExitCode
