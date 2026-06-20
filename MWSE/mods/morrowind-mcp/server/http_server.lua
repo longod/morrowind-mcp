@@ -32,7 +32,7 @@ local socket = require("socket")
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
 ---@field httpHeaders table<string, string> must headers
 ---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
----@field methodHandlers table<string, fun(self: MwseHttpServer, params: table?): MethodResult>
+---@field methodHandlers table<string, fun(self: MwseHttpServer, params: MCP.RequestParams): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field resources table<string, MCP.IResource>
 ---@field tools table<string, MCP.ITool>
@@ -63,7 +63,7 @@ function this.new(params)
     instance.methodHandlers = {
         [mcp.method.initialize] = instance.OnInitialize,
         [mcp.method.notifications_initialized] = instance.OnNotification,
-        [mcp.method.logging_setlevel] = instance.OnLogging,
+        [mcp.method.logging_setlevel] = instance.OnLoggingSetLevel,
         [mcp.method.prompts_list] = instance.OnPromptsList,
         [mcp.method.resources_list] = instance.OnResourcesList,
         [mcp.method.tools_list] = instance.OnToolsList,
@@ -145,23 +145,10 @@ function this:DumpRequest(request)
     end
 end
 
----@class ClientRequest
----@field http_request Http.Request
----@field json_request MCP.JSONRPCRequest|MCP.JSONRPCNotification?
 
----@class ServerResponce
----@field http_responce Http.ResponseStatusCodes
----@field http_headers table<string, string>?
----@field json_result table?
----@field json_error MCP.Error?
-
----@class MethodResult
----@field http_responce Http.ResponseStatusCodes -- TODO simplify 200, 202, 400 or more?
----@field result MCP.Result?
----@field error MCP.Error?
 
 --- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
----@param params table?
+---@param params MCP.InitializeRequestParams
 ---@return MethodResult
 function this:OnInitialize(params)
     -- TODO reset state
@@ -171,10 +158,8 @@ function this:OnInitialize(params)
     -- todo validation and set correct values
     local protocolVersion = "2025-11-25"
 
-    ---@type MethodResult
-    local reuslt = {
-        http_responce = http.response_code.ok,
-        result = {
+    ---@type MCP.InitializeResult
+    local result = {
             ["protocolVersion"] = "2025-11-25",
             ["capabilities"] = {
                 ["logging"] = jsonrpc.object(),
@@ -207,73 +192,79 @@ function this:OnInitialize(params)
                 ["websiteUrl"] = "http://localhost:33427" -- or repository?
             },
             ["instructions"] = "Optional instructions for the client"
-        },
+        }
+
+    ---@type MethodResult
+    return {
+        http_responce = http.response_code.ok,
+        result = result,
     }
-    return reuslt
 end
 
----@param params table?
+---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnPromptsList(params)
-    local list = jsonrpc.array(table.size(self.prompts))
+    ---@type MCP.ListPromptsResult
+    local result = {
+        prompts = jsonrpc.array(table.size(self.prompts)),
+    }
 
     for name, value in pairs(self.prompts) do
         if value:CanExecute({}) then
-            table.insert(list, value.definition)
+            table.insert(result.prompts, value.definition)
         end
     end
 
     ---@type MethodResult
     return {
         http_responce = http.response_code.ok,
-        result = {
-            prompts = list,
-        },
+        result = result,
     }
 end
 
----@param params table?
+---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnResourcesList(params)
-    local list = jsonrpc.array(table.size(self.resources))
+    ---@type MCP.ListResourcesResult
+    local result = {
+        resources = jsonrpc.array(table.size(self.resources)),
+    }
 
     for name, value in pairs(self.resources) do
         if value:CanExecute({}) then
-            table.insert(list, value.definition)
+            table.insert(result.resources, value.definition)
         end
     end
 
     ---@type MethodResult
     return {
         http_responce = http.response_code.ok,
-        result = {
-            resources = list,
-        },
+        result = result,
     }
 end
 
----@param params table?
+---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnToolsList(params)
-
-    local list = jsonrpc.array(table.size(self.tools))
+    ---@type MCP.ListToolsResult
+    local result = {
+        tools = jsonrpc.array(table.size(self.tools)),
+    }
 
     for name, value in pairs(self.tools) do
         if value:CanExecute({}) then
-            table.insert(list, value.definition)
+            table.insert(result.tools, value.definition)
         end
     end
 
     ---@type MethodResult
     return {
         http_responce = http.response_code.ok,
-        result = {
-            tools = list,
-        },
+        result = result,
     }
 end
 
----@param params MCP.CallToolRequestParams?
+---@param params MCP.CallToolRequestParams
 ---@return MethodResult
 function this:OnToolsCall(params)
     if not params or not params.name then
@@ -306,18 +297,23 @@ function this:OnToolsCall(params)
     }
 end
 
----@param params table?
+---@param params MCP.SetLevelRequestParams
 ---@return MethodResult
-function this:OnLogging(params)
-    -- TODO set log level for cliant logging
+function this:OnLoggingSetLevel(params)
+    -- TODO set log level for client logging
+    self.logger:info("Set log level for client to: %s", params.level)
+    ---@type MethodResult
     return {
         http_responce = http.response_code.ok,
     }
 end
 
----@param params table?
+---@param params MCP.NotificationParams
 ---@return MethodResult
 function this:OnNotification(params)
+    --- curretly, this function is fallback for notifications, nothing to do, just return 202 Accepted
+    self.logger:info("Received notification")
+    ---@type MethodResult
     return {
         http_responce = http.response_code.accepted,
     }
@@ -347,8 +343,16 @@ function this:OnPOST(request)
     end
 
     self.logger:info("handle method: %s", request.json_request.method)
-
-    local result = handler(self, request.json_request.params)
+    local param = request.json_request.params or {}
+    local success, result = pcall(handler, self, param)
+    if not success then
+        self.logger:error("Failed to execute method %s", request.json_request.method)
+        ---@type ServerResponce
+        return {
+            http_responce = http.response_code.internal_server_error,
+            json_error = jsonrpc.error_code.internal_error,
+        }
+    end
 
     ---@type ServerResponce
     return {
@@ -404,7 +408,7 @@ function this:OnOPTIONS(request)
     return {
         http_responce = http.response_code.no_content,
         http_headers = cros,
-            -- json_error = jsonrpc.error_code.method_not_found,
+        -- json_error = jsonrpc.error_code.method_not_found,
     }
 end
 

@@ -1,3 +1,4 @@
+--[[
 local base = require("morrowind-mcp.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
@@ -316,7 +317,6 @@ function this:Listen(e)
 
             if this.IsSSE(request) then
                 -- SSE subscription request: send headers and keep client
-                --[[
                 local success, sendErr = http.SendResponse(client, "HTTP/1.1 200 OK", {
                     ["Content-Type"] = "text/event-stream",
                     ["Cache-Control"] = "no-cache",
@@ -328,10 +328,8 @@ function this:Listen(e)
                 else
                     self:AddClient(client)
                 end
-                --]]
             else
                 -- normal request: dispatch through existing handlers and close connection
-                --[[
                 local response = self:HandleRequest(request)
                 local status = 200
                 if response and response.status then status = response.status end
@@ -354,7 +352,6 @@ function this:Listen(e)
                 if not success then
                     self.logger:error("Error sending response: %s", sendErr)
                 end
-                --]]
                 pcall(function() client:close() end)
             end
         end
@@ -403,3 +400,4 @@ function this:Shutdown()
 end
 
 return this
+--]]

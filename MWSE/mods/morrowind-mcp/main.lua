@@ -1,8 +1,8 @@
 local function Test()
-	local args = os.getCommandLine()
-    for index, value in ipairs(args) do
-        print(value)
-    end
+	-- local args = os.getCommandLine()
+    -- for index, value in ipairs(args) do
+    --     print(value)
+    -- end
 
     local exitAfter = false
     local dataFiles = "Data Files\\"

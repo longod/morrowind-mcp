@@ -412,10 +412,6 @@ local logging_level = {
 
 ---@class MCP.ServerLoggingCapability: MCP.CapabilityMarker
 ---@class MCP.ServerCompletionsCapability: MCP.CapabilityMarker
----@class MCP.ServerPromptsListChangedCapability: MCP.CapabilityMarker
----@class MCP.ServerResourcesSubscribeCapability: MCP.CapabilityMarker
----@class MCP.ServerResourcesListChangedCapability: MCP.CapabilityMarker
----@class MCP.ServerToolsListChangedCapability: MCP.CapabilityMarker
 ---@class MCP.ServerTaskListCapability: MCP.CapabilityMarker
 ---@class MCP.ServerTaskCancelCapability: MCP.CapabilityMarker
 ---@class MCP.ServerTaskToolsCallCapability: MCP.CapabilityMarker
@@ -428,14 +424,14 @@ local logging_level = {
 ---@field tasks MCP.ClientTasksCapabilities?
 
 ---@class MCP.ServerPromptsCapabilities
----@field listChanged MCP.ServerPromptsListChangedCapability?
+---@field listChanged boolean?
 
 ---@class MCP.ServerResourcesCapabilities
----@field subscribe MCP.ServerResourcesSubscribeCapability?
----@field listChanged MCP.ServerResourcesListChangedCapability?
+---@field subscribe boolean?
+---@field listChanged boolean?
 
 ---@class MCP.ServerToolsCapabilities
----@field listChanged MCP.ServerToolsListChangedCapability?
+---@field listChanged boolean?
 
 ---@class MCP.ServerTaskToolsRequestsCapabilities
 ---@field call MCP.ServerTaskToolsCallCapability?
