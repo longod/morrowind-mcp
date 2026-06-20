@@ -40,5 +40,6 @@ luac.out
 *.hex
 
 meta.ini
+.exit-after-tests
 .vscode/
 tests/node_modules/

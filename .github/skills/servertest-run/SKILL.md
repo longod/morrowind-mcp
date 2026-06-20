@@ -1,29 +1,31 @@
 ---
-name: test-server
+name: servertest-run
 user-invocable: true
-summary: サーバーのテストを実行する
 description: |
-  ワークスペースのルートから `tests/test.ps1` を実行し、サーバーのテストを行う。
-  `pwsh -File tests/test.ps1`
+  Morrowind MCP のサーバーのテストを行う。出力と MWSE.log を確認してテストの成否を検証する。
 ---
 
-# test-server
+# servertest-run
 
 ## Purpose
 - リポジトリのルートからワークスペースのテストスクリプトを実行し、サーバーのテストを行う。
+- 出力からテストのの結果を検証する。
+- `MWSE.log` でサーバー側の結果を検証する。
 
 ## How to run
-ワークスペースのルートから、次のどちらかを使う。
+ワークスペースのルートから実行する。
 
 ```powershell
 pwsh -File tests/test.ps1
 ```
 
-ルートディレクトリにいるなら、こちらでも同じ。
+2. 出力を確認する。
 
-```powershell
-.\tests\test.ps1
-```
+3. 出力からテスト結果を抽出する。
+
+4. `MWSE.log` を確認する。
+
+5. `MWSE.log` からサーバー側の挙動を検査する。
 
 ## Notes
 - Inspector v0.22.0 では、`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94` が必ず発生する。

@@ -46,3 +46,4 @@ https://github.com/modelcontextprotocol/inspector
 - Streamable HTTP
 - http://localhost:33427
 - Via Proxy
+

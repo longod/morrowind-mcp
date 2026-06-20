@@ -1,11 +1,9 @@
 local function Test()
-	-- local args = os.getCommandLine()
-    -- for index, value in ipairs(args) do
-    --     print(value)
-    -- end
-
-    local exitAfter = false
+    -- commandline and environment variables are not available in MWSE with MO2
+    -- so we use a file to indicate that we should exit after running tests
     local dataFiles = "Data Files\\"
+    local exitAfterFlagPath = dataFiles .. "MWSE\\mods\\morrowind-mcp\\.exit-after-tests"
+    local exitAfter = lfs.attributes(exitAfterFlagPath, "mode") == "file"
     local testDir = "MWSE\\mods\\morrowind-mcp\\tests"
     local dir = dataFiles .. testDir
     for file in lfs.dir(dir) do
