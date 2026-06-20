@@ -45,7 +45,7 @@ function Get-FirstNonEmpty {
     return $null
 }
 
-# Resolve one config value using the shared precedence: local, then env, then defaults.
+# Resolve one config value using the shared precedence: env, then local, then defaults.
 function Resolve-ConfigValue {
     param(
         [object]$LocalConfig,
@@ -55,12 +55,12 @@ function Resolve-ConfigValue {
         [string]$DefaultPath
     )
 
-    # Each value resolves in the same order: local override, environment, then defaults.
+    # Each value resolves in the same order: environment override, local, then defaults.
     return Get-FirstNonEmpty -Candidates @(
-        # Local file wins when it provides a usable value.
-        (Get-NestedValue $LocalConfig -Path $LocalPath.Split('.')),
-        # Environment variables are the middle layer.
+        # Environment variables win when they provide a usable value.
         (Get-Item -Path "Env:$EnvName" -ErrorAction SilentlyContinue).Value,
+        # Local file is the middle layer.
+        (Get-NestedValue $LocalConfig -Path $LocalPath.Split('.')),
         # Defaults are the final fallback.
         (Get-NestedValue $DefaultsConfig -Path $DefaultPath.Split('.'))
     )
@@ -86,7 +86,7 @@ function Get-MwmcpConfig {
         $localConfig = Get-Content -LiteralPath $localPath -Raw | ConvertFrom-Json -ErrorAction Stop
     }
 
-    # Resolve connection and path settings from local/env/default layers.
+    # Resolve connection and path settings from env/local/default layers.
     $serverAddress = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "server.address" -EnvName "MWMCP_SERVER_ADDRESS" -DefaultPath "server.address"
     $serverPortRaw = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "server.port" -EnvName "MWMCP_SERVER_PORT" -DefaultPath "server.port"
 

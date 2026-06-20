@@ -7,7 +7,7 @@ This allows the AI to learn about the world of Morrowind and interact with it.
 ## MCP configuration
 
 ### VS Code
-.vscode/mcp.json
+- `.vscode/mcp.json`
 
 ```json
 {
@@ -22,13 +22,10 @@ This allows the AI to learn about the world of Morrowind and interact with it.
 
 https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
-### Shared root config
-
-Tests and agent-oriented tooling resolve host/port from [mwmcp.defaults.json](mwmcp.defaults.json), [mwmcp.local.json](mwmcp.local.json), and `MWMCP_SERVER_*` environment variables.
-
-Local development overrides can be placed in [mwmcp.local.json](mwmcp.local.json). The default values live in [mwmcp.defaults.json](mwmcp.defaults.json).
-
 ### Others
+
+- Cursor: `.cursor/mcp.json`
+- Others: `.mcp.json`
 
 ```json
 {
@@ -41,17 +38,50 @@ Local development overrides can be placed in [mwmcp.local.json](mwmcp.local.json
 }
 ```
 
+## MCP List
+
+### Tools
+
+### Resources
+
+### Prompts
+
 ## Development
 
-```sh
-npx @modelcontextprotocol/inspector --cli http://localhost:33427 --transport http
+### Shared root config
+
+Precedence: `env > local > default`.
+- Environment variables can be used to override values in `mwmcp.local.json` for CI or other purposes. For example, `MWMCP_SERVER_ADDRESS` can override the `server.address` value.
+- Local development overrides can be placed in [mwmcp.local.json](mwmcp.local.json).
+- The default values live in [mwmcp.defaults.json](mwmcp.defaults.json).
+
+Environment variables:
+
+| Variable | Overrides | Meaning |
+|---|---|---|
+| `MWMCP_SERVER_ADDRESS` | `server.address` | MCP server host name or IP address |
+| `MWMCP_SERVER_PORT` | `server.port` | MCP server TCP port |
+| `MWMCP_MO2_EXE_FILE` | `paths.mo2ExeFile` | ModOrganizer2 executable file path |
+| `MWMCP_MO2_APPLICATION` | `paths.mo2Application` | ModOrganizer2 application name to launch |
+| `MWMCP_MO2_PROFILE` | `paths.mo2Profile` | ModOrganizer2 profile name |
+| `MWMCP_MORROWIND_INSTALL_DIR` | `paths.morrowindInstallDir` | Morrowind install directory path |
+| `MWMCP_MWSE_CONFIG_DIR` | `paths.mwseConfigDir` | MWSE config directory path |
+
+### Test scripts
+
+- [tests/unit_test.ps1](tests/unit_test.ps1): Run Lua unit tests for MWSE mod modules
+- [tests/server_test.ps1](tests/server_test.ps1): Start Morrowind/MWSE server, run integration tests, and stop the server
+- [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Launch ModOrganizer2 to start Morrowind with MWSE and the MCP server
+- [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running MCP server
+- [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests
+
+### MCP Inspector
+
+Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Inspector UI:
+
+```powershell
+.\tests\start_inspector.ps1
 ```
 
-Test scripts are located under [tests/](tests/) and use [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1) and [tests/stop_server.ps1](tests/stop_server.ps1).
-
-https://github.com/modelcontextprotocol/inspector
-
-- Streamable HTTP
-- http://localhost:33427
-- Via Proxy
+This automatically resolves the server configuration and opens the Inspector at the configured connection URL.
 
