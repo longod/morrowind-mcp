@@ -4,7 +4,11 @@ Morrowind Model Context Protocol Server (Morrowind MCP) connects Morrowind to ex
 
 This allows the AI to learn about the world of Morrowind and interact with it.
 
-## MCP configuration
+## Features
+
+[FEATURES.md](FEATURES.md)
+
+## MCP Configuration
 
 ### VS Code
 - `.vscode/mcp.json`
@@ -37,14 +41,6 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
   }
 }
 ```
-
-## MCP List
-
-### Tools
-
-### Resources
-
-### Prompts
 
 ## Development
 
