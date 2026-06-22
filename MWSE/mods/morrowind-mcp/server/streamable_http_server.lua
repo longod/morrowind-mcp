@@ -1,3 +1,5 @@
+---@deprecated
+
 --[[
 local base = require("morrowind-mcp.iserver")
 local http = require("morrowind-mcp.server.http")

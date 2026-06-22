@@ -18,10 +18,10 @@ description: |
 1. サーバー起動経路を確認し、実際に使われるサーバー実装ファイルを特定する。
 2. サーバー実装から `methodHandlers` を確認し、実行可能な `*/list` メソッドのみ抽出する。
 3. `prompts`, `resources`, `tools` のロード元を確認し、実ファイルから `definition.name`, `definition.description` を収集する。
-4. Markdownを3セクションに分けて出力する。
-- Prompts:`prompts/list`
-- Resources:`resources/list`
-- Tools:`tools/list`
+4. [FEATURES.md](../../../FEATURES.md) にMarkdownを3セクションに分けて出力する。
+- `prompts/list` -> `Prompts`
+- `resources/list` -> `Resources`
+- `tools/list` -> `Tools`
 5. 各セクションは、要素がある場合のみ表形式で `Name`, `Description` を書く。
 
 ## 分岐ルール

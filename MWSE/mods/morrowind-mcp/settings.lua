@@ -4,6 +4,8 @@ this.modName = this.metadata.package.name
 this.version = this.metadata.package.version
 this.description = this.metadata.package.description
 this.configPath = "morrowind-mcp"
+this.dataFiles = "Data Files\\"
+this.modDir = this.dataFiles .. "MWSE\\mods\\morrowind-mcp\\"
 
 ---@class MCP.MWSEConfig
 this.defaultConfig = {
@@ -17,6 +19,7 @@ this.defaultConfig = {
         logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,
         unitTest = false,
+        debug = false,
     },
 }
 

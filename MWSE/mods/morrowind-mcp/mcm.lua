@@ -16,6 +16,42 @@ local function OnModConfigReady(e)
 
     -- stop, start, restart buttons
     -- port, server status
+
+    do
+        local server = page:createCategory({
+            label = "Server",
+            description = "Settings for the MCP server.",
+        })
+        server:createTextField({
+            label = "Address",
+            description = "The address the server will listen on.",
+            variable = mwse.mcm.createTableVariable({
+                id = "address",
+                table = config.server,
+            }),
+            restartRequired = true,
+        })
+        server:createTextField({
+            label = "Port",
+            description = "The port the server will listen on.",
+            variable = mwse.mcm.createTableVariable({
+                id = "port",
+                table = config.server,
+            }),
+            restartRequired = true,
+            numbersOnly = true,
+            converter = function(text)
+                local num = tonumber(text)
+                if num then
+                    --- clamp to valid port range
+                    num = math.max(1024, math.min(65535, num))
+                    return num
+                end
+                return config.server.port
+            end,
+        })
+    end
+
     -- history
     -- dev menu
     do
@@ -60,6 +96,14 @@ local function OnModConfigReady(e)
             description = "Run unit tests on startup.",
             variable = mwse.mcm.createTableVariable({
                 id = "unitTest",
+                table = config.development,
+            }),
+        })
+        dev:createOnOffButton({
+            label = "Debug Mode",
+            description = "Enable debug mode.",
+            variable = mwse.mcm.createTableVariable({
+                id = "debug",
                 table = config.development,
             }),
         })

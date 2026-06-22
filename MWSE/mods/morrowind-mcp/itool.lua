@@ -23,7 +23,7 @@ function this:CanExecute(params)
 end
 
 ---@public
----@param params table
+---@param params MCP.CallToolRequestParams
 ---@return MCP.CallToolResult?
 function this:Execute(params)
 end

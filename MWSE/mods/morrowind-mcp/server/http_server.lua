@@ -3,25 +3,7 @@ local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.strutil")
 local mcp = require("morrowind-mcp.mcp")
-
-local dataFiles = "Data Files\\"
-local modDir = "MWSE\\mods\\morrowind-mcp\\"
-local maxClients = 32
-local maxQueueSize = 128
-local notificationMethod = "server/event"
-
-
--- ---@type table<string, function>
--- local methods = {
---     ["server/discover"] = nil,
---     ["prompts/list"] = nil,
---     ["prompts/get"] = nil,
--- }
-
--- "server"
--- "prompts"
--- "list"
--- "get"
+local settings = require("morrowind-mcp.settings")
 
 ---@type Socket.Module
 local socket = require("socket")
@@ -30,6 +12,8 @@ local socket = require("socket")
 ---@field logger mwseLogger
 ---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
+---@field hostname string
+---@field port integer
 ---@field httpHeaders table<string, string> must headers
 ---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
 ---@field methodHandlers table<string, fun(self: MwseHttpServer, params: MCP.RequestParams): MethodResult>
@@ -39,12 +23,6 @@ local socket = require("socket")
 local this = {}
 setmetatable(this, { __index = base })
 
--- this.returnedTypes = {
---     complete = "complete",
---     failed = "failed",
---     progressing = "progressing",
--- }
-
 ---@param params table?
 ---@return MwseHttpServer
 function this.new(params)
@@ -53,6 +31,8 @@ function this.new(params)
     if not instance.logger then
         instance.logger = require("morrowind-mcp.logger")
     end
+    instance.hostname = instance.hostname or settings.defaultConfig.server.address
+    instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
@@ -78,10 +58,10 @@ end
 
 function this:LoadPrompts()
     self.prompts = {}
-    local dir = dataFiles .. modDir .. "prompts"
+    local dir = settings.modDir .. "prompts\\"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local prompt  = dofile(dir .. "\\" .. file) ---@type MCP.IPrompt
+            local prompt  = dofile(dir .. file) ---@type MCP.IPrompt
             if prompt and type(prompt) == "table" then
                 local instance = prompt.new()
                 self.prompts[instance.definition.name] = instance
@@ -94,10 +74,10 @@ end
 
 function this:LoadResources()
     self.resources = {}
-    local dir = dataFiles .. modDir .. "resources"
+    local dir = settings.modDir .. "resources\\"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local res  = dofile(dir .. "\\" .. file) ---@type MCP.IResource
+            local res  = dofile(dir .. file) ---@type MCP.IResource
             if res and type(res) == "table" then
                 local instance = res.new()
                 self.resources[instance.definition.name] = instance
@@ -110,10 +90,10 @@ end
 
 function this:LoadTools()
     self.tools = {}
-    local dir = dataFiles .. modDir .. "tools"
+    local dir = settings.modDir .. "tools\\"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local tool = dofile(dir .. "\\" .. file) ---@type MCP.ITool
+            local tool = dofile(dir .. file) ---@type MCP.ITool
             if tool and type(tool) == "table" then
                 local instance = tool.new()
                 self.tools[instance.definition.name] = instance
@@ -155,7 +135,7 @@ function this:OnInitialize(params)
 
     local settings = require("morrowind-mcp.settings")
 
-    -- todo validation and set correct values
+    -- TODO validation and set correct values
     local protocolVersion = "2025-11-25"
 
     ---@type MCP.InitializeResult
@@ -288,6 +268,7 @@ function this:OnToolsCall(params)
         }
     end
 
+    -- TODO maybe need more context table (world, player, etc...)
     local result = tool:Execute(params)
 
     ---@type MethodResult
@@ -488,9 +469,9 @@ function this:Start()
         self.logger:warn("MCP server is already running")
         return false
     end
-    self.server = socket.bind("localhost", "33427")
+    self.server = socket.bind(self.hostname, self.port)
     if not self.server then
-        self.logger:error("Failed to start MCP server on port 33427")
+        self.logger:error("Failed to start MCP server on %s:%d", self.hostname, self.port)
         return false
     end
     self.server:settimeout(0)
@@ -502,7 +483,7 @@ function this:Start()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
-    self.logger:info("server started on port 33427")
+    self.logger:info("server started on %s:%d", self.hostname, self.port)
     return true
 end
 

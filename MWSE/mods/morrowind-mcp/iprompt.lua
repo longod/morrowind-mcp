@@ -14,5 +14,13 @@ function this.new(params)
     return instance
 end
 
+---@public
+---@param params table
+---@return boolean
+function this:CanExecute(params)
+    return true
+end
+
+
 
 return this

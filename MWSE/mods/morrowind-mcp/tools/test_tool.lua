@@ -17,7 +17,7 @@ function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.TestTool
     instance.definition = {
-        name = "test_tool",
+        name = "test_tool", -- TODO need prefix?
         description = "Returns state of on main menu",
         inputSchema = {
             type = "object",
@@ -28,12 +28,10 @@ function this.new(params)
 end
 
 function this:CanExecute(params)
+    -- only in development mode
     return true
 end
 
----comment
----@param params table
----@return MCP.CallToolResult
 function this:Execute(params)
     local menu = tes3.onMainMenu()
     -- todo generator?
