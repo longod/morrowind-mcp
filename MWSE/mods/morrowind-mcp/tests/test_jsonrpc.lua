@@ -132,7 +132,7 @@ function this.Test()
     end)
 
     unitwind:test("Tool generators build schema, execution and annotations", function()
-        local schema = jsonrpc.ToolObjectSchema(
+        local schema = jsonrpc.InputSchema(
             { name = { type = "string" } },
             { "name" },
             "https://json-schema.org/draft/2020-12/schema"
@@ -150,6 +150,86 @@ function this.Test()
         unitwind:expect(annotations.destructiveHint).toBe(false)
         unitwind:expect(annotations.idempotentHint).toBe(true)
         unitwind:expect(annotations.openWorldHint).toBe(false)
+    end)
+
+    unitwind:test("ToolObjectSchema keeps required and reports missing keys", function()
+        local schema, validRequired = jsonrpc.InputSchema(
+            {
+                name = { type = "string" },
+                age = { type = "number" },
+            },
+            { "name", "missing", "age" },
+            "https://json-schema.org/draft/2020-12/schema"
+        )
+
+        unitwind:expect(validRequired).toBe(false)
+        unitwind:expect(type(schema.required)).toBe("table")
+        unitwind:expect(table.size(schema.required)).toBe(3)
+        unitwind:expect(schema.required[1]).toBe("name")
+        unitwind:expect(schema.required[2]).toBe("missing")
+        unitwind:expect(schema.required[3]).toBe("age")
+    end)
+
+    unitwind:test("ToolObjectSchema reports false when required is valid", function()
+        local schema, validRequired = jsonrpc.InputSchema(
+            {
+                value = { type = "string" },
+            },
+            { "value" },
+            "https://json-schema.org/draft/2020-12/schema"
+        )
+
+        unitwind:expect(validRequired).toBe(true)
+        unitwind:expect(schema.required[1]).toBe("value")
+    end)
+
+    unitwind:test("Tool generator builds MCP.Tool from single ToolInput argument", function()
+        local inputSchema = jsonrpc.InputSchema(
+            { value = { type = "string" } },
+            { "value" },
+            "https://json-schema.org/draft/2020-12/schema"
+        )
+
+        local tool = jsonrpc.Tool({
+            name = "test_tool",
+            title = "Test Tool",
+            description = "Returns state of on main menu",
+            inputSchema = inputSchema,
+            execution = jsonrpc.ToolExecution("optional"),
+            outputSchema = jsonrpc.OutputSchema(nil, nil, "https://json-schema.org/draft/2020-12/schema"),
+            annotations = jsonrpc.ToolAnnotations("Test Tool", true, false, true, false),
+        })
+
+        unitwind:expect(tool.name).toBe("test_tool")
+        unitwind:expect(tool.title).toBe("Test Tool")
+        unitwind:expect(tool.inputSchema.type).toBe("object")
+        unitwind:expect(tool.execution.taskSupport).toBe("optional")
+        unitwind:expect(tool.annotations.readOnlyHint).toBe(true)
+    end)
+
+    unitwind:test("Tool generator keeps additionalProperties unset for empty inputSchema.properties", function()
+        local inputSchema = jsonrpc.InputSchema({}, nil, "https://json-schema.org/draft/2020-12/schema")
+        local outputSchema = jsonrpc.OutputSchema({}, nil, "https://json-schema.org/draft/2020-12/schema")
+
+        local tool = jsonrpc.Tool({
+            name = "no_params_tool",
+            description = "Tool with no parameters",
+            inputSchema = inputSchema,
+            outputSchema = outputSchema,
+        })
+
+        unitwind:expect(tool.inputSchema.additionalProperties).toBe(nil)
+    end)
+
+    unitwind:test("Tool generator keeps MCP.Tool inputSchema required", function()
+        local tool = jsonrpc.Tool({
+            name = "implicit_input_schema_tool",
+            description = "Tool with generated input schema",
+            inputSchema = jsonrpc.InputSchema(),
+        })
+
+        unitwind:expect(tool.inputSchema.type).toBe("object")
+        unitwind:expect(tool.inputSchema.additionalProperties).toBe(false)
     end)
 
     unitwind:test("ListPromptsResult prepares MCP array field", function()

@@ -863,7 +863,14 @@ local logging_level = {
 -- Tools
 -- ============================================================================
 
----@class MCP.ToolObjectSchema
+---@class MCP.InputSchema
+---@field ["$schema"] string?
+---@field type "object"
+---@field properties table<string, MCP.JsonSchemaProperty>?
+---@field required string[]?
+---@field additionalProperties boolean?
+
+---@class MCP.OutputSchema
 ---@field ["$schema"] string?
 ---@field type "object"
 ---@field properties table<string, MCP.JsonSchemaProperty>?
@@ -886,9 +893,9 @@ local logging_level = {
 ---@field name string
 ---@field title string?
 ---@field description string?
----@field inputSchema MCP.ToolObjectSchema
+---@field inputSchema MCP.InputSchema
 ---@field execution MCP.ToolExecution?
----@field outputSchema MCP.ToolObjectSchema?
+---@field outputSchema MCP.OutputSchema?
 ---@field annotations MCP.ToolAnnotations?
 
 ---@class MCP.ListToolsRequest

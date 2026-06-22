@@ -303,15 +303,58 @@ end
 
 ---@param properties table<string, MCP.JsonSchemaProperty>?
 ---@param required string[]?
+---@return boolean validRequired
+local function ValidateProperties(properties, required)
+    if required then
+        if properties then
+            for _, key in ipairs(required) do
+                if not properties[key] then
+                    return false
+                end
+            end
+        else
+            return false
+        end
+    end
+    return true
+end
+
+---@param properties table<string, MCP.JsonSchemaProperty>?
+---@param required string[]?
 ---@param schema string?
----@return MCP.ToolObjectSchema
-function this.ToolObjectSchema(properties, required, schema)
-    return {
+---@return MCP.InputSchema
+---@return boolean validRequired
+function this.InputSchema(properties, required, schema)
+    local validRequired = ValidateProperties(properties, required)
+
+    local inputSchema = {
         ["$schema"] = schema,
         type = "object",
         properties = properties,
         required = required,
     }
+    if not inputSchema.properties then
+        inputSchema.additionalProperties = false
+    end
+    return inputSchema, validRequired
+end
+
+
+---@param properties table<string, MCP.JsonSchemaProperty>?
+---@param required string[]?
+---@param schema string?
+---@return MCP.OutputSchema
+---@return boolean validRequired
+function this.OutputSchema(properties, required, schema)
+    local validRequired = ValidateProperties(properties, required)
+
+    local outputSchema = {
+        ["$schema"] = schema,
+        type = "object",
+        properties = properties,
+        required = required,
+    }
+    return outputSchema, validRequired
 end
 
 ---@param taskSupport MCP.ToolTaskSupport?
@@ -336,6 +379,21 @@ function this.ToolAnnotations(title, readOnlyHint, destructiveHint, idempotentHi
         idempotentHint = idempotentHint,
         openWorldHint = openWorldHint,
     }
+end
+
+---@param tool MCP.Tool
+---@return MCP.Tool
+function this.Tool(tool)
+    local normalizedTool = this.object(8)
+    normalizedTool.icons = tool.icons
+    normalizedTool.name = tool.name
+    normalizedTool.title = tool.title
+    normalizedTool.description = tool.description
+    normalizedTool.inputSchema = tool.inputSchema
+    normalizedTool.execution = tool.execution
+    normalizedTool.outputSchema = tool.outputSchema
+    normalizedTool.annotations = tool.annotations
+    return normalizedTool
 end
 
 -- ============================================================================
@@ -445,9 +503,9 @@ end
 function this.CallToolResult(content, structuredContent, isError)
     local result_content = nil
     if type(content) == "table" then
-        if content.type ~= nil then
+        if content.type ~= nil then -- single content block
             result_content = this.array({ content })
-        else
+        else -- array of content blocks
             result_content = this.array(content)
         end
     else

@@ -6,6 +6,9 @@ this.description = this.metadata.package.description
 this.configPath = "morrowind-mcp"
 this.dataFiles = "Data Files\\"
 this.modDir = this.dataFiles .. "MWSE\\mods\\morrowind-mcp\\"
+this.name_prefix = "mw_"
+this.title_prefix = "[Morrowind] "
+this.description_prefix = "[Morrowind] "
 
 ---@class MCP.MWSEConfig
 this.defaultConfig = {

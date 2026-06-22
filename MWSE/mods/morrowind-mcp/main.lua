@@ -19,11 +19,16 @@ local function Test()
     end
 end
 
-if require("morrowind-mcp.config").development.unitTest then
+local config =require("morrowind-mcp.config")
+
+if config.development.unitTest then
     Test()
 end
 
-local server = require("morrowind-mcp.server.http_server").new()
+local server = require("morrowind-mcp.server.http_server").new({
+    hostname = config.server.hostname,
+    port = config.server.port,
+})
 
 ---@param e initializedEventData
 local function OnInitialized(e)

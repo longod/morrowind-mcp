@@ -16,14 +16,12 @@ setmetatable(this, { __index = base })
 function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.TestTool
-    instance.definition = {
+    local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+    instance.definition = jsonrpc.Tool({
         name = "test_tool", -- TODO need prefix?
         description = "Returns state of on main menu",
-        inputSchema = {
-            type = "object",
-            additionalProperties = false,
-        },
-    }
+        inputSchema = jsonrpc.InputSchema(),
+    })
     return instance
 end
 
