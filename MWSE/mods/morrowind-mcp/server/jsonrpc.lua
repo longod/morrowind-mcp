@@ -60,19 +60,55 @@ local function AddType(tbl, forceType)
     return tbl
 end
 
----@param reserved number?
----@return table
-function this.object(reserved)
-    local t = table.new(0, reserved or 0)
+---@param arg table|number?
+---@return table?
+function this.object(arg)
+    local content = nil
+    local reserved = 0
+    if type(arg) == "number" then
+        reserved = arg
+    elseif type(arg) == "table" then
+        local mt = getmetatable(arg)
+        if mt and mt.__jsontype == "array" then
+            return nil -- array tagged table is not valid for object
+        else
+            content = arg
+            reserved = table.size(content)
+        end
+    end
+    local t = table.new(0, reserved)
     setmetatable(t, { __jsontype = "object" })
+    if content then
+        for k, v in pairs(content) do
+            t[k] = v
+        end
+    end
     return t
 end
 
----@param reserved number?
----@return table
-function this.array(reserved)
-    local t = table.new(reserved or 0, 0)
+---@param arg table|number?
+---@return table?
+function this.array(arg)
+    local content = nil
+    local reserved = 0
+    if type(arg) == "number" then
+        reserved = arg
+    elseif type(arg) == "table" then
+        local mt = getmetatable(arg)
+        if mt and mt.__jsontype == "object" then
+            return nil -- object tagged table is not valid for array
+        else
+            content = arg
+            reserved = table.size(content)
+        end
+    end
+    local t = table.new(reserved, 0)
     setmetatable(t, { __jsontype = "array" })
+    if content then
+        for _, v in ipairs(content) do
+            table.insert(t, v)
+        end
+    end
     return t
 end
 
@@ -160,6 +196,329 @@ function this.notification(method, params)
     end
     return json.encode(body, { indent = false })
 
+end
+
+-- ============================================================================
+-- MCP Content Generators
+-- ============================================================================
+
+---@param text string
+---@param annotations MCP.Annotations?
+---@return MCP.TextContent
+function this.TextContent(text, annotations)
+    return {
+        type = "text",
+        text = text,
+        annotations = annotations,
+    }
+end
+
+---@param data string
+---@param mimeType MCP.MimeType
+---@param annotations MCP.Annotations?
+---@return MCP.ImageContent
+function this.ImageContent(data, mimeType, annotations)
+    return {
+        type = "image",
+        data = data,
+        mimeType = mimeType,
+        annotations = annotations,
+    }
+end
+
+---@param data string
+---@param mimeType MCP.MimeType
+---@param annotations MCP.Annotations?
+---@return MCP.AudioContent
+function this.AudioContent(data, mimeType, annotations)
+    return {
+        type = "audio",
+        data = data,
+        mimeType = mimeType,
+        annotations = annotations,
+    }
+end
+
+---@param uri string
+---@param text string
+---@param mimeType MCP.MimeType?
+---@return MCP.TextResourceContents
+function this.TextResourceContents(uri, text, mimeType)
+    return {
+        uri = uri,
+        mimeType = mimeType,
+        text = text,
+    }
+end
+
+---@param uri string
+---@param blob string
+---@param mimeType MCP.MimeType?
+---@return MCP.BlobResourceContents
+function this.BlobResourceContents(uri, blob, mimeType)
+    return {
+        uri = uri,
+        mimeType = mimeType,
+        blob = blob,
+    }
+end
+
+---@param resource MCP.TextResourceContents|MCP.BlobResourceContents
+---@param annotations MCP.Annotations?
+---@return MCP.EmbeddedResource
+function this.EmbeddedResource(resource, annotations)
+    return {
+        type = "resource",
+        resource = resource,
+        annotations = annotations,
+    }
+end
+
+---@param name string
+---@param uri string
+---@param title string?
+---@param description string?
+---@param mimeType MCP.MimeType?
+---@param annotations MCP.Annotations?
+---@param size number?
+---@param icons MCP.Icon[]?
+---@return MCP.ResourceLink
+function this.ResourceLink(name, uri, title, description, mimeType, annotations, size, icons)
+    return {
+        type = "resource_link",
+        icons = icons,
+        name = name,
+        title = title,
+        uri = uri,
+        description = description,
+        mimeType = mimeType,
+        annotations = annotations,
+        size = size,
+    }
+end
+
+-- ============================================================================
+-- MCP Tool Generators
+-- ============================================================================
+
+---@param properties table<string, MCP.JsonSchemaProperty>?
+---@param required string[]?
+---@param schema string?
+---@return MCP.ToolObjectSchema
+function this.ToolObjectSchema(properties, required, schema)
+    return {
+        ["$schema"] = schema,
+        type = "object",
+        properties = properties,
+        required = required,
+    }
+end
+
+---@param taskSupport MCP.ToolTaskSupport?
+---@return MCP.ToolExecution
+function this.ToolExecution(taskSupport)
+    return {
+        taskSupport = taskSupport,
+    }
+end
+
+---@param title string?
+---@param readOnlyHint boolean?
+---@param destructiveHint boolean?
+---@param idempotentHint boolean?
+---@param openWorldHint boolean?
+---@return MCP.ToolAnnotations
+function this.ToolAnnotations(title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
+    return {
+        title = title,
+        readOnlyHint = readOnlyHint,
+        destructiveHint = destructiveHint,
+        idempotentHint = idempotentHint,
+        openWorldHint = openWorldHint,
+    }
+end
+
+-- ============================================================================
+-- MCP Result Generators
+-- ============================================================================
+
+---@param values table|number?
+---@param total number?
+---@param hasMore boolean?
+---@return MCP.CompleteResult
+function this.CompleteResult(values, total, hasMore)
+    return {
+        completion = {
+            values = this.array(values),
+            total = total,
+            hasMore = hasMore,
+        },
+    }
+end
+
+---@return MCP.ElicitResult
+function this.ElicitResult()
+    return {
+        action = nil,
+        content = nil,
+    }
+end
+
+---@return MCP.InitializeResult
+function this.InitializeResult()
+    return {
+        protocolVersion = nil,
+        capabilities = this.object(),
+        serverInfo = this.object(),
+        instructions = nil,
+    }
+end
+
+---@param task MCP.Task?
+---@return MCP.CreateTaskResult
+function this.CreateTaskResult(task)
+    return {
+        task = this.object(task),
+    }
+end
+
+---@param prompts table|number?
+---@param nextCursor string?
+---@return MCP.ListPromptsResult
+function this.ListPromptsResult(prompts, nextCursor)
+    return {
+        prompts = this.array(prompts),
+        nextCursor = nextCursor,
+    }
+end
+
+---@param resources table|number?
+---@param nextCursor string?
+---@return MCP.ListResourcesResult
+function this.ListResourcesResult(resources, nextCursor)
+    return {
+        resources = this.array(resources),
+        nextCursor = nextCursor,
+    }
+end
+
+---@param tools table|number?
+---@param nextCursor string?
+---@return MCP.ListToolsResult
+function this.ListToolsResult(tools, nextCursor)
+    return {
+        tools = this.array(tools),
+        nextCursor = nextCursor,
+    }
+end
+
+---@param roots table|number?
+---@return MCP.ListRootsResult
+function this.ListRootsResult(roots)
+    return {
+        roots = this.array(roots),
+    }
+end
+
+---@param tasks table|number?
+---@param nextCursor string?
+---@return MCP.ListTasksResult
+function this.ListTasksResult(tasks, nextCursor)
+    return {
+        tasks = this.array(tasks),
+        nextCursor = nextCursor,
+    }
+end
+
+---@param contents table|number?
+---@return MCP.ReadResourceResult
+function this.ReadResourceResult(contents)
+    return {
+        contents = this.array(contents),
+    }
+end
+
+---@param content MCP.ContentBlock|MCP.ContentBlock[]?
+---@param structuredContent MCP.AnyMap?
+---@param isError boolean?
+---@return MCP.CallToolResult
+function this.CallToolResult(content, structuredContent, isError)
+    local result_content = nil
+    if type(content) == "table" then
+        if content.type ~= nil then
+            result_content = this.array({ content })
+        else
+            result_content = this.array(content)
+        end
+    else
+        result_content = this.array()
+    end
+    return {
+        content = result_content,
+        structuredContent = structuredContent,
+        isError = isError,
+    }
+end
+
+---@param messages table|number?
+---@param description string?
+---@return MCP.GetPromptResult
+function this.GetPromptResult(messages, description)
+    return {
+        description = description,
+        messages = this.array(messages),
+    }
+end
+
+---@return MCP.GetTaskResult
+function this.GetTaskResult()
+    return {
+        taskId = nil,
+        status = nil,
+        statusMessage = nil,
+        createdAt = nil,
+        lastUpdatedAt = nil,
+        ttl = nil,
+        pollInterval = nil,
+    }
+end
+
+---@return MCP.GetTaskPayloadResult
+function this.GetTaskPayloadResult()
+    return {}
+end
+
+---@return MCP.CancelTaskResult
+function this.CancelTaskResult()
+    return {
+        taskId = nil,
+        status = nil,
+        statusMessage = nil,
+        createdAt = nil,
+        lastUpdatedAt = nil,
+        ttl = nil,
+        pollInterval = nil,
+    }
+end
+
+---@param resourceTemplates table|number?
+---@param nextCursor string?
+---@return MCP.ListResourceTemplatesResult
+function this.ListResourceTemplatesResult(resourceTemplates, nextCursor)
+    return {
+        resourceTemplates = this.array(resourceTemplates),
+        nextCursor = nextCursor,
+    }
+end
+
+---@return MCP.CreateMessageResult
+function this.CreateMessageResult()
+    return {
+        model = nil,
+        stopReason = nil,
+        role = nil,
+        content = this.array(),
+    }
 end
 
 return this

@@ -135,44 +135,40 @@ function this:OnInitialize(params)
 
     local settings = require("morrowind-mcp.settings")
 
-    -- TODO validation and set correct values
-    local protocolVersion = "2025-11-25"
-
     ---@type MCP.InitializeResult
-    local result = {
-            ["protocolVersion"] = "2025-11-25",
-            ["capabilities"] = {
-                ["logging"] = jsonrpc.object(),
-                ["prompts"] = {
-                    ["listChanged"] = false,
-                },
-                ["resources"] = {
-                    ["subscribe"] = false,
-                    ["listChanged"] = false,
-                },
+    local result = jsonrpc.InitializeResult()
+    result.protocolVersion = "2025-11-25"
+    result.capabilities = {
+        ["logging"] = jsonrpc.object(),
+        ["prompts"] = {
+            ["listChanged"] = false,
+        },
+        ["resources"] = {
+            ["subscribe"] = false,
+            ["listChanged"] = false,
+        },
+        ["tools"] = {
+            ["listChanged"] = false,
+        },
+        ["tasks"] = {
+            ["list"] = jsonrpc.object(),
+            ["cancel"] = jsonrpc.object(),
+            ["requests"] = {
                 ["tools"] = {
-                    ["listChanged"] = false,
-                },
-                ["tasks"] = {
-                    ["list"] = jsonrpc.object(),
-                    ["cancel"] = jsonrpc.object(),
-                    ["requests"] = {
-                        ["tools"] = {
-                            ["call"] = jsonrpc.object(),
-                        },
-                    },
+                    ["call"] = jsonrpc.object(),
                 },
             },
-            ["serverInfo"] = {
-                ["name"] = settings.modName,
-                ["title"] = settings.modName,
-                ["version"] = settings.version,
-                ["description"] = settings.description,
-                ["icons"] = jsonrpc.array(),
-                ["websiteUrl"] = "http://localhost:33427" -- or repository?
-            },
-            ["instructions"] = "Optional instructions for the client"
-        }
+        },
+    }
+    result.serverInfo = {
+        ["name"] = settings.modName,
+        ["title"] = settings.modName,
+        ["version"] = settings.version,
+        ["description"] = settings.description,
+        ["icons"] = jsonrpc.array(),
+        ["websiteUrl"] = "http://localhost:33427" -- or repository?
+    }
+    result.instructions = "Optional instructions for the client"
 
     ---@type MethodResult
     return {
@@ -185,9 +181,7 @@ end
 ---@return MethodResult
 function this:OnPromptsList(params)
     ---@type MCP.ListPromptsResult
-    local result = {
-        prompts = jsonrpc.array(table.size(self.prompts)),
-    }
+    local result = jsonrpc.ListPromptsResult(table.size(self.prompts))
 
     for name, value in pairs(self.prompts) do
         if value:CanExecute({}) then
@@ -206,9 +200,7 @@ end
 ---@return MethodResult
 function this:OnResourcesList(params)
     ---@type MCP.ListResourcesResult
-    local result = {
-        resources = jsonrpc.array(table.size(self.resources)),
-    }
+    local result = jsonrpc.ListResourcesResult(table.size(self.resources))
 
     for name, value in pairs(self.resources) do
         if value:CanExecute({}) then
@@ -227,9 +219,7 @@ end
 ---@return MethodResult
 function this:OnToolsList(params)
     ---@type MCP.ListToolsResult
-    local result = {
-        tools = jsonrpc.array(table.size(self.tools)),
-    }
+    local result = jsonrpc.ListToolsResult(table.size(self.tools))
 
     for name, value in pairs(self.tools) do
         if value:CanExecute({}) then

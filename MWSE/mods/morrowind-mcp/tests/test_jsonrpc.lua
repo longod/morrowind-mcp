@@ -85,12 +85,209 @@ function this.Test()
     end)
 
     unitwind:test("notification encodes JSON-RPC notification", function()
-        local notificationJson = jsonrpc.notification("update", { x = 1 })
+        local notificationJson = jsonrpc.notification("ping", { x = 1 })
         unitwind:expect(notificationJson).toBe(json.encode({
             jsonrpc = "2.0",
-            method = "update",
+            method = "ping",
             params = { x = 1 },
         }, { indent = false }))
+    end)
+
+    unitwind:test("Content generators build text, image and audio blocks", function()
+        local textContent = jsonrpc.TextContent("hello")
+        unitwind:expect(textContent.type).toBe("text")
+        unitwind:expect(textContent.text).toBe("hello")
+
+        local imageContent = jsonrpc.ImageContent("imgdata", "image/png")
+        unitwind:expect(imageContent.type).toBe("image")
+        unitwind:expect(imageContent.data).toBe("imgdata")
+        unitwind:expect(imageContent.mimeType).toBe("image/png")
+
+        local audioContent = jsonrpc.AudioContent("audiodata", "audio/mpeg")
+        unitwind:expect(audioContent.type).toBe("audio")
+        unitwind:expect(audioContent.data).toBe("audiodata")
+        unitwind:expect(audioContent.mimeType).toBe("audio/mpeg")
+    end)
+
+    unitwind:test("Content generators build resource blocks", function()
+        local textResource = jsonrpc.TextResourceContents("mcp://text", "body", "text/plain")
+        unitwind:expect(textResource.uri).toBe("mcp://text")
+        unitwind:expect(textResource.text).toBe("body")
+        unitwind:expect(textResource.mimeType).toBe("text/plain")
+
+        local blobResource = jsonrpc.BlobResourceContents("mcp://blob", "YmFzZTY0", "application/json")
+        unitwind:expect(blobResource.uri).toBe("mcp://blob")
+        unitwind:expect(blobResource.blob).toBe("YmFzZTY0")
+        unitwind:expect(blobResource.mimeType).toBe("application/json")
+
+        local embedded = jsonrpc.EmbeddedResource(textResource)
+        unitwind:expect(embedded.type).toBe("resource")
+        unitwind:expect(embedded.resource.uri).toBe("mcp://text")
+
+        local resourceLink = jsonrpc.ResourceLink("name", "mcp://link", "title", "desc", "text/plain", nil, 123)
+        unitwind:expect(resourceLink.type).toBe("resource_link")
+        unitwind:expect(resourceLink.name).toBe("name")
+        unitwind:expect(resourceLink.uri).toBe("mcp://link")
+        unitwind:expect(resourceLink.size).toBe(123)
+    end)
+
+    unitwind:test("Tool generators build schema, execution and annotations", function()
+        local schema = jsonrpc.ToolObjectSchema(
+            { name = { type = "string" } },
+            { "name" },
+            "https://json-schema.org/draft/2020-12/schema"
+        )
+        unitwind:expect(schema.type).toBe("object")
+        unitwind:expect(schema.required[1]).toBe("name")
+        unitwind:expect(schema.properties.name.type).toBe("string")
+
+        local execution = jsonrpc.ToolExecution("optional")
+        unitwind:expect(execution.taskSupport).toBe("optional")
+
+        local annotations = jsonrpc.ToolAnnotations("Title", true, false, true, false)
+        unitwind:expect(annotations.title).toBe("Title")
+        unitwind:expect(annotations.readOnlyHint).toBe(true)
+        unitwind:expect(annotations.destructiveHint).toBe(false)
+        unitwind:expect(annotations.idempotentHint).toBe(true)
+        unitwind:expect(annotations.openWorldHint).toBe(false)
+    end)
+
+    unitwind:test("ListPromptsResult prepares MCP array field", function()
+        local result = jsonrpc.ListPromptsResult(2)
+        unitwind:expect(type(result)).toBe("table")
+        unitwind:expect(type(result.prompts)).toBe("table")
+        unitwind:expect(getmetatable(result.prompts).__jsontype).toBe("array")
+        unitwind:expect(result.nextCursor).toBe(nil)
+    end)
+
+    unitwind:test("CompleteResult accepts array and metadata", function()
+        local result = jsonrpc.CompleteResult({ "one", "two" }, 2, true)
+        unitwind:expect(getmetatable(result.completion.values).__jsontype).toBe("array")
+        unitwind:expect(result.completion.values[1]).toBe("one")
+        unitwind:expect(result.completion.values[2]).toBe("two")
+        unitwind:expect(result.completion.total).toBe(2)
+        unitwind:expect(result.completion.hasMore).toBe(true)
+    end)
+
+    unitwind:test("CreateTaskResult copies task object", function()
+        local result = jsonrpc.CreateTaskResult({
+            taskId = "task-1",
+            status = "working",
+            createdAt = "2026-06-22T00:00:00Z",
+            lastUpdatedAt = "2026-06-22T00:00:00Z",
+        })
+        unitwind:expect(result.task.taskId).toBe("task-1")
+        unitwind:expect(result.task.status).toBe("working")
+    end)
+
+    unitwind:test("ListTasksResult accepts nextCursor", function()
+        local result = jsonrpc.ListTasksResult({ { taskId = "task-1" } }, "cursor-1")
+        unitwind:expect(getmetatable(result.tasks).__jsontype).toBe("array")
+        unitwind:expect(result.tasks[1].taskId).toBe("task-1")
+        unitwind:expect(result.nextCursor).toBe("cursor-1")
+    end)
+
+    unitwind:test("GetPromptResult accepts description", function()
+        local result = jsonrpc.GetPromptResult({ { role = "user", content = { type = "text", text = "hi" } } }, "prompt-desc")
+        unitwind:expect(getmetatable(result.messages).__jsontype).toBe("array")
+        unitwind:expect(result.messages[1].role).toBe("user")
+        unitwind:expect(result.description).toBe("prompt-desc")
+    end)
+
+    unitwind:test("ListResourceTemplatesResult accepts nextCursor", function()
+        local result = jsonrpc.ListResourceTemplatesResult({ { name = "template-1", uriTemplate = "mcp://foo" } }, "cursor-2")
+        unitwind:expect(getmetatable(result.resourceTemplates).__jsontype).toBe("array")
+        unitwind:expect(result.resourceTemplates[1].name).toBe("template-1")
+        unitwind:expect(result.nextCursor).toBe("cursor-2")
+    end)
+
+    unitwind:test("CallToolResult prepares default MCP shape", function()
+        local result = jsonrpc.CallToolResult()
+        unitwind:expect(type(result)).toBe("table")
+        unitwind:expect(type(result.content)).toBe("table")
+        unitwind:expect(getmetatable(result.content).__jsontype).toBe("array")
+        unitwind:expect(result.structuredContent).toBe(nil)
+        unitwind:expect(result.isError).toBe(nil)
+    end)
+
+    unitwind:test("CallToolResult wraps single content block", function()
+        local result = jsonrpc.CallToolResult({
+            type = "text",
+            text = "hello",
+        })
+        unitwind:expect(getmetatable(result.content).__jsontype).toBe("array")
+        unitwind:expect(result.content[1].type).toBe("text")
+        unitwind:expect(result.content[1].text).toBe("hello")
+    end)
+
+    unitwind:test("CallToolResult copies content array", function()
+        local result = jsonrpc.CallToolResult({ {
+            type = "text",
+            text = "hello",
+        } })
+        unitwind:expect(getmetatable(result.content).__jsontype).toBe("array")
+        unitwind:expect(result.content[1].type).toBe("text")
+        unitwind:expect(result.content[1].text).toBe("hello")
+    end)
+
+    unitwind:test("CallToolResult sets structuredContent and isError", function()
+        local result = jsonrpc.CallToolResult(nil, { ok = true }, false)
+        unitwind:expect(result.structuredContent.ok).toBe(true)
+        unitwind:expect(result.isError).toBe(false)
+    end)
+
+    unitwind:test("ListPromptsResult copies prompt array", function()
+        local result = jsonrpc.ListPromptsResult({ { name = "foo" } })
+        unitwind:expect(getmetatable(result.prompts).__jsontype).toBe("array")
+        unitwind:expect(result.prompts[1].name).toBe("foo")
+    end)
+
+    unitwind:test("ListResourcesResult copies resource array", function()
+        local result = jsonrpc.ListResourcesResult({ { name = "resource-1" } }, "cursor-3")
+        unitwind:expect(getmetatable(result.resources).__jsontype).toBe("array")
+        unitwind:expect(result.resources[1].name).toBe("resource-1")
+        unitwind:expect(result.nextCursor).toBe("cursor-3")
+    end)
+
+    unitwind:test("ListToolsResult copies tool array", function()
+        local result = jsonrpc.ListToolsResult({ { name = "tool-1" } }, "cursor-4")
+        unitwind:expect(getmetatable(result.tools).__jsontype).toBe("array")
+        unitwind:expect(result.tools[1].name).toBe("tool-1")
+        unitwind:expect(result.nextCursor).toBe("cursor-4")
+    end)
+
+    unitwind:test("ListRootsResult copies root array", function()
+        local result = jsonrpc.ListRootsResult({ { uri = "mcp://root" } })
+        unitwind:expect(getmetatable(result.roots).__jsontype).toBe("array")
+        unitwind:expect(result.roots[1].uri).toBe("mcp://root")
+    end)
+
+    unitwind:test("ReadResourceResult copies contents array", function()
+        local result = jsonrpc.ReadResourceResult({ { uri = "mcp://resource", text = "hello" } })
+        unitwind:expect(getmetatable(result.contents).__jsontype).toBe("array")
+        unitwind:expect(result.contents[1].uri).toBe("mcp://resource")
+        unitwind:expect(result.contents[1].text).toBe("hello")
+    end)
+
+    unitwind:test("object returns nil for array tagged table", function()
+        local arr = jsonrpc.array({ 1, 2, 3 })
+        local result = jsonrpc.object(arr)
+        unitwind:expect(result).toBe(nil)
+    end)
+
+    unitwind:test("array with table copies content", function()
+        local result = jsonrpc.array({ "a", "b" })
+        if result then
+            unitwind:expect(getmetatable(result).__jsontype).toBe("array")
+            unitwind:expect(result[1]).toBe("a")
+            unitwind:expect(result[2]).toBe("b")
+        end
+    end)
+
+    unitwind:test("array returns nil for object tagged table", function()
+        local obj = jsonrpc.object({ name = "foo" })
+        local result = jsonrpc.array(obj)
+        unitwind:expect(result).toBe(nil)
     end)
 
     unitwind:finish()
