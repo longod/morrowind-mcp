@@ -13,6 +13,19 @@ this.error_code = {
     header_mismatch = { code = -32001, message = "Header mismatch" }, ---@type MCP.Error https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http#server-validation
 }
 
+local name_prefix = ""
+local title_prefix = ""
+local description_prefix = ""
+
+---@param name string?
+---@param title string?
+---@param description string?
+function this.SetPrimitivePrefix(name, title, description)
+    name_prefix = name or ""
+    title_prefix = title or ""
+    description_prefix = description or ""
+end
+
 ---@param tbl table
 ---@return boolean
 local function IsArray(tbl)
@@ -386,9 +399,9 @@ end
 function this.Tool(tool)
     local normalizedTool = this.object(8)
     normalizedTool.icons = tool.icons
-    normalizedTool.name = tool.name
-    normalizedTool.title = tool.title
-    normalizedTool.description = tool.description
+    normalizedTool.name = name_prefix .. tool.name
+    normalizedTool.title = tool.title and (title_prefix .. tool.title) or nil
+    normalizedTool.description = tool.description and (description_prefix .. tool.description) or nil
     normalizedTool.inputSchema = tool.inputSchema
     normalizedTool.execution = tool.execution
     normalizedTool.outputSchema = tool.outputSchema

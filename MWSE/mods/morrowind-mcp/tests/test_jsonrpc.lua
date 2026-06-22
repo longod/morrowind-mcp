@@ -8,6 +8,10 @@ function this.Test()
 
     local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
+    local function ResetPrimitivePrefix()
+        jsonrpc.SetPrimitivePrefix("", "", "")
+    end
+
     unitwind:start("morrowind-mcp.jsonrpc")
 
     unitwind:test("request returns parse_error for invalid JSON", function()
@@ -184,6 +188,7 @@ function this.Test()
     end)
 
     unitwind:test("Tool generator builds MCP.Tool from single ToolInput argument", function()
+        ResetPrimitivePrefix()
         local inputSchema = jsonrpc.InputSchema(
             { value = { type = "string" } },
             { "value" },
@@ -207,7 +212,42 @@ function this.Test()
         unitwind:expect(tool.annotations.readOnlyHint).toBe(true)
     end)
 
+    unitwind:test("Tool generator applies configured primitive prefixes", function()
+        jsonrpc.SetPrimitivePrefix("mw_", "[MW] ", "[MW] ")
+
+        local tool = jsonrpc.Tool({
+            name = "test_tool",
+            title = "Test Tool",
+            description = "Returns state of on main menu",
+            inputSchema = jsonrpc.InputSchema(),
+        })
+
+        unitwind:expect(tool.name).toBe("mw_test_tool")
+        unitwind:expect(tool.title).toBe("[MW] Test Tool")
+        unitwind:expect(tool.description).toBe("[MW] Returns state of on main menu")
+
+        ResetPrimitivePrefix()
+    end)
+
+    unitwind:test("Tool generator keeps nil title and description with prefixes", function()
+        jsonrpc.SetPrimitivePrefix("mw_", "[MW] ", "[MW] ")
+
+        local tool = jsonrpc.Tool({
+            name = "test_tool",
+            title = nil,
+            description = nil,
+            inputSchema = jsonrpc.InputSchema(),
+        })
+
+        unitwind:expect(tool.name).toBe("mw_test_tool")
+        unitwind:expect(tool.title).toBe(nil)
+        unitwind:expect(tool.description).toBe(nil)
+
+        ResetPrimitivePrefix()
+    end)
+
     unitwind:test("Tool generator keeps additionalProperties unset for empty inputSchema.properties", function()
+        ResetPrimitivePrefix()
         local inputSchema = jsonrpc.InputSchema({}, nil, "https://json-schema.org/draft/2020-12/schema")
         local outputSchema = jsonrpc.OutputSchema({}, nil, "https://json-schema.org/draft/2020-12/schema")
 
@@ -222,6 +262,7 @@ function this.Test()
     end)
 
     unitwind:test("Tool generator keeps MCP.Tool inputSchema required", function()
+        ResetPrimitivePrefix()
         local tool = jsonrpc.Tool({
             name = "implicit_input_schema_tool",
             description = "Tool with generated input schema",

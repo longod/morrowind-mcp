@@ -6,6 +6,6 @@
 
 ## Tools
 
-| Name | Description |
-|---|---|
-| test_tool | Returns state of on main menu |
+| Name | Title | Description |
+|---|---|---|
+| `mw_test_tool` |  | [Morrowind] Returns state of on main menu |

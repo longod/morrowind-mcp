@@ -26,6 +26,8 @@ setmetatable(this, { __index = base })
 ---@param params table?
 ---@return MwseHttpServer
 function this.new(params)
+    jsonrpc.SetPrimitivePrefix(settings.name_prefix, settings.title_prefix, settings.description_prefix)
+
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MwseHttpServer
     if not instance.logger then

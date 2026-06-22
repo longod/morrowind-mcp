@@ -8,6 +8,7 @@ description: |
 # servertest-run
 
 ## Purpose
+- `tests/server_test.ps1` は integration test として扱う。
 - リポジトリのルートからワークスペースのテストスクリプトを実行し、サーバーのテストを行う。
 - 出力からテストの結果を検証する。
 - `MWSE.log` でサーバー側の結果を検証する。
