@@ -3,6 +3,7 @@
 
 --- MCP schema annotations
 --- https://modelcontextprotocol.io/specification/2025-11-25/schema
+--- https://modelcontextprotocol.io/specification/2025-11-25/schema.md
 
 -- ============================================================================
 -- JSON-RPC

@@ -50,6 +50,7 @@ function this.new(params)
         [mcp.method.resources_list] = instance.OnResourcesList,
         [mcp.method.tools_list] = instance.OnToolsList,
         [mcp.method.tools_call] = instance.OnToolsCall,
+        [mcp.method.resources_read] = instance.OnResourcesRead,
     }
     instance:LoadPrompts()
     instance:LoadResources()
@@ -123,7 +124,7 @@ function this:DumpRequest(request)
         if request.body then
             str = str .. "\n" .. request.body
         end
-        self.logger:trace(str)
+        self.logger:trace("%s", str)
     end
 end
 
@@ -140,6 +141,7 @@ function this:OnInitialize(params)
     ---@type MCP.InitializeResult
     local result = jsonrpc.InitializeResult()
     result.protocolVersion = "2025-11-25"
+    -- TODO generator, can be flatten arguments
     result.capabilities = {
         ["logging"] = jsonrpc.object(),
         ["prompts"] = {
@@ -168,9 +170,9 @@ function this:OnInitialize(params)
         ["version"] = settings.version,
         ["description"] = settings.description,
         ["icons"] = jsonrpc.array(),
-        ["websiteUrl"] = "http://localhost:33427" -- or repository?
+        ["websiteUrl"] = settings.repository
     }
-    result.instructions = "Optional instructions for the client"
+    result.instructions = "Provides Morrowind game-state and metadata access plus in-game action tools via MWSE. To reduce failures, inspect current game context and discover available capabilities before invoking state-changing tools, because some operations depend on runtime conditions (target, loaded cell, menu mode, etc.)."
 
     ---@type MethodResult
     return {
@@ -214,6 +216,54 @@ function this:OnResourcesList(params)
     return {
         http_responce = http.response_code.ok,
         result = result,
+    }
+end
+
+---@param params MCP.ReadResourceRequestParams
+---@return MethodResult
+function this:OnResourcesRead(params)
+    if not params or type(params.uri) ~= "string" then
+        return {
+            http_responce = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    -- Custom resource URIs are resolved as Data Files-relative paths through MWSE/MO2 VFS.
+    local prefix = settings.resourceUriPrefix
+    if string.sub(params.uri, 1, string.len(prefix)) ~= prefix then
+        return {
+            http_responce = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local resourcePath = string.sub(params.uri, string.len(prefix) + 1)
+    if resourcePath == "" or string.sub(resourcePath, 1, 1) == "/" or string.find(resourcePath, "\\", 1, true) or string.find(resourcePath, "..", 1, true) or string.find(resourcePath, ":", 1, true) then
+        return {
+            http_responce = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local file = io.open(settings.dataFiles .. string.gsub(resourcePath, "/", "\\"), "rb")
+    if not file then
+        return {
+            http_responce = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local data = file:read("*a")
+    file:close()
+
+    local base64 = require("morrowind-mcp.base64")
+    local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), "image/png")
+
+    ---@type MethodResult
+    return {
+        http_responce = http.response_code.ok,
+        result = jsonrpc.ReadResourceResult({ content }),
     }
 end
 
@@ -317,9 +367,16 @@ function this:OnPOST(request)
 
     self.logger:info("handle method: %s", request.json_request.method)
     local param = request.json_request.params or {}
-    local success, result = pcall(handler, self, param)
+    local success, result = xpcall(
+        function()
+            return handler(self, param)
+        end,
+        function(err)
+            return debug.traceback(tostring(err), 2)
+        end
+    )
     if not success then
-        self.logger:error("Failed to execute method %s", request.json_request.method)
+        self.logger:error("Failed to execute method %s\n%s", request.json_request.method, result)
         ---@type ServerResponce
         return {
             http_responce = http.response_code.internal_server_error,

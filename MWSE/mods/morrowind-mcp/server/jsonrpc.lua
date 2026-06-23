@@ -379,18 +379,18 @@ function this.ToolExecution(taskSupport)
 end
 
 ---@param title string?
----@param readOnlyHint boolean?
----@param destructiveHint boolean?
----@param idempotentHint boolean?
----@param openWorldHint boolean?
+---@param readOnlyHint boolean? default false
+---@param destructiveHint boolean? default true
+---@param idempotentHint boolean? default false
+---@param openWorldHint boolean? default false
 ---@return MCP.ToolAnnotations
 function this.ToolAnnotations(title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
     return {
-        title = title,
+        title = title, -- TODO need prefix?
         readOnlyHint = readOnlyHint,
         destructiveHint = destructiveHint,
         idempotentHint = idempotentHint,
-        openWorldHint = openWorldHint,
+        openWorldHint = openWorldHint or false, -- specification is true, but morrowind is closed world, so default is false
     }
 end
 
@@ -589,6 +589,171 @@ function this.CreateMessageResult()
         stopReason = nil,
         role = nil,
         content = this.array(),
+    }
+end
+
+-- ============================================================================
+-- MCP Schema Generators
+-- ============================================================================
+
+---@param title string?
+---@param description string?
+---@param minLength number?
+---@param maxLength number?
+---@param format "uri"|"email"|"date"|"date-time"?
+---@param default string?
+---@return MCP.StringSchema
+function this.StringSchema(title, description, minLength, maxLength, format, default)
+    return {
+        type = "string",
+        title = title,
+        description = description,
+        minLength = minLength,
+        maxLength = maxLength,
+        format = format,
+        default = default,
+    }
+end
+
+---@param title string?
+---@param description string?
+---@param minimum number?
+---@param maximum number?
+---@param default number?
+---@return MCP.NumberSchema
+function this.NumberSchema(title, description, minimum, maximum, default)
+    return {
+        type = "number",
+        title = title,
+        description = description,
+        minimum = minimum,
+        maximum = maximum,
+        default = default,
+    }
+end
+
+---@param title string?
+---@param description string?
+---@param default boolean?
+---@return MCP.BooleanSchema
+function this.BooleanSchema(title, description, default)
+    return {
+        type = "boolean",
+        title = title,
+        description = description,
+        default = default,
+    }
+end
+
+---@param const string
+---@param title string
+---@return MCP.ConstTitle
+function this.ConstTitle(const, title)
+    return {
+        const = const,
+        title = title,
+    }
+end
+
+---@param enum string[]
+---@param title string?
+---@param description string?
+---@param default string?
+---@return MCP.UntitledSingleSelectEnumSchema
+function this.UntitledSingleSelectEnumSchema(enum, title, description, default)
+    return {
+        type = "string",
+        title = title,
+        description = description,
+        enum = this.array(enum),
+        default = default,
+    }
+end
+
+---@param oneOf MCP.ConstTitle[]
+---@param title string?
+---@param description string?
+---@param default string?
+---@return MCP.TitledSingleSelectEnumSchema
+function this.TitledSingleSelectEnumSchema(oneOf, title, description, default)
+    return {
+        type = "string",
+        title = title,
+        description = description,
+        oneOf = this.array(oneOf),
+        default = default,
+    }
+end
+
+---@param enum string[]
+---@param enumNames string[]?
+---@param title string?
+---@param description string?
+---@param default string?
+---@return MCP.LegacyTitledEnumSchema
+function this.LegacyTitledEnumSchema(enum, enumNames, title, description, default)
+    return {
+        type = "string",
+        title = title,
+        description = description,
+        enum = this.array(enum),
+        enumNames = enumNames and this.array(enumNames) or nil,
+        default = default,
+    }
+end
+
+---@param enum string[]
+---@return MCP.UntitledMultiSelectEnumSchemaItems
+function this.UntitledMultiSelectEnumSchemaItems(enum)
+    return {
+        type = "string",
+        enum = this.array(enum),
+    }
+end
+
+---@param items MCP.UntitledMultiSelectEnumSchemaItems
+---@param title string?
+---@param description string?
+---@param minItems number?
+---@param maxItems number?
+---@param default string[]?
+---@return MCP.UntitledMultiSelectEnumSchema
+function this.UntitledMultiSelectEnumSchema(items, title, description, minItems, maxItems, default)
+    return {
+        type = "array",
+        title = title,
+        description = description,
+        minItems = minItems,
+        maxItems = maxItems,
+        items = items,
+        default = default and this.array(default) or nil,
+    }
+end
+
+---@param anyOf MCP.ConstTitle[]
+---@return MCP.TitledMultiSelectEnumSchemaItems
+function this.TitledMultiSelectEnumSchemaItems(anyOf)
+    return {
+        anyOf = this.array(anyOf),
+    }
+end
+
+---@param items MCP.TitledMultiSelectEnumSchemaItems
+---@param title string?
+---@param description string?
+---@param minItems number?
+---@param maxItems number?
+---@param default string[]?
+---@return MCP.TitledMultiSelectEnumSchema
+function this.TitledMultiSelectEnumSchema(items, title, description, minItems, maxItems, default)
+    return {
+        type = "array",
+        title = title,
+        description = description,
+        minItems = minItems,
+        maxItems = maxItems,
+        items = items,
+        default = default and this.array(default) or nil,
     }
 end
 

@@ -411,6 +411,142 @@ function this.Test()
         unitwind:expect(result).toBe(nil)
     end)
 
+    -- ========================================================================
+    -- Schema Generators
+    -- ========================================================================
+
+    unitwind:test("StringSchema creates valid schema", function()
+        local schema = jsonrpc.StringSchema("Name", "Enter a name", 1, 50, "email", "default@example.com")
+        unitwind:expect(schema.type).toBe("string")
+        unitwind:expect(schema.title).toBe("Name")
+        unitwind:expect(schema.description).toBe("Enter a name")
+        unitwind:expect(schema.minLength).toBe(1)
+        unitwind:expect(schema.maxLength).toBe(50)
+        unitwind:expect(schema.format).toBe("email")
+        unitwind:expect(schema.default).toBe("default@example.com")
+    end)
+
+    unitwind:test("StringSchema allows nil optional fields", function()
+        local schema = jsonrpc.StringSchema(nil, nil, nil, nil, nil, nil)
+        unitwind:expect(schema.type).toBe("string")
+        unitwind:expect(schema.title).toBe(nil)
+        unitwind:expect(schema.description).toBe(nil)
+    end)
+
+    unitwind:test("NumberSchema creates valid schema", function()
+        local schema = jsonrpc.NumberSchema("Age", "Enter your age", 0, 150, 25)
+        unitwind:expect(schema.type).toBe("number")
+        unitwind:expect(schema.title).toBe("Age")
+        unitwind:expect(schema.description).toBe("Enter your age")
+        unitwind:expect(schema.minimum).toBe(0)
+        unitwind:expect(schema.maximum).toBe(150)
+        unitwind:expect(schema.default).toBe(25)
+    end)
+
+    unitwind:test("BooleanSchema creates valid schema", function()
+        local schema = jsonrpc.BooleanSchema("Enabled", "Enable this option", true)
+        unitwind:expect(schema.type).toBe("boolean")
+        unitwind:expect(schema.title).toBe("Enabled")
+        unitwind:expect(schema.description).toBe("Enable this option")
+        unitwind:expect(schema.default).toBe(true)
+    end)
+
+    unitwind:test("ConstTitle creates valid const-title pair", function()
+        local constTitle = jsonrpc.ConstTitle("red", "Red Color")
+        unitwind:expect(constTitle.const).toBe("red")
+        unitwind:expect(constTitle.title).toBe("Red Color")
+    end)
+
+    unitwind:test("UntitledSingleSelectEnumSchema creates valid schema", function()
+        local enum = { "option1", "option2", "option3" }
+        local schema = jsonrpc.UntitledSingleSelectEnumSchema(enum, "Select", "Choose one option", "option1")
+        unitwind:expect(schema.type).toBe("string")
+        unitwind:expect(schema.title).toBe("Select")
+        unitwind:expect(schema.description).toBe("Choose one option")
+        unitwind:expect(getmetatable(schema.enum).__jsontype).toBe("array")
+        unitwind:expect(schema.enum[1]).toBe("option1")
+        unitwind:expect(schema.default).toBe("option1")
+    end)
+
+    unitwind:test("TitledSingleSelectEnumSchema creates valid schema", function()
+        local oneOf = {
+            jsonrpc.ConstTitle("red", "Red"),
+            jsonrpc.ConstTitle("blue", "Blue"),
+        }
+        local schema = jsonrpc.TitledSingleSelectEnumSchema(oneOf, "Color", "Pick a color")
+        unitwind:expect(schema.type).toBe("string")
+        unitwind:expect(schema.title).toBe("Color")
+        unitwind:expect(getmetatable(schema.oneOf).__jsontype).toBe("array")
+        unitwind:expect(schema.oneOf[1].const).toBe("red")
+    end)
+
+    unitwind:test("LegacyTitledEnumSchema creates valid schema", function()
+        local enum = { "a", "b", "c" }
+        local enumNames = { "Option A", "Option B", "Option C" }
+        local schema = jsonrpc.LegacyTitledEnumSchema(enum, enumNames, "Legacy", "Old format enum")
+        unitwind:expect(schema.type).toBe("string")
+        unitwind:expect(schema.title).toBe("Legacy")
+        unitwind:expect(getmetatable(schema.enum).__jsontype).toBe("array")
+        unitwind:expect(getmetatable(schema.enumNames).__jsontype).toBe("array")
+        unitwind:expect(schema.enumNames[1]).toBe("Option A")
+    end)
+
+    unitwind:test("LegacyTitledEnumSchema allows nil enumNames", function()
+        local enum = { "a", "b" }
+        local schema = jsonrpc.LegacyTitledEnumSchema(enum, nil, "NoNames")
+        unitwind:expect(schema.enumNames).toBe(nil)
+    end)
+
+    unitwind:test("UntitledMultiSelectEnumSchemaItems creates valid items", function()
+        local enum = { "item1", "item2", "item3" }
+        local items = jsonrpc.UntitledMultiSelectEnumSchemaItems(enum)
+        unitwind:expect(items.type).toBe("string")
+        unitwind:expect(getmetatable(items.enum).__jsontype).toBe("array")
+        unitwind:expect(items.enum[1]).toBe("item1")
+    end)
+
+    unitwind:test("UntitledMultiSelectEnumSchema creates valid array schema", function()
+        local enum = { "a", "b", "c" }
+        local items = jsonrpc.UntitledMultiSelectEnumSchemaItems(enum)
+        local schema = jsonrpc.UntitledMultiSelectEnumSchema(items, "Colors", "Select colors", 1, 3, { "a", "b" })
+        unitwind:expect(schema.type).toBe("array")
+        unitwind:expect(schema.title).toBe("Colors")
+        unitwind:expect(schema.minItems).toBe(1)
+        unitwind:expect(schema.maxItems).toBe(3)
+        unitwind:expect(schema.items.type).toBe("string")
+        unitwind:expect(getmetatable(schema.default).__jsontype).toBe("array")
+        unitwind:expect(schema.default[1]).toBe("a")
+    end)
+
+    unitwind:test("UntitledMultiSelectEnumSchema allows nil default", function()
+        local items = jsonrpc.UntitledMultiSelectEnumSchemaItems({ "a", "b" })
+        local schema = jsonrpc.UntitledMultiSelectEnumSchema(items, "List", nil, nil, nil, nil)
+        unitwind:expect(schema.default).toBe(nil)
+    end)
+
+    unitwind:test("TitledMultiSelectEnumSchemaItems creates valid items", function()
+        local anyOf = {
+            jsonrpc.ConstTitle("red", "Red"),
+            jsonrpc.ConstTitle("green", "Green"),
+        }
+        local items = jsonrpc.TitledMultiSelectEnumSchemaItems(anyOf)
+        unitwind:expect(getmetatable(items.anyOf).__jsontype).toBe("array")
+        unitwind:expect(items.anyOf[1].const).toBe("red")
+    end)
+
+    unitwind:test("TitledMultiSelectEnumSchema creates valid array schema", function()
+        local anyOf = {
+            jsonrpc.ConstTitle("x", "X Axis"),
+            jsonrpc.ConstTitle("y", "Y Axis"),
+        }
+        local items = jsonrpc.TitledMultiSelectEnumSchemaItems(anyOf)
+        local schema = jsonrpc.TitledMultiSelectEnumSchema(items, "Axes", "Select axes", 1, 2, { "x" })
+        unitwind:expect(schema.type).toBe("array")
+        unitwind:expect(schema.title).toBe("Axes")
+        unitwind:expect(schema.items.anyOf[1].title).toBe("X Axis")
+        unitwind:expect(getmetatable(schema.default).__jsontype).toBe("array")
+    end)
+
     unitwind:finish()
 end
 
