@@ -6,9 +6,9 @@ function this.Test()
         highlight = false,
     })
 
-    local strutil = require("morrowind-mcp.strutil")
+    local strutil = require("morrowind-mcp.core.strutil")
 
-    unitwind:start("morrowind-mcp.strutil")
+    unitwind:start("morrowind-mcp.core.strutil")
 
     unitwind:test("ltrim removes leading spaces", function()
         unitwind:expect(strutil.ltrim("   abc")).toBe("abc")

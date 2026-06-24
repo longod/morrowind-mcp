@@ -1,5 +1,5 @@
 
-local base = require("morrowind-mcp.itool")
+local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
 

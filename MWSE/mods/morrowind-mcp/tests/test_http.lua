@@ -8,7 +8,7 @@ function this.Test()
 
     local http = require("morrowind-mcp.server.http")
 
-    unitwind:start("morrowind-mcp.http")
+    unitwind:start("morrowind-mcp.server.http")
 
     unitwind:test("ParseRequestMethod parses request line", function()
         local method, endpoint, protocol = http.ParseRequestMethod("GET / HTTP/1.1")

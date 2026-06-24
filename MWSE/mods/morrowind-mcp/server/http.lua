@@ -1,5 +1,5 @@
 local this  = {}
-local strutil = require("morrowind-mcp.strutil")
+local strutil = require("morrowind-mcp.core.strutil")
 
 -- https://defold.com/ref/stable/socket-lua/
 --- lua socket meta data

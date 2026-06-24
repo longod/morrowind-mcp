@@ -1,8 +1,8 @@
-local base = require("morrowind-mcp.iserver")
+local base = require("morrowind-mcp.core.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local strutil = require("morrowind-mcp.strutil")
-local mcp = require("morrowind-mcp.mcp")
+local strutil = require("morrowind-mcp.core.strutil")
+local mcp = require("morrowind-mcp.core.mcp")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 
@@ -278,7 +278,7 @@ function this:OnResourcesRead(params)
     local data = file:read("*a")
     file:close()
 
-    local base64 = require("morrowind-mcp.base64")
+    local base64 = require("morrowind-mcp.core.base64")
     local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), "image/png")
 
     ---@type MethodResult

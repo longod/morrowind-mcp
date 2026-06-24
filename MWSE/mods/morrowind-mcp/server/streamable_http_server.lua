@@ -1,7 +1,7 @@
 ---@deprecated
 
 --[[
-local base = require("morrowind-mcp.iserver")
+local base = require("morrowind-mcp.core.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 

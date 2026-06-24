@@ -12,7 +12,7 @@ function this.Test()
         jsonrpc.SetPrimitivePrefix("", "", "")
     end
 
-    unitwind:start("morrowind-mcp.jsonrpc")
+    unitwind:start("morrowind-mcp.server.jsonrpc")
 
     unitwind:test("request returns parse_error for invalid JSON", function()
         local result, err = jsonrpc.request("not json")

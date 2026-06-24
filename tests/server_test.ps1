@@ -104,13 +104,13 @@ function Invoke-MCPInspector {
 
 $TargetIP = $Config.Connection.host
 $TargetPort = [int]$Config.Connection.port
+$StartScriptPath = ".\start_server_mo2.ps1"
+$StopScriptPath = ".\stop_server.ps1"
 
 $ExitCode = 0
 
 Push-Location $ScriptDir
 try {
-    $StartScriptPath = ".\start_server_mo2.ps1"
-    $StopScriptPath = ".\stop_server.ps1"
     if (-not (Test-Path -LiteralPath $StartScriptPath)) {
         Write-Host "[ERROR] $StartScriptPath was not found." -ForegroundColor Red
         $ExitCode = 1
@@ -170,13 +170,14 @@ try {
 
     $ExitCode = $ExitCode -bor $TestResult
 
+}
+finally {
     Write-Host "[INFO] Stopping the server..." -ForegroundColor Cyan
     & $StopScriptPath
     if ([int]$LASTEXITCODE -ne 0) {
         Write-Host "[WARN] $StopScriptPath exit code: $LASTEXITCODE" -ForegroundColor Yellow
     }
-}
-finally {
+
     Pop-Location
 }
 

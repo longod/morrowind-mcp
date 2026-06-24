@@ -24,6 +24,7 @@
 
 local base64 = {}
 
+---@diagnostic disable-next-line: undefined-field
 local extract = _G.bit32 and _G.bit32.extract -- Lua 5.2/Lua 5.3 in compatibility mode
 if not extract then
 	if _G.bit then -- LuaJIT
