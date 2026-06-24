@@ -82,4 +82,26 @@ function this.replace(str, from, to)
     return table.concat(parts)
 end
 
+---@param path string?
+---@return string?
+function this.splitext(path)
+    if type(path) ~= "string" then
+        return nil
+    end
+
+    local i = string.len(path)
+    while i > 0 do
+        local ch = string.sub(path, i, i)
+        if ch == "/" or ch == "\\" then
+            return nil
+        end
+        if ch == "." then
+            return string.sub(path, i)
+        end
+        i = i - 1
+    end
+
+    return nil
+end
+
 return this

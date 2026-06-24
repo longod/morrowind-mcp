@@ -156,10 +156,9 @@ try {
         @("--method", "resources/list"),
         @("--method", "prompts/list"),
         @("--method", "resources/templates/list"),
-        @("--method", "tools/call", "--tool-name", "mw_take_screenshot"),
+        @("--method", "tools/call", "--tool-name", "mw_take_screenshot", "--tool-arg", "fileName=test"),
         @("--method", "tools/call", "--tool-name", "mw_test_tool"), # no args
-        @("--method", "tools/call", "--tool-name", "mw_test_tool", "--tool-arg", "arg1=value1", "--tool-arg", "arg2=value2"),
-        @("--method", "resources/read", "--uri", "placeholder"),
+        @("--method", "resources/read", "--uri", "mwmcp://data-files/MWSE/mods/morrowind-mcp/temp/test.jpg"),
         @("--method", "prompts/get", "--prompt-name", "placeholder")
     )
 
