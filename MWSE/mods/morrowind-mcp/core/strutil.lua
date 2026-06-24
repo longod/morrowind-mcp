@@ -58,8 +58,28 @@ function this.replace(str, from, to)
     if not str or from == nil or from == "" then
         return str
     end
-    local escapedFrom = from:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-    return (str:gsub(escapedFrom, to or ""))
+    to = to or ""
+
+    local parts = {}
+    local start = 1
+    local replaced = false
+    while true do
+        local s, e = string.find(str, from, start, true)
+        if not s then
+            break
+        end
+        table.insert(parts, string.sub(str, start, s - 1))
+        table.insert(parts, to)
+        start = e + 1
+        replaced = true
+    end
+
+    if not replaced then
+        return str
+    end
+
+    table.insert(parts, string.sub(str, start))
+    return table.concat(parts)
 end
 
 return this

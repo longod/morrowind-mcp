@@ -110,6 +110,7 @@ local mime_type = {
     audio_wav = "audio/wav",
     text_plain = "text/plain",
     application_json = "application/json",
+    application_octet_stream = "application/octet-stream",
 }
 
 ---@enum MCP.LoggingLevel

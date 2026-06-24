@@ -55,6 +55,7 @@ function this.Test()
         unitwind:expect(strutil.replace("hello world", "world", "morrowind")).toBe("hello morrowind")
         unitwind:expect(strutil.replace("aaaa", "aa", "b")).toBe("bb")
         unitwind:expect(strutil.replace("abc", "d", "x")).toBe("abc")
+        unitwind:expect(strutil.replace("a.b.c", ".", "%")).toBe("a%b%c")
         unitwind:expect(strutil.replace("abc", "", "x")).toBe("abc")
         unitwind:expect(strutil.replace(nil, "a", "b")).toBe(nil) ---@diagnostic disable-line: param-type-mismatch
     end)

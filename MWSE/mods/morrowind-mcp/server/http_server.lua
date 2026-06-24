@@ -11,6 +11,36 @@ local socket = require("socket")
 
 local maxResponseLogLength = config.development.debug and 2048 or 512
 
+local mimeTypeByExtension = {
+    [".apng"] = mcp.mime_type.image_apng,
+    [".avif"] = mcp.mime_type.image_avif,
+    [".gif"] = mcp.mime_type.image_gif,
+    [".jpg"] = mcp.mime_type.image_jpeg,
+    [".jpeg"] = mcp.mime_type.image_jpeg,
+    [".png"] = mcp.mime_type.image_png,
+    [".svg"] = mcp.mime_type.image_svg_xml,
+    [".webp"] = mcp.mime_type.image_webp,
+    [".aac"] = mcp.mime_type.audio_aac,
+    [".flac"] = mcp.mime_type.audio_flac,
+    [".mp3"] = mcp.mime_type.audio_mpeg,
+    [".ogg"] = mcp.mime_type.audio_ogg,
+    [".wav"] = mcp.mime_type.audio_wav,
+    [".txt"] = mcp.mime_type.text_plain,
+    [".json"] = mcp.mime_type.application_json,
+}
+
+---@param resourcePath string
+---@return MCP.MimeType
+local function ResolveMimeTypeFromResourcePath(resourcePath)
+    local normalized = string.lower(resourcePath)
+    for extension, mimeType in pairs(mimeTypeByExtension) do
+        if strutil.endswith(normalized, extension) then
+            return mimeType
+        end
+    end
+    return mcp.mime_type.application_octet_stream
+end
+
 ---@param response string?
 ---@return string
 local function FormatResponseForLog(response)
@@ -279,7 +309,8 @@ function this:OnResourcesRead(params)
     file:close()
 
     local base64 = require("morrowind-mcp.core.base64")
-    local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), "image/png")
+    local mimeType = ResolveMimeTypeFromResourcePath(resourcePath)
+    local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), mimeType)
 
     ---@type MethodResult
     return {
