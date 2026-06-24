@@ -75,8 +75,8 @@ local function OnModConfigReady(e)
                 table = config.development,
             }),
             callback = function(self)
-                local logger = require("morrowind-mcp.logger")
-                logger:setLevel(self.variable.value)
+                local loggerFactory = require("morrowind-mcp.logger")
+                loggerFactory.ApplyConfigToAll({ level = self.variable.value })
             end
         })
         dev:createOnOffButton({
@@ -87,8 +87,8 @@ local function OnModConfigReady(e)
                 table = config.development,
             }),
             callback = function(self)
-                local logger = require("morrowind-mcp.logger")
-                logger.logToConsole = config.development.logToConsole
+                local loggerFactory = require("morrowind-mcp.logger")
+                loggerFactory.ApplyConfigToAll({ logToConsole = self.variable.value })
             end
         })
         dev:createOnOffButton({

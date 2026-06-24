@@ -30,9 +30,7 @@ function this.new(params)
 
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MwseHttpServer
-    if not instance.logger then
-        instance.logger = require("morrowind-mcp.logger")
-    end
+    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "http_server" })
     instance.hostname = instance.hostname or settings.defaultConfig.server.address
     instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}

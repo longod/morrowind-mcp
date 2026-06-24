@@ -81,3 +81,8 @@ Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Ins
 
 This automatically resolves the server configuration and opens the Inspector at the configured connection URL.
 
+## SDK
+- [base64.lua](MWSE/mods/morrowind-mcp/base64.lua) from [lbase64](https://github.com/iskolbin/lbase64)
+
+## License
+- [LICENSE](LICENSE)
