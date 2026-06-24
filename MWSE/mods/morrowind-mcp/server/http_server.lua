@@ -4,9 +4,28 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.strutil")
 local mcp = require("morrowind-mcp.mcp")
 local settings = require("morrowind-mcp.settings")
+local config = require("morrowind-mcp.config")
 
 ---@type Socket.Module
 local socket = require("socket")
+
+local maxResponseLogLength = config.development.debug and 2048 or 512
+
+---@param response string?
+---@return string
+local function FormatResponseForLog(response)
+    if not response then
+        return "nil"
+    end
+
+    if #response <= maxResponseLogLength then
+        local r, _ = string.gsub(response, "\r", "")
+        return r
+    end
+
+    local r, _ = string.gsub(string.sub(response, 1, maxResponseLogLength), "\r", "")
+    return r .. "[...too long]"
+end
 
 ---@class MwseHttpServer : MCP.IServer
 ---@field logger mwseLogger
@@ -15,7 +34,7 @@ local socket = require("socket")
 ---@field hostname string
 ---@field port integer
 ---@field httpHeaders table<string, string> must headers
----@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponce?>
+---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponse?>
 ---@field methodHandlers table<string, fun(self: MwseHttpServer, params: MCP.RequestParams): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field resources table<string, MCP.IResource>
@@ -163,7 +182,7 @@ function this:OnInitialize(params)
         },
     }
     result.serverInfo = {
-        ["name"] = settings.modName,
+        ["name"] = settings.shortModName,
         ["title"] = settings.modName,
         ["version"] = settings.version,
         ["description"] = settings.description,
@@ -174,7 +193,7 @@ function this:OnInitialize(params)
 
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
         result = result,
     }
 end
@@ -193,7 +212,7 @@ function this:OnPromptsList(params)
 
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
         result = result,
     }
 end
@@ -212,7 +231,7 @@ function this:OnResourcesList(params)
 
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
         result = result,
     }
 end
@@ -221,8 +240,9 @@ end
 ---@return MethodResult
 function this:OnResourcesRead(params)
     if not params or type(params.uri) ~= "string" then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
         }
     end
@@ -230,24 +250,27 @@ function this:OnResourcesRead(params)
     -- Custom resource URIs are resolved as Data Files-relative paths through MWSE/MO2 VFS.
     local prefix = settings.resourceUriPrefix
     if string.sub(params.uri, 1, string.len(prefix)) ~= prefix then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
         }
     end
 
     local resourcePath = string.sub(params.uri, string.len(prefix) + 1)
     if resourcePath == "" or string.sub(resourcePath, 1, 1) == "/" or string.find(resourcePath, "\\", 1, true) or string.find(resourcePath, "..", 1, true) or string.find(resourcePath, ":", 1, true) then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
         }
     end
 
     local file = io.open(settings.dataFiles .. string.gsub(resourcePath, "/", "\\"), "rb")
     if not file then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
         }
     end
@@ -260,7 +283,7 @@ function this:OnResourcesRead(params)
 
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
         result = jsonrpc.ReadResourceResult({ content }),
     }
 end
@@ -279,7 +302,7 @@ function this:OnToolsList(params)
 
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
         result = result,
     }
 end
@@ -288,22 +311,25 @@ end
 ---@return MethodResult
 function this:OnToolsCall(params)
     if not params or not params.name then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
         }
     end
 
     local tool = self.tools[params.name]
     if not tool then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.method_not_found,
         }
     end
     if not tool:CanExecute(params) then
+        ---@type MethodResult
         return {
-            http_responce = http.response_code.forbidden,
+            http_response = http.response_code.forbidden,
             error = jsonrpc.error_code.invalid_params,
         }
     end
@@ -313,7 +339,7 @@ function this:OnToolsCall(params)
 
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
         result = result,
     }
 end
@@ -325,7 +351,7 @@ function this:OnLoggingSetLevel(params)
     self.logger:info("Set log level for client to: %s", params.level)
     ---@type MethodResult
     return {
-        http_responce = http.response_code.ok,
+        http_response = http.response_code.ok,
     }
 end
 
@@ -336,19 +362,19 @@ function this:OnNotification(params)
     self.logger:info("Received notification")
     ---@type MethodResult
     return {
-        http_responce = http.response_code.accepted,
+        http_response = http.response_code.accepted,
     }
 end
 
 ---@param request ClientRequest
----@return ServerResponce?
+---@return ServerResponse?
 function this:OnPOST(request)
     -- TODO check headers
 
     if not request.json_request then
-        ---@type ServerResponce
+        ---@type ServerResponse
         return {
-            http_responce = http.response_code.bad_request,
+            http_response = http.response_code.bad_request,
             json_error = jsonrpc.error_code.invalid_request,
         }
     end
@@ -356,9 +382,9 @@ function this:OnPOST(request)
     local handler = self.methodHandlers[request.json_request.method]
     if not handler then
         self.logger:warn("No handler for method: %s", request.json_request.method)
-        ---@type ServerResponce
+        ---@type ServerResponse
         return {
-            http_responce = http.response_code.not_implemented, -- ?
+            http_response = http.response_code.not_implemented, -- ?
             json_error = jsonrpc.error_code.method_not_found,
         }
     end
@@ -375,23 +401,23 @@ function this:OnPOST(request)
     )
     if not success then
         self.logger:error("Failed to execute method %s\n%s", request.json_request.method, result)
-        ---@type ServerResponce
+        ---@type ServerResponse
         return {
-            http_responce = http.response_code.internal_server_error,
+            http_response = http.response_code.internal_server_error,
             json_error = jsonrpc.error_code.internal_error,
         }
     end
 
-    ---@type ServerResponce
+    ---@type ServerResponse
     return {
-        http_responce = result.http_responce,
+        http_response = result.http_response,
         json_result = result.result,
         json_error = result.error,
     }
 end
 
 ---@param request ClientRequest
----@return ServerResponce?
+---@return ServerResponse?
 function this:OnGET(request)
     -- server is supported SSE?
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
@@ -402,9 +428,9 @@ function this:OnGET(request)
             if content == http. content_type.event_stream then
                 -- no supported SSE
                 self.logger:info("No supported SSE")
-                ---@type ServerResponce
+                ---@type ServerResponse
                 return {
-                    http_responce = http.response_code.method_not_allowed,
+                    http_response = http.response_code.method_not_allowed,
                     -- json_error = jsonrpc.error_code.method_not_found,
                 }
             end
@@ -414,7 +440,7 @@ function this:OnGET(request)
 end
 
 ---@param request ClientRequest
----@return ServerResponce?
+---@return ServerResponse?
 function this:OnOPTIONS(request)
     -- Streamable http
 
@@ -432,22 +458,22 @@ function this:OnOPTIONS(request)
         ", "),
     }
 
-    ---@type ServerResponce
+    ---@type ServerResponse
     return {
-        http_responce = http.response_code.no_content,
+        http_response = http.response_code.no_content,
         http_headers = cros,
         -- json_error = jsonrpc.error_code.method_not_found,
     }
 end
 
 ---@param request ClientRequest
----@return ServerResponce?
+---@return ServerResponse?
 function this:HandleRequest(request)
     local handler = self.requestHandlers[request.http_request.method]
     if not handler then
         self.logger:warn("No handler for request: %s", request.http_request.method)
         return {
-            http_responce = http.response_code.not_implemented,
+            http_response = http.response_code.not_implemented,
             json_error = jsonrpc.error_code.internal_error,
         }
     end
@@ -479,7 +505,7 @@ function this:Listen(e)
             end
 
             local result = http.SendResponse(client, http.response_code.bad_request) -- TODO add json?
-            self.logger:error(result.response)
+            self.logger:error("bad request: %d%s", http.response_code.bad_request.code, FormatResponseForLog(result.response))
 
             pcall(function() client:close() end)
         else
@@ -491,19 +517,19 @@ function this:Listen(e)
                 local response = self:HandleRequest({http_request = request, json_request = json_request})
                 if response then
                     if response.json_error then
-                        local result = http.SendResponse(client, response.http_responce, response.http_headers, jsonrpc.error(id, response.json_error) )
-                        self.logger:error("json error: %d\n%s", response.http_responce.code, string.gsub(result.response, "\r", ""))
+                        local result = http.SendResponse(client, response.http_response, response.http_headers, jsonrpc.error(id, response.json_error) )
+                        self.logger:error("json error: %d\n%s", response.http_response.code, FormatResponseForLog(result.response))
                     else
-                        local result = http.SendResponse(client, response.http_responce, response.http_headers, jsonrpc.result(id, response.json_result) )
-                        self.logger:debug("success: %d\n%s", response.http_responce.code, string.gsub(result.response, "\r", ""))
+                        local result = http.SendResponse(client, response.http_response, response.http_headers, jsonrpc.result(id, response.json_result) )
+                        self.logger:debug("success: %d\n%s", response.http_response.code, FormatResponseForLog(result.response))
                     end
                 else
                     local result = http.SendResponse(client, http.response_code.internal_server_error, nil, jsonrpc.error(id, jsonrpc.error_code.internal_error) )
-                    self.logger:error("internal error: %s", string.gsub(result.response, "\r", ""))
+                    self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code, FormatResponseForLog(result.response))
                 end
             else
                 local result = http.SendResponse(client, http.response_code.bad_request, nil, jsonrpc.error(nil, json_error))
-                self.logger:error("request error: %s", string.gsub(result.response, "\r", ""))
+                self.logger:error("request error: %d\n%s", http.response_code.bad_request.code, FormatResponseForLog(result.response))
             end
 
             pcall(function() client:close() end)

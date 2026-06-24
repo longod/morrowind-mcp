@@ -20,13 +20,13 @@ return this
 ---@field http_request Http.Request
 ---@field json_request MCP.JSONRPCRequest|MCP.JSONRPCNotification?
 
----@class ServerResponce
----@field http_responce Http.ResponseStatusCodes
+---@class ServerResponse
+---@field http_response Http.ResponseStatusCodes
 ---@field http_headers table<string, string>?
 ---@field json_result table?
 ---@field json_error MCP.Error?
 
 ---@class MethodResult
----@field http_responce Http.ResponseStatusCodes -- TODO simplify 200, 202, 400 or more?
+---@field http_response Http.ResponseStatusCodes -- TODO simplify 200, 202, 400 or more?
 ---@field result MCP.Result?
 ---@field error MCP.Error?

@@ -400,12 +400,12 @@ end
 
 
 ---@param client Socket.TcpClient
----@param responce_code Http.ResponseStatusCodes
+---@param response_code Http.ResponseStatusCodes
 ---@param headers table<Http.Header|Http.MCPHeader, string>?
 ---@param body string?
 ---@return Http.Result
-function this.SendResponse(client, responce_code, headers, body)
-    local response = string.format("%s %d %s\r\n", this.protocol.HTTP1_1, responce_code.code, responce_code.message)
+function this.SendResponse(client, response_code, headers, body)
+    local response = string.format("%s %d %s\r\n", this.protocol.HTTP1_1, response_code.code, response_code.message)
     if headers then
         for name, value in pairs(headers) do
             response = response .. string.format("%s: %s\r\n", name, value)

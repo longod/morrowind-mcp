@@ -63,7 +63,7 @@ function this.Get(options)
     local filepath = options.filepath and NormalizePath(options.filepath) or ResolveCallerFilepath()
 
     local logger = mwseLogger.new({
-        modName = settings.modName,
+        modName = settings.shortModName,
         modDir = settings.modDirRelative,
         moduleName = options.moduleName,
         filepath = filepath,
