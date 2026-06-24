@@ -20,8 +20,6 @@ function this.new(params)
         description = "Takes a screenshot of the current game state",
         inputSchema = jsonrpc.InputSchema(
             {
-                -- TODO name
-                -- TODO extension
                 captureWithUI = jsonrpc.BooleanSchema(
                     "Capture with UI",
                     "The screenshot will include the user interface.",

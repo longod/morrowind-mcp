@@ -10,7 +10,7 @@ local config = require("morrowind-mcp.config")
 ---@type Socket.Module
 local socket = require("socket")
 
-local maxResponseLogLength = config.development.debug and 2048 or 512
+local maxResponseLogLength = config.development.debug and 1024 or 256
 
 ---@param response string?
 ---@return string
