@@ -38,7 +38,6 @@ end
 ---@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponse?>
 ---@field methodHandlers table<string, fun(self: MwseHttpServer, params: MCP.RequestParams): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
----@field resources table<string, MCP.IResource>
 ---@field tools table<string, MCP.ITool>
 local this = {}
 setmetatable(this, { __index = base })
@@ -66,12 +65,13 @@ function this.new(params)
         [mcp.method.logging_setlevel] = instance.OnLoggingSetLevel,
         [mcp.method.prompts_list] = instance.OnPromptsList,
         [mcp.method.resources_list] = instance.OnResourcesList,
+        [mcp.method.resources_templates_list] = instance.OnResourcesTemplatesList,
         [mcp.method.tools_list] = instance.OnToolsList,
         [mcp.method.tools_call] = instance.OnToolsCall,
         [mcp.method.resources_read] = instance.OnResourcesRead,
+        [mcp.method.prompts_get] = instance.OnPromptsGet,
     }
     instance:LoadPrompts()
-    instance:LoadResources()
     instance:LoadTools()
     return instance
 end
@@ -88,22 +88,6 @@ function this:LoadPrompts()
                 self.prompts[instance.definition.name] = instance
             else
                 self.logger:error("Failed to load prompt from file: %s", file)
-            end
-        end
-    end
-end
-
-function this:LoadResources()
-    self.resources = {}
-    local dir = settings.modDir .. "resources\\"
-    for file in lfs.dir(dir) do
-        if string.endswith(file:lower(), ".lua") then
-            local res  = dofile(dir .. file) ---@type MCP.IResource
-            if res and type(res) == "table" then
-                local instance = res.new()
-                self.resources[instance.definition.name] = instance
-            else
-                self.logger:error("Failed to load resource from file: %s", file)
             end
         end
     end
@@ -222,13 +206,26 @@ end
 ---@return MethodResult
 function this:OnResourcesList(params)
     ---@type MCP.ListResourcesResult
-    local result = jsonrpc.ListResourcesResult(table.size(self.resources))
+    local result = jsonrpc.ListResourcesResult()
 
-    for name, value in pairs(self.resources) do
-        if value:CanExecute({}) then
-            table.insert(result.resources, value.definition)
-        end
-    end
+    -- TODO crawl files from resource directory, or maybe only registered resources
+    -- implementation as to resources/
+
+    ---@type MethodResult
+    return {
+        http_response = http.response_code.ok,
+        result = result,
+    }
+end
+
+---@param params MCP.PaginatedRequestParams
+---@return MethodResult
+function this:OnResourcesTemplatesList(params)
+    ---@type MCP.ListResourceTemplatesResult
+    local result = jsonrpc.ListResourceTemplatesResult()
+
+    -- TODO crawl files from resource directory, or maybe only registered resources
+    -- implementation as to resources/
 
     ---@type MethodResult
     return {
@@ -240,6 +237,8 @@ end
 ---@param params MCP.ReadResourceRequestParams
 ---@return MethodResult
 function this:OnResourcesRead(params)
+    -- TODO move implementation to resources/
+
     if not params or type(params.uri) ~= "string" then
         ---@type MethodResult
         return {
@@ -338,6 +337,43 @@ function this:OnToolsCall(params)
 
     -- TODO maybe need more context table (world, player, etc...)
     local result = tool:Execute(params)
+
+    ---@type MethodResult
+    return {
+        http_response = http.response_code.ok,
+        result = result,
+    }
+end
+
+---@param params MCP.GetPromptRequestParams
+---@return MethodResult
+function this:OnPromptsGet(params)
+    if not params or not params.name then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local prompt = self.prompts[params.name]
+    if not prompt then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.method_not_found,
+        }
+    end
+    if not prompt:CanExecute(params) then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.forbidden,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    -- TODO maybe need more context table (world, player, etc...)
+    local result = prompt:Execute(params)
 
     ---@type MethodResult
     return {

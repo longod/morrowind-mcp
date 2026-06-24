@@ -57,7 +57,7 @@ function this.Test()
             unitwind:expect(request.method).toBe("POST")
             unitwind:expect(request.endpoint).toBe("/hello")
             unitwind:expect(request.protocol).toBe("HTTP/1.1")
-            unitwind:expect(request.headers.host).toBe("example.com")
+            unitwind:expect(request.headers["host"]).toBe("example.com")
             unitwind:expect(request.headers["content-length"]).toBe("5")
             unitwind:expect(request.body).toBe("world")
         end

@@ -21,6 +21,11 @@ function this:CanExecute(params)
     return true
 end
 
+---@public
+---@param params MCP.GetPromptRequestParams
+---@return MCP.GetPromptResult?
+function this:Execute(params)
+end
 
 
 return this
