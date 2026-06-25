@@ -39,8 +39,9 @@ luac.out
 *.x86_64
 *.hex
 
+# Project
+.vscode/
 meta.ini
 .exit-after-tests
-.vscode/
-tests/node_modules/
+*.log
 mwmcp.local.json

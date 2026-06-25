@@ -12,6 +12,26 @@ catch {
     exit 1
 }
 
+$LogsRoot = Join-Path $ScriptDir "logs\server_test"
+$RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$InspectorLogPath = Join-Path $LogsRoot "inspector_$RunTimestamp.log"
+$MwseLogSourcePath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
+$MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
+
+try {
+    $null = New-Item -Path $LogsRoot -ItemType Directory -Force
+    Set-Content -Path $InspectorLogPath -Value @(
+        "# Morrowind MCP server_test inspector log"
+        "# StartedAt: $(Get-Date -Format o)"
+        "# Endpoint: $($Config.Connection.url)"
+        ""
+    )
+}
+catch {
+    Write-Host "[ERROR] Failed to initialize inspector log file: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+
 # Workaround for Inspector issue/PR #1337:
 # https://github.com/modelcontextprotocol/inspector/issues/1334
 # https://github.com/modelcontextprotocol/inspector/pull/1337
@@ -41,16 +61,35 @@ function Invoke-MCPInspector {
     try {
         & npx.cmd @commandArguments 1> $stdoutFile 2> $stderrFile
         $result = [int]$LASTEXITCODE
+        $runLabel = $Arguments -join ' '
 
         $stdoutText = if (Test-Path $stdoutFile) { Get-Content -Path $stdoutFile -Raw } else { "" }
         $stderrText = if (Test-Path $stderrFile) { Get-Content -Path $stderrFile -Raw } else { "" }
 
+        Add-Content -Path $InspectorLogPath -Value @(
+            "================================================================================"
+            "[RUN] $runLabel"
+            "[TIME] $(Get-Date -Format o)"
+            "[EXIT] $result"
+            "--- STDERR ---"
+        )
         if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
-            $stderrText -split "`r?`n" | ForEach-Object { if ($_ -ne "") { Write-Host $_ } }
+            Add-Content -Path $InspectorLogPath -Value $stderrText
         }
+        else {
+            Add-Content -Path $InspectorLogPath -Value "<empty>"
+        }
+
+        Add-Content -Path $InspectorLogPath -Value @(
+            "--- STDOUT ---"
+        )
         if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
-            $stdoutText -split "`r?`n" | ForEach-Object { if ($_ -ne "") { Write-Host $_ } }
+            Add-Content -Path $InspectorLogPath -Value $stdoutText
         }
+        else {
+            Add-Content -Path $InspectorLogPath -Value "<empty>"
+        }
+        Add-Content -Path $InspectorLogPath -Value ""
 
         # Inspector の既知問題で出るノイズ行を定義する。
         $assertionPattern = "Assertion failed: !\(handle->flags & UV_HANDLE_CLOSING\)"
@@ -94,6 +133,12 @@ function Invoke-MCPInspector {
         }
 
         Write-Host "[FAILED] $result" -ForegroundColor Red
+        if ($hasRealStderrError) {
+            $preview = $filteredStderrLines | Select-Object -First 5
+            foreach ($line in $preview) {
+                Write-Host "  $line" -ForegroundColor DarkYellow
+            }
+        }
         return $result
     }
     finally {
@@ -176,6 +221,21 @@ finally {
     if ([int]$LASTEXITCODE -ne 0) {
         Write-Host "[WARN] $StopScriptPath exit code: $LASTEXITCODE" -ForegroundColor Yellow
     }
+
+    if (Test-Path -LiteralPath $MwseLogSourcePath) {
+        try {
+            Copy-Item -LiteralPath $MwseLogSourcePath -Destination $MwseLogCopyPath -Force
+            Write-Host "[INFO] MWSE log copy: $MwseLogCopyPath" -ForegroundColor Cyan
+        }
+        catch {
+            Write-Host "[WARN] Failed to copy MWSE.log: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "[WARN] MWSE.log not found: $MwseLogSourcePath" -ForegroundColor Yellow
+    }
+
+    Write-Host "[INFO] Inspector logs: $InspectorLogPath" -ForegroundColor Cyan
 
     Pop-Location
 }

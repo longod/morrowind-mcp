@@ -4,6 +4,15 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 $ExitCode = 0
 $CreatedSentinel = $false
+$RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$OutputDir = Join-Path $ScriptDir "logs\unit_test"
+$ExtractOutputPath = Join-Path $OutputDir "unitwind_$RunTimestamp.log"
+$MwseCopyOutputPath = Join-Path $OutputDir "mwse_$RunTimestamp.log"
+$ExtractPattern = '\[UnitWind\]|MORROWIND-MCP\..*(PASSED|FAILED)'
+$ExtractedLines = @()
+$FoundFailed = $false
+$MwseLogPath = $null
+$MwseLogStatus = ""
 
 Push-Location $ScriptDir
 try {
@@ -83,6 +92,78 @@ try {
     }
     else {
         Write-Host "[WARN] Morrowind process was not detected. Cleanup continues." -ForegroundColor Yellow
+    }
+
+    if (-not (Test-Path -LiteralPath $OutputDir)) {
+        New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+    }
+
+    $ConfigScriptPath = ".\mwmcp_config.ps1"
+    if (Test-Path -LiteralPath $ConfigScriptPath) {
+        . $ConfigScriptPath
+        try {
+            $Config = Get-MwmcpConfig
+            $MwseLogPath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
+        }
+        catch {
+            $MwseLogStatus = "Failed to resolve MWSE.log path: $($_.Exception.Message)"
+            Write-Host "[WARN] $MwseLogStatus" -ForegroundColor Yellow
+        }
+    }
+    else {
+        $MwseLogStatus = "Config helper was not found: $ConfigScriptPath"
+        Write-Host "[WARN] $MwseLogStatus" -ForegroundColor Yellow
+    }
+
+    if ($MwseLogPath -and (Test-Path -LiteralPath $MwseLogPath)) {
+        Write-Host "[INFO] Extracting unit test results from $MwseLogPath" -ForegroundColor DarkCyan
+        try {
+            Copy-Item -LiteralPath $MwseLogPath -Destination $MwseCopyOutputPath -Force
+            Write-Host "[INFO] Saved MWSE.log copy: $MwseCopyOutputPath" -ForegroundColor DarkCyan
+        }
+        catch {
+            Write-Host "[WARN] Failed to save MWSE.log copy: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+
+        $ExtractedLines = Select-String -LiteralPath $MwseLogPath -Pattern $ExtractPattern | ForEach-Object { $_.Line }
+        if ($ExtractedLines.Count -gt 0) {
+            Write-Host "[INFO] Extracted $($ExtractedLines.Count) matching line(s)." -ForegroundColor DarkCyan
+            $ExtractedLines | ForEach-Object { Write-Host $_ }
+            $FoundFailed = ($ExtractedLines | Where-Object { $_ -match "FAILED" }).Count -gt 0
+        }
+        else {
+            Write-Host "[WARN] No matching unit test lines were found in MWSE.log." -ForegroundColor Yellow
+        }
+    }
+    elseif ($MwseLogPath) {
+        $MwseLogStatus = "MWSE.log was not found: $MwseLogPath"
+        Write-Host "[WARN] $MwseLogStatus" -ForegroundColor Yellow
+    }
+
+    $ExtractFileLines = @(
+        "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+        "MWSELogPath: $MwseLogPath",
+        "ExtractPattern: $ExtractPattern",
+        ""
+    )
+
+    if ($MwseLogStatus) {
+        $ExtractFileLines += "[WARN] $MwseLogStatus"
+    }
+
+    if ($ExtractedLines.Count -gt 0) {
+        $ExtractFileLines += $ExtractedLines
+    }
+    else {
+        $ExtractFileLines += "[INFO] No matching lines were extracted."
+    }
+
+    Set-Content -LiteralPath $ExtractOutputPath -Value $ExtractFileLines -Encoding UTF8
+    Write-Host "[INFO] Saved extracted results: $ExtractOutputPath" -ForegroundColor DarkCyan
+
+    if ($FoundFailed -and $ExitCode -eq 0) {
+        Write-Host "[WARN] FAILED result detected in MWSE.log. Returning non-zero exit code." -ForegroundColor Yellow
+        $ExitCode = 1
     }
 }
 finally {
