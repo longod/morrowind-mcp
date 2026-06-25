@@ -24,11 +24,23 @@ function this.Test()
         unitwind:expect(pathutil.FromUri("mwmcp://nested/folder/test.png", uriScheme)).toBe("nested/folder/test.png")
     end)
 
+    unitwind:test("ToUri applies percent encoding for reserved characters", function()
+        unitwind:expect(pathutil.ToUri("folder/my file#.txt", uriScheme)).toBe("mwmcp://folder/my%20file%23.txt")
+        unitwind:expect(pathutil.ToUri("folder/a?b&c.txt", uriScheme)).toBe("mwmcp://folder/a%3Fb%26c.txt")
+    end)
+
+    unitwind:test("FromUri applies percent decoding before validation", function()
+        unitwind:expect(pathutil.FromUri("mwmcp://folder/my%20file%23.txt", uriScheme)).toBe("folder/my file#.txt")
+        unitwind:expect(pathutil.FromUri("mwmcp://folder/a%3Fb%26c.txt", uriScheme)).toBe("folder/a?b&c.txt")
+    end)
+
     unitwind:test("FromUri rejects invalid inputs", function()
         unitwind:expect(pathutil.FromUri("http://test.jpg", uriScheme)).toBe(nil)
         unitwind:expect(pathutil.FromUri("mwmcp://../test.jpg", uriScheme)).toBe(nil)
         unitwind:expect(pathutil.FromUri("mwmcp:///test.jpg", uriScheme)).toBe(nil)
         unitwind:expect(pathutil.FromUri("mwmcp://folder//test.jpg", uriScheme)).toBe(nil)
+        unitwind:expect(pathutil.FromUri("mwmcp://folder/file%2", uriScheme)).toBe(nil)
+        unitwind:expect(pathutil.FromUri("mwmcp://folder/file%GG", uriScheme)).toBe(nil)
     end)
 
     unitwind:test("ToUri rejects invalid inputs", function()
