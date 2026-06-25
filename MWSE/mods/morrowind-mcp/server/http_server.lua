@@ -28,6 +28,33 @@ local function FormatResponseForLog(response)
     return r .. "[...too long]"
 end
 
+---@param resourcePath string
+---@return boolean
+local function IsValidResourcePath(resourcePath)
+    -- Resource URIs must stay inside Data Files and use forward-slash relative paths.
+    if resourcePath == "" or strutil.startswith(resourcePath, "/") then
+        return false
+    end
+
+    if string.find(resourcePath, "\\", 1, true) or string.find(resourcePath, ":", 1, true) then
+        return false
+    end
+
+    local segments = strutil.split(resourcePath, "/")
+    if not segments then
+        return false
+    end
+
+    -- Reject empty, current-directory, and parent-directory segments to block traversal.
+    for _, segment in ipairs(segments) do
+        if segment == "" or segment == "." or segment == ".." then
+            return false
+        end
+    end
+
+    return true
+end
+
 ---@class MwseHttpServer : MCP.IServer
 ---@field logger mwseLogger
 ---@field server Socket.TcpServer?
@@ -247,9 +274,9 @@ function this:OnResourcesRead(params)
         }
     end
 
-    -- Custom resource URIs are resolved as Data Files-relative paths through MWSE/MO2 VFS.
-    local prefix = settings.resourceUriPrefix
-    if string.sub(params.uri, 1, string.len(prefix)) ~= prefix then
+    -- Custom resource URIs are resolved relative to the configured resource root.
+    local prefix = settings.uriScheme
+    if not strutil.startswith(params.uri, prefix) then
         ---@type MethodResult
         return {
             http_response = http.response_code.bad_request,
@@ -258,7 +285,7 @@ function this:OnResourcesRead(params)
     end
 
     local resourcePath = string.sub(params.uri, string.len(prefix) + 1)
-    if resourcePath == "" or string.sub(resourcePath, 1, 1) == "/" or string.find(resourcePath, "\\", 1, true) or string.find(resourcePath, "..", 1, true) or string.find(resourcePath, ":", 1, true) then
+    if not IsValidResourcePath(resourcePath) then
         ---@type MethodResult
         return {
             http_response = http.response_code.bad_request,
@@ -266,7 +293,7 @@ function this:OnResourcesRead(params)
         }
     end
 
-    local file = io.open(settings.dataFiles .. string.gsub(resourcePath, "/", "\\"), "rb")
+    local file = io.open(settings.resourceRootDir .. string.gsub(resourcePath, "/", "\\"), "rb")
     if not file then
         ---@type MethodResult
         return {

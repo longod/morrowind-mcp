@@ -77,7 +77,7 @@ function this:Execute(params)
     end
     local extension = arguments["extension"] or ".jpg"
     local settings = require("morrowind-mcp.settings")
-    local dir = settings.screenshotDir
+    local dir = settings.resourceRootDir
     pcall(lfs.mkdir, dir)
     local path = dir .. name .. extension
     local captureWithUI = arguments["captureWithUI"]
@@ -85,9 +85,9 @@ function this:Execute(params)
         captureWithUI = true
     end
     mge.saveScreenshot({path = path,  captureWithUI = captureWithUI})
-    local resourcePath = string.sub(path, string.len(settings.dataFiles) + 1)
-    -- This custom URI is resolved by resources/read as a Data Files-relative path.
-    local uri = settings.resourceUriPrefix .. string.gsub(resourcePath, "\\", "/")
+    local resourcePath = string.sub(path, string.len(settings.resourceRootDir) + 1)
+    -- This custom URI is resolved by resources/read relative to settings.resourceRootDir.
+    local uri = settings.uriScheme .. string.gsub(resourcePath, "\\", "/")
 
 
     self.logger:info("Screenshot taken: path=%s, uri=%s", path, uri)
