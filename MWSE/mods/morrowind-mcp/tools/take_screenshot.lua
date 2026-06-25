@@ -2,6 +2,7 @@
 local base = require("morrowind-mcp.core.itool")
 local mime = require("morrowind-mcp.core.mime")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+local pathutil = require("morrowind-mcp.core.pathutil")
 
 
 ---@class MCP.TakeScreenshot: MCP.ITool
@@ -85,15 +86,25 @@ function this:Execute(params)
         captureWithUI = true
     end
     mge.saveScreenshot({path = path,  captureWithUI = captureWithUI})
-    local resourcePath = string.sub(path, string.len(settings.resourceRootDir) + 1)
-    -- This custom URI is resolved by resources/read relative to settings.resourceRootDir.
-    local uri = settings.uriScheme .. string.gsub(resourcePath, "\\", "/")
+    local resourcePath = pathutil.FromResourceFilePath(path, settings.resourceRootDir)
+    if not resourcePath then
+        self.logger:error("Failed to convert screenshot file path to resource path: %s", path)
+        local errorContent = jsonrpc.TextContent("Failed to resolve screenshot resource path")
+        return jsonrpc.CallToolResult(errorContent, nil, true)
+    end
+
+    local resourceUri = pathutil.ToUri(resourcePath, settings.uriScheme)
+    if not resourceUri then
+        self.logger:error("Failed to convert screenshot path to URI: %s", path)
+        local errorContent = jsonrpc.TextContent("Failed to resolve screenshot URI")
+        return jsonrpc.CallToolResult(errorContent, nil, true)
+    end
 
 
-    self.logger:info("Screenshot taken: path=%s, uri=%s", path, uri)
+    self.logger:info("Screenshot taken: path=%s, uri=%s", path, resourceUri)
 
     local mimeType = mime.ResolveMimeTypeFromExtension(extension)
-    local content = jsonrpc.ResourceLink(name .. extension, uri, "Screenshot taken at " .. os.date("%Y-%m-%d %H:%M:%S"), nil, mimeType)
+    local content = jsonrpc.ResourceLink(name .. extension, resourceUri, "Screenshot taken at " .. os.date("%Y-%m-%d %H:%M:%S"), nil, mimeType)
     return jsonrpc.CallToolResult(content)
 end
 

@@ -2,6 +2,7 @@ local base = require("morrowind-mcp.core.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.core.strutil")
+local pathutil = require("morrowind-mcp.core.pathutil")
 local mcp = require("morrowind-mcp.core.mcp")
 local mime = require("morrowind-mcp.core.mime")
 local settings = require("morrowind-mcp.settings")
@@ -26,33 +27,6 @@ local function FormatResponseForLog(response)
 
     local r, _ = string.gsub(string.sub(response, 1, maxResponseLogLength), "\r", "")
     return r .. "[...too long]"
-end
-
----@param resourcePath string
----@return boolean
-local function IsValidResourcePath(resourcePath)
-    -- Resource URIs must stay inside Data Files and use forward-slash relative paths.
-    if resourcePath == "" or strutil.startswith(resourcePath, "/") then
-        return false
-    end
-
-    if string.find(resourcePath, "\\", 1, true) or string.find(resourcePath, ":", 1, true) then
-        return false
-    end
-
-    local segments = strutil.split(resourcePath, "/")
-    if not segments then
-        return false
-    end
-
-    -- Reject empty, current-directory, and parent-directory segments to block traversal.
-    for _, segment in ipairs(segments) do
-        if segment == "" or segment == "." or segment == ".." then
-            return false
-        end
-    end
-
-    return true
 end
 
 ---@class MwseHttpServer : MCP.IServer
@@ -235,8 +209,40 @@ function this:OnResourcesList(params)
     ---@type MCP.ListResourcesResult
     local result = jsonrpc.ListResourcesResult()
 
-    -- TODO crawl files from resource directory, or maybe only registered resources
-    -- implementation as to resources/
+    ---@param currentDir string
+    ---@param relativeDir string
+    local function CollectResources(currentDir, relativeDir)
+        for file in lfs.dir(currentDir) do
+            if file ~= "." and file ~= ".." then
+                local currentPath = currentDir .. file
+                local mode = lfs.attributes(currentPath, "mode")
+                if mode == "directory" then
+                    CollectResources(currentPath .. "\\", relativeDir .. file .. "/")
+                elseif mode == "file" then
+                    local relativePath = relativeDir .. file
+                    local resourceUri = pathutil.ToUri(relativePath, settings.uriScheme)
+                    if resourceUri then
+                        ---@type MCP.Resource
+                        local resource = {
+                            name = relativePath,
+                            uri = resourceUri,
+                            mimeType = mime.ResolveMimeTypeFromResourcePath(relativePath),
+                            size = lfs.attributes(currentPath, "size"),
+                        }
+                        table.insert(result.resources, resource)
+                    else
+                        self.logger:warn("Skip invalid resource path: %s", relativePath)
+                    end
+                end
+            end
+        end
+    end
+
+    local rootDir = settings.resourceRootDir
+    CollectResources(rootDir, "")
+    table.sort(result.resources, function(a, b)
+        return a.uri < b.uri
+    end)
 
     ---@type MethodResult
     return {
@@ -274,9 +280,8 @@ function this:OnResourcesRead(params)
         }
     end
 
-    -- Custom resource URIs are resolved relative to the configured resource root.
-    local prefix = settings.uriScheme
-    if not strutil.startswith(params.uri, prefix) then
+    local resourcePath = pathutil.FromUri(params.uri, settings.uriScheme)
+    if not resourcePath then
         ---@type MethodResult
         return {
             http_response = http.response_code.bad_request,
@@ -284,8 +289,8 @@ function this:OnResourcesRead(params)
         }
     end
 
-    local resourcePath = string.sub(params.uri, string.len(prefix) + 1)
-    if not IsValidResourcePath(resourcePath) then
+    local resourceFilePath = pathutil.ToResourceFilePath(resourcePath, settings.resourceRootDir)
+    if not resourceFilePath then
         ---@type MethodResult
         return {
             http_response = http.response_code.bad_request,
@@ -293,7 +298,7 @@ function this:OnResourcesRead(params)
         }
     end
 
-    local file = io.open(settings.resourceRootDir .. string.gsub(resourcePath, "/", "\\"), "rb")
+    local file = io.open(resourceFilePath, "rb")
     if not file then
         ---@type MethodResult
         return {
