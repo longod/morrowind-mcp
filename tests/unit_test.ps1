@@ -13,6 +13,22 @@ $ExtractedLines = @()
 $FoundFailed = $false
 $MwseLogPath = $null
 $MwseLogStatus = ""
+$SavedMwseCopy = $false
+
+function Convert-ToFileUri {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+        return ([System.Uri]::new($fullPath)).AbsoluteUri
+    }
+    catch {
+        return $Path
+    }
+}
 
 Push-Location $ScriptDir
 try {
@@ -119,7 +135,7 @@ try {
         Write-Host "[INFO] Extracting unit test results from $MwseLogPath" -ForegroundColor DarkCyan
         try {
             Copy-Item -LiteralPath $MwseLogPath -Destination $MwseCopyOutputPath -Force
-            Write-Host "[INFO] Saved MWSE.log copy: $MwseCopyOutputPath" -ForegroundColor DarkCyan
+            $SavedMwseCopy = $true
         }
         catch {
             Write-Host "[WARN] Failed to save MWSE.log copy: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -159,7 +175,6 @@ try {
     }
 
     Set-Content -LiteralPath $ExtractOutputPath -Value $ExtractFileLines -Encoding UTF8
-    Write-Host "[INFO] Saved extracted results: $ExtractOutputPath" -ForegroundColor DarkCyan
 
     if ($FoundFailed -and $ExitCode -eq 0) {
         Write-Host "[WARN] FAILED result detected in MWSE.log. Returning non-zero exit code." -ForegroundColor Yellow
@@ -167,6 +182,14 @@ try {
     }
 }
 finally {
+    if (Test-Path -LiteralPath $ExtractOutputPath) {
+        Write-Host "[INFO] Saved extracted results: $(Convert-ToFileUri -Path $ExtractOutputPath)" -ForegroundColor DarkCyan
+    }
+
+    if ($SavedMwseCopy) {
+        Write-Host "[INFO] Saved MWSE.log copy: $(Convert-ToFileUri -Path $MwseCopyOutputPath)" -ForegroundColor DarkCyan
+    }
+
     # Clean up only when this script created the sentinel file.
     if ($CreatedSentinel) {
         Remove-Item -LiteralPath $SentinelPath -ErrorAction SilentlyContinue

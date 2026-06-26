@@ -18,6 +18,21 @@ $InspectorLogPath = Join-Path $LogsRoot "inspector_$RunTimestamp.log"
 $MwseLogSourcePath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
 $MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
 
+function Convert-ToFileUri {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+        return ([System.Uri]::new($fullPath)).AbsoluteUri
+    }
+    catch {
+        return $Path
+    }
+}
+
 try {
     $null = New-Item -Path $LogsRoot -ItemType Directory -Force
     Set-Content -Path $InspectorLogPath -Value @(
@@ -226,7 +241,7 @@ finally {
     if (Test-Path -LiteralPath $MwseLogSourcePath) {
         try {
             Copy-Item -LiteralPath $MwseLogSourcePath -Destination $MwseLogCopyPath -Force
-            Write-Host "[INFO] MWSE log copy: $MwseLogCopyPath" -ForegroundColor Cyan
+            Write-Host "[INFO] MWSE log copy: $(Convert-ToFileUri -Path $MwseLogCopyPath)" -ForegroundColor Cyan
         }
         catch {
             Write-Host "[WARN] Failed to copy MWSE.log: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -236,7 +251,7 @@ finally {
         Write-Host "[WARN] MWSE.log not found: $MwseLogSourcePath" -ForegroundColor Yellow
     }
 
-    Write-Host "[INFO] Inspector logs: $InspectorLogPath" -ForegroundColor Cyan
+    Write-Host "[INFO] Inspector logs: $(Convert-ToFileUri -Path $InspectorLogPath)" -ForegroundColor Cyan
 
     Pop-Location
 }
