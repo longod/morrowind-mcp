@@ -18,7 +18,7 @@ function this.new(params)
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "take_screenshot" })
     instance.definition = jsonrpc.Tool({
         name = "take_screenshot",
-        description = "Takes a screenshot of the current game state",
+        description = "Take a screenshot of the current game state",
         inputSchema = jsonrpc.InputSchema(
             {
                 captureWithUI = jsonrpc.BooleanSchema(

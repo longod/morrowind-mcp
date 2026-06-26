@@ -206,6 +206,10 @@ end
 ---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnResourcesList(params)
+    -- crawl files from resource directory, or maybe only registered resources
+    -- TODO implementation to resources/
+    -- TODO pagenation support
+
     ---@type MCP.ListResourcesResult
     local result = jsonrpc.ListResourcesResult()
 
@@ -257,8 +261,8 @@ function this:OnResourcesTemplatesList(params)
     ---@type MCP.ListResourceTemplatesResult
     local result = jsonrpc.ListResourceTemplatesResult()
 
-    -- TODO crawl files from resource directory, or maybe only registered resources
-    -- implementation as to resources/
+    -- TODO present templete path for resource finding.
+    -- TODO implementation to resources/
 
     ---@type MethodResult
     return {

@@ -645,6 +645,43 @@ function this.BooleanSchema(title, description, default)
     }
 end
 
+
+---@param object table<string, MCP.JsonSchemaProperty>|number?
+---@return MCP.JsonObjectSchema
+---@return boolean validObjectType
+function this.JsonObjectSchema(object)
+    local o = this.object(object)
+    if not o then
+        return { type = "object" }, false
+    end
+
+    local validObjectType = true
+    if o.type and o.type ~= "object" then
+        validObjectType = false
+    end
+    o.type = "object"
+    return o, validObjectType
+end
+
+
+---@param array table<string, any>|number?
+---@return MCP.JsonArraySchema
+---@return boolean validArrayType
+function this.JsonArraySchema(array)
+    local a = this.object(array)
+    if not a then
+        return { type = "array" }, false
+    end
+
+    local validArrayType = true
+    if a.type and a.type ~= "array" then
+        validArrayType = false
+    end
+    a.type = "array"
+    return a, validArrayType
+end
+
+
 ---@param const string
 ---@param title string
 ---@return MCP.ConstTitle

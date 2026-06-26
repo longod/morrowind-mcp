@@ -155,16 +155,6 @@ local logging_level = {
 ---@class MCP.PaginatedRequestParams: MCP.RequestParams
 ---@field cursor MCP.Cursor?
 
----@class MCP.JsonSchemaObject
----@field ["$schema"] string?
----@field type string
----@field title string?
----@field description string?
----@field properties table<string, MCP.JsonSchemaProperty>?
----@field required string[]?
-
----@alias MCP.JsonSchemaProperty MCP.StringSchema|MCP.NumberSchema|MCP.BooleanSchema|MCP.EnumSchema|MCP.JsonSchemaObject
-
 -- ============================================================================
 -- Content
 -- ============================================================================
@@ -867,6 +857,14 @@ local logging_level = {
 -- ============================================================================
 -- Tools
 -- ============================================================================
+
+---@class MCP.JsonObjectSchema
+---@field type "object"
+
+---@class MCP.JsonArraySchema
+---@field type "array"
+
+---@alias MCP.JsonSchemaProperty MCP.StringSchema|MCP.NumberSchema|MCP.BooleanSchema|MCP.EnumSchema|MCP.JsonObjectSchema|MCP.JsonArraySchema
 
 ---@class MCP.InputSchema
 ---@field ["$schema"] string?

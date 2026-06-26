@@ -1,5 +1,5 @@
 [package]
-name = "Morrowind MCP Server"
+name = "Morrowind MCP"
 description = "MCP server for reading Morrowind game state and metadata, and performing in-game actions."
 homepage = "placeholder"
 repository = "https://github.com/longod/morrowind-mcp"

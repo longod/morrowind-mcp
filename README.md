@@ -4,6 +4,10 @@ Morrowind Model Context Protocol Server (Morrowind MCP) connects Morrowind to ex
 
 This allows the AI to learn about the world of Morrowind and interact with it.
 
+## Requirements
+- Morrowind full expansion
+- Morrowind Script Extender (MWSE) latest version
+
 ## Features
 
 [FEATURES.md](FEATURES.md)
@@ -46,6 +50,8 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
 ### Shared root config
 
+This configuration system is designed to handle differences between user environments, such as Morrowind install locations, Mod Organizer 2 setup, and profile-specific paths. By layering `default`, `local`, and `env` values, the project can run consistently across personal setups, test machines, and CI.
+
 Precedence: `env > local > default`.
 - Environment variables can be used to override values in `mwmcp.local.json` for CI or other purposes. For example, `MWMCP_SERVER_ADDRESS` can override the `server.address` value.
 - Local development overrides can be placed in [mwmcp.local.json](mwmcp.local.json).
@@ -82,7 +88,13 @@ Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Ins
 This automatically resolves the server configuration and opens the Inspector at the configured connection URL.
 
 ## SDK
+
 - [base64.lua](MWSE/mods/morrowind-mcp/base64.lua) from [lbase64](https://github.com/iskolbin/lbase64)
 
+## TODO
+
+- OpenMW supported
+
 ## License
-- [LICENSE](LICENSE)
+
+[MIT License](LICENSE)

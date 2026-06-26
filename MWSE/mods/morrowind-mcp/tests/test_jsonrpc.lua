@@ -451,6 +451,65 @@ function this.Test()
         unitwind:expect(schema.default).toBe(true)
     end)
 
+    unitwind:test("JsonObjectSchema keeps object type and reports valid input", function()
+        ---@type table
+        local objectDefinition = {
+            title = "Object Title",
+        }
+        local schema, validObjectType = jsonrpc.JsonObjectSchema(objectDefinition)
+        ---@type table
+        local rawSchema = schema
+
+        unitwind:expect(validObjectType).toBe(true)
+        unitwind:expect(rawSchema.type).toBe("object")
+        unitwind:expect(rawSchema.title).toBe("Object Title")
+    end)
+
+    unitwind:test("JsonObjectSchema reports false when input type mismatches", function()
+        ---@type table
+        local objectDefinition = {
+            type = "string",
+            title = "Object Title",
+        }
+        local schema, validObjectType = jsonrpc.JsonObjectSchema(objectDefinition)
+        ---@type table
+        local rawSchema = schema
+
+        unitwind:expect(validObjectType).toBe(false)
+        unitwind:expect(rawSchema.type).toBe("object")
+        unitwind:expect(rawSchema.title).toBe("Object Title")
+    end)
+
+    unitwind:test("JsonArraySchema keeps array type and reports valid input", function()
+        ---@type table
+        local arrayDefinition = {
+            type = "array",
+            title = "Array Title",
+        }
+        local schema, validArrayType = jsonrpc.JsonArraySchema(arrayDefinition)
+        ---@type table
+        local rawSchema = schema
+
+        unitwind:expect(validArrayType).toBe(true)
+        unitwind:expect(rawSchema.type).toBe("array")
+        unitwind:expect(rawSchema.title).toBe("Array Title")
+    end)
+
+    unitwind:test("JsonArraySchema reports false when input type mismatches", function()
+        ---@type table
+        local arrayDefinition = {
+            type = "object",
+            title = "Array Title",
+        }
+        local schema, validArrayType = jsonrpc.JsonArraySchema(arrayDefinition)
+        ---@type table
+        local rawSchema = schema
+
+        unitwind:expect(validArrayType).toBe(false)
+        unitwind:expect(rawSchema.type).toBe("array")
+        unitwind:expect(rawSchema.title).toBe("Array Title")
+    end)
+
     unitwind:test("ConstTitle creates valid const-title pair", function()
         local constTitle = jsonrpc.ConstTitle("red", "Red Color")
         unitwind:expect(constTitle.const).toBe("red")
