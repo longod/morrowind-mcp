@@ -1,9 +1,11 @@
 
 local base = require("morrowind-mcp.core.itool")
-local mime = require("morrowind-mcp.core.mime")
+local mimeutil = require("morrowind-mcp.core.mimeutil")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local pathutil = require("morrowind-mcp.core.pathutil")
 
+local minMenuNameLength = 1
+local maxMenuNameLength = 255
 
 ---@class MCP.TakeScreenshot: MCP.ITool
 ---@field logger mwseLogger
@@ -28,11 +30,9 @@ function this.new(params)
                 ),
                 fileName = jsonrpc.StringSchema(
                     "File Name",
-                    "Optional screenshot file name (without extension).",
-                    1,
-                    nil,
-                    nil,
-                    nil
+                    "Screenshot file name (without extension). If not specified, a timestamp will be used.",
+                    minMenuNameLength, -- minimum length
+                    maxMenuNameLength -- maximum length
                 ),
                 extension = jsonrpc.UntitledSingleSelectEnumSchema(
                     { ".jpg", ".png", ".bmp", ".tga", ".dds" },
@@ -53,6 +53,7 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params)
+    -- TODO validation for injection
     local arguments = params.arguments or {}
 
     local ms = math.floor((os.clock() % 1) * 1000)
@@ -61,7 +62,7 @@ function this:Execute(params)
     local filename = arguments["fileName"]
     self.logger:debug("arguments fileName=%s, extension=%s, captureWithUI=%s", tostring(arguments["fileName"]), tostring(arguments["extension"]), tostring(arguments["captureWithUI"]))
 
-    if type(filename) == "string" and filename ~= "" then
+    if type(filename) == "string" and #filename >= minMenuNameLength and #filename <= maxMenuNameLength then
         -- or sanitize...
         local has_invalid_char = false
         for _, ch in ipairs({ "\\", "/", ":", "*", "?", "\"", "<", ">", "|" }) do
@@ -103,7 +104,7 @@ function this:Execute(params)
 
     self.logger:info("Screenshot taken: path=%s, uri=%s", path, resourceUri)
 
-    local mimeType = mime.ResolveMimeTypeFromExtension(extension)
+    local mimeType = mimeutil.ResolveMimeTypeFromExtension(extension)
     local content = jsonrpc.ResourceLink(name .. extension, resourceUri, "Screenshot taken at " .. os.date("%Y-%m-%d %H:%M:%S"), nil, mimeType)
     return jsonrpc.CallToolResult(content)
 end

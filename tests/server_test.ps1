@@ -218,7 +218,8 @@ try {
         @("--method", "resources/templates/list"),
         @("--method", "tools/call", "--tool-name", "mw_take_screenshot", "--tool-arg", "fileName=test"),
         @("--method", "resources/list"),
-        @("--method", "tools/call", "--tool-name", "mw_test_tool"), # no args
+        @("--method", "tools/call", "--tool-name", "mw_test_tool"),
+        @("--method", "tools/call", "--tool-name", "mw_get_menu"),
         @("--method", "resources/read", "--uri", "mwmcp://test.jpg"),
         @("--method", "prompts/get", "--prompt-name", "placeholder")
     )

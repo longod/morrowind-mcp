@@ -1,7 +1,8 @@
-
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
+local minMenuNameLength = 1
+local maxMenuNameLength = 255
 
 ---@class MCP.GetMenu: MCP.ITool
 ---@field logger mwseLogger
@@ -16,20 +17,35 @@ function this.new(params)
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "get_menu" })
     instance.definition = jsonrpc.Tool({
         name = "get_menu",
-        description = "Get current menus state. menu is user interface such as inventory. help is overlay such as tooltips.",
+        description =
+        "Get current menus state. menu is user interface such as inventory. help is overlay such as tooltips.",
         inputSchema = jsonrpc.InputSchema(
-            -- menu name, path or all
-            -- filter?
-            -- contain help layer
-            -- depth
-            -- show invisible
+            {
+                menuId = jsonrpc.NumberSchema(
+                    "Menu ID",
+                    "Find a non-root hierarchy of menu by ID (key name is `id`). If not specified, all menus will be returned. One of `menuId` or `menuName` should be specified."
+                ),
+                menuName = jsonrpc.StringSchema(
+                    "Menu Name",
+                    "Find a non-root hierarchy of menu by name (key name is `name`). If not specified, all menus will be returned. One of `menuId` or `menuName` should be specified.",
+                    minMenuNameLength,
+                    maxMenuNameLength
+                ),
+                -- filter?
+                -- contain help layer?
+                -- depth
+                -- show invisible? disabled?
+                -- top-most menu
+                -- get cursor
+                -- get cursor tile
+                -- focus element
+            }
         ),
         outputSchema = jsonrpc.OutputSchema(
             {
                 menu = jsonrpc.JsonObjectSchema(),
                 help = jsonrpc.JsonObjectSchema(),
             }
-            -- , jsonrpc.array({"menu"})
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
     })
@@ -45,7 +61,7 @@ function this:CanExecute(params)
 end
 
 local fonts = {
-    "magic_cards_regular", -- Magic Cards, default
+    "magic_cards_regular",         -- Magic Cards, default
     "century_gothic_font_regular", -- Century Sans
     "daedric_font",
 }
@@ -127,7 +143,7 @@ local function ToJsonElement(e)
         text = e.text,
         -- texture = e.texture, -- need?
         type = e.type,
-        -- visible = e.visible, -- terminate?
+        -- visible = e.visible, -- if element is not terminated, it is needed to contain
         -- widget = ToJsonWidget(e.widget, e.type), -- need?
         -- width = e.width,
         -- widthProportional = e.widthProportional,
@@ -135,7 +151,7 @@ local function ToJsonElement(e)
 
     local children = jsonrpc.array(table.size(e.children))
     for _, child in ipairs(e.children) do
-        local c =ToJsonElement(child)
+        local c = ToJsonElement(child)
         if c then
             table.insert(children, c)
         end
@@ -151,15 +167,46 @@ local function ToJsonElement(e)
 end
 
 function this:Execute(params)
+    -- TODO validation for injection
     local arguments = params.arguments or {}
+    local menuId = arguments["menuId"]
+    local menuName = arguments["menuName"]
+    if menuId ~= nil and menuName ~= nil then
+        local errorContent = jsonrpc.TextContent("Only one of menuId or menuName should be specified.")
+        return jsonrpc.CallToolResult(errorContent, nil, true)
+    end
 
-    local main = tes3.worldController.menuController.mainRoot
+    local menu = tes3.worldController.menuController.mainRoot
     local help = tes3.worldController.menuController.helpRoot
 
-    local structuredContent = jsonrpc.object({menu = ToJsonElement(main), help = ToJsonElement(help)})
+    -- better distinguish between fineMenu and findChild, but arguments too complex, so just use findChild.
+
+    if menuId ~= nil then
+        if type(menuId) ~= "number" then
+            local errorContent = jsonrpc.TextContent("menuId should be a number.")
+            return jsonrpc.CallToolResult(errorContent, nil, true)
+        end
+
+        self.logger:debug("Searching for menu with ID: %d", menuId)
+
+        menu = menu:findChild(menuId)
+        help = help:findChild(menuId)
+    elseif menuName ~= nil then
+        if type(menuName) ~= "string" or #menuName < minMenuNameLength or #menuName > maxMenuNameLength then
+            local errorContent = jsonrpc.TextContent(string.format("menuName should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
+            return jsonrpc.CallToolResult(errorContent, nil, true)
+        end
+
+        self.logger:debug("Searching for menu with Name: %s", menuName)
+
+        menu = menu:findChild(menuName)
+        help = help:findChild(menuName)
+    else
+        self.logger:debug("No menuId or menuName specified. Returning all menus.")
+    end
+
+    local structuredContent = jsonrpc.object({ menu = ToJsonElement(menu), help = ToJsonElement(help) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
-
-
 
 return this

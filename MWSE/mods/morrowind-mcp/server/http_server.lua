@@ -4,7 +4,7 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.core.strutil")
 local pathutil = require("morrowind-mcp.core.pathutil")
 local mcp = require("morrowind-mcp.core.mcp")
-local mime = require("morrowind-mcp.core.mime")
+local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 
@@ -230,7 +230,7 @@ function this:OnResourcesList(params)
                         local resource = {
                             name = relativePath,
                             uri = resourceUri,
-                            mimeType = mime.ResolveMimeTypeFromResourcePath(relativePath),
+                            mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
                             size = lfs.attributes(currentPath, "size"),
                         }
                         table.insert(result.resources, resource)
@@ -315,7 +315,7 @@ function this:OnResourcesRead(params)
     file:close()
 
     local base64 = require("morrowind-mcp.core.base64")
-    local mimeType = mime.ResolveMimeTypeFromResourcePath(resourcePath)
+    local mimeType = mimeutil.ResolveMimeTypeFromResourcePath(resourcePath)
     local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), mimeType)
 
     ---@type MethodResult
