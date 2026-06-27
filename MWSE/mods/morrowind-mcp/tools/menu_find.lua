@@ -14,20 +14,20 @@ setmetatable(this, { __index = base })
 function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.GetMenu
-    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "get_menu" })
+    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "menu_find" })
     instance.definition = jsonrpc.Tool({
-        name = "get_menu",
+        name = "menu-find",
         description =
-        "Get current menus state. menu is user interface such as inventory. help is overlay such as tooltips.",
+        "Find current menu hierarchy. `menu` is user interface such as inventory. `help` is overlay such as tooltips.",
         inputSchema = jsonrpc.InputSchema(
             {
-                menuId = jsonrpc.NumberSchema(
+                menu_id = jsonrpc.NumberSchema(
                     "Menu ID",
-                    "Find a non-root hierarchy of menu by ID (key name is `id`). If not specified, all menus will be returned. One of `menuId` or `menuName` should be specified."
+                    "Find a non-root hierarchy of menu by ID (key name is `id`). If not specified, all menus will be returned. One of `menu_id` or `menu_name` should be specified."
                 ),
-                menuName = jsonrpc.StringSchema(
+                menu_name = jsonrpc.StringSchema(
                     "Menu Name",
-                    "Find a non-root hierarchy of menu by name (key name is `name`). If not specified, all menus will be returned. One of `menuId` or `menuName` should be specified.",
+                    "Find a non-root hierarchy of menu by name (key name is `name`). If not specified, all menus will be returned. One of `menu_id` or `menu_name` should be specified.",
                     minMenuNameLength,
                     maxMenuNameLength
                 ),
@@ -169,10 +169,10 @@ end
 function this:Execute(params)
     -- TODO validation for injection
     local arguments = params.arguments or {}
-    local menuId = arguments["menuId"]
-    local menuName = arguments["menuName"]
-    if menuId ~= nil and menuName ~= nil then
-        local errorContent = jsonrpc.TextContent("Only one of menuId or menuName should be specified.")
+    local menu_id = arguments["menu_id"]
+    local menu_name = arguments["menu_name"]
+    if menu_id ~= nil and menu_name ~= nil then
+        local errorContent = jsonrpc.TextContent("Only one of menu_id or menu_name should be specified.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
@@ -181,28 +181,28 @@ function this:Execute(params)
 
     -- better distinguish between fineMenu and findChild, but arguments too complex, so just use findChild.
 
-    if menuId ~= nil then
-        if type(menuId) ~= "number" then
-            local errorContent = jsonrpc.TextContent("menuId should be a number.")
+    if menu_id ~= nil then
+        if type(menu_id) ~= "number" then
+            local errorContent = jsonrpc.TextContent("menu_id should be a number.")
             return jsonrpc.CallToolResult(errorContent, nil, true)
         end
 
-        self.logger:debug("Searching for menu with ID: %d", menuId)
+        self.logger:debug("Searching for menu with ID: %d", menu_id)
 
-        menu = menu:findChild(menuId)
-        help = help:findChild(menuId)
-    elseif menuName ~= nil then
-        if type(menuName) ~= "string" or #menuName < minMenuNameLength or #menuName > maxMenuNameLength then
-            local errorContent = jsonrpc.TextContent(string.format("menuName should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
+        menu = menu:findChild(menu_id)
+        help = help:findChild(menu_id)
+    elseif menu_name ~= nil then
+        if type(menu_name) ~= "string" or #menu_name < minMenuNameLength or #menu_name > maxMenuNameLength then
+            local errorContent = jsonrpc.TextContent(string.format("menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
             return jsonrpc.CallToolResult(errorContent, nil, true)
         end
 
-        self.logger:debug("Searching for menu with Name: %s", menuName)
+        self.logger:debug("Searching for menu with Name: %s", menu_name)
 
-        menu = menu:findChild(menuName)
-        help = help:findChild(menuName)
+        menu = menu:findChild(menu_name)
+        help = help:findChild(menu_name)
     else
-        self.logger:debug("No menuId or menuName specified. Returning all menus.")
+        self.logger:debug("No menu_id or menu_name specified. Returning all menus.")
     end
 
     local structuredContent = jsonrpc.object({ menu = ToJsonElement(menu), help = ToJsonElement(help) })

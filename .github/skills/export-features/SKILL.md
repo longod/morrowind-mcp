@@ -3,8 +3,6 @@ name: export-features
 user-invocable: true
 description: |
   Lua実装から MCP の */list で実行可能な機能を抽出し、prompts/resources/tools ごとに Markdown へ整理する。
-  「余計な情報を書かない」「Name, Title, Description の一覧のみ」に限定した出力が必要なときに使う。
-  必要に応じて Input/Output/Annotations 列を追加した拡張一覧にも対応する。
   トリガー例: "*/list だけ調べる", "prompts/resources/tools を分けて Name/Title/Description 一覧化", "LuaからMCP機能を抽出して最小表で出力"。
 ---
 
@@ -13,8 +11,6 @@ description: |
 ## 使う場面
 - Lua実装を根拠に、MCPクライアントで実行可能な `*/list` 機能だけを報告するとき
 - `prompts` / `resources` / `tools` を分けて一覧化するとき
-- 出力を `Name`, `Title`, `Description` のみへ厳密に絞るとき
-- 出力に `Input`, `Output`, `Annotations` を追加したいとき
 
 ## 手順
 1. サーバー起動経路を確認し、実際に使われるサーバー実装ファイルを特定する。
@@ -26,8 +22,7 @@ description: |
 - `prompts/list` -> `Prompts`
 - `resources/list` -> `Resources`
 - `tools/list` -> `Tools`
-5. 各セクションは、要素がある場合のみ表形式で `Name`, `Title`, `Description` を書く。
- - ユーザーが指定した場合のみ `Input`, `Output`, `Annotations` 列を追加する。
+5. 各セクションは、要素がある場合のみ表形式で `Name`, `Title`, `Description`, `Input`, `Output`, `Annotations` 列を追加する。
 6. 表の `Name` 値は必ずインラインコード（バッククォート）で囲む。
 7. `Input`, `Output`, `Annotations` を出す場合は、各テーブルセル内をリスト形式（`<ul><li>...</li></ul>`）で書く。
 

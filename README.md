@@ -48,6 +48,18 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
 ## Development
 
+### Naming Convention
+#### Prompts, Tools
+
+- Prompts and Tools name must be in `kebab-case`.
+- (mcp prefix)-(object)-(action)
+    - mcp prefix: `mw` (Morrowind)
+    - Example: `mw-menu-find`, `mw-screenshot-save`
+
+#### Arguments
+
+- Arguments name must be in `snake_case`.
+
 ### Shared root config
 
 This configuration system is designed to handle differences between user environments, such as Morrowind install locations, Mod Organizer 2 setup, and profile-specific paths. By layering `default`, `local`, and `env` values, the project can run consistently across personal setups, test machines, and CI.

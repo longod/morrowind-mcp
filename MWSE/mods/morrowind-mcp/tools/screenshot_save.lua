@@ -17,18 +17,18 @@ setmetatable(this, { __index = base })
 function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.TakeScreenshot
-    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "take_screenshot" })
+    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "screenshot_save" })
     instance.definition = jsonrpc.Tool({
-        name = "take_screenshot",
-        description = "Take a screenshot of the current game state",
+        name = "screenshot-save",
+        description = "Save a screenshot of the current game state to a file. The screenshot will be saved to the resources",
         inputSchema = jsonrpc.InputSchema(
             {
-                captureWithUI = jsonrpc.BooleanSchema(
+                capture_with_ui = jsonrpc.BooleanSchema(
                     "Capture with UI",
                     "The screenshot will include the user interface.",
                     true
                 ),
-                fileName = jsonrpc.StringSchema(
+                file_name = jsonrpc.StringSchema(
                     "File Name",
                     "Screenshot file name (without extension). If not specified, a timestamp will be used.",
                     minMenuNameLength, -- minimum length
@@ -59,8 +59,8 @@ function this:Execute(params)
     local ms = math.floor((os.clock() % 1) * 1000)
     local default_name = os.date("%Y%m%d_%H%M%S") .. string.format("_%03d", ms)
     local name = default_name
-    local filename = arguments["fileName"]
-    self.logger:debug("arguments fileName=%s, extension=%s, captureWithUI=%s", tostring(arguments["fileName"]), tostring(arguments["extension"]), tostring(arguments["captureWithUI"]))
+    local filename = arguments["file_name"]
+    self.logger:debug("arguments file_name=%s, extension=%s, capture_with_ui=%s", tostring(arguments["file_name"]), tostring(arguments["extension"]), tostring(arguments["capture_with_ui"]))
 
     if type(filename) == "string" and #filename >= minMenuNameLength and #filename <= maxMenuNameLength then
         -- or sanitize...
@@ -74,19 +74,19 @@ function this:Execute(params)
         if not has_invalid_char then
             name = filename
         else
-            self.logger:warn("Invalid fileName: %s. Fallback to auto-generated name.", filename)
+            self.logger:warn("Invalid file_name: %s. Fallback to auto-generated name.", filename)
         end
     end
     local extension = arguments["extension"] or ".jpg"
     local settings = require("morrowind-mcp.settings")
-    local dir = settings.resourceRootDir
+    local dir = settings.resourceRootDir .. "screenshot\\"
     pcall(lfs.mkdir, dir)
     local path = dir .. name .. extension
-    local captureWithUI = arguments["captureWithUI"]
-    if captureWithUI == nil then
-        captureWithUI = true
+    local capture_with_ui = arguments["capture_with_ui"]
+    if capture_with_ui == nil then
+        capture_with_ui = true
     end
-    mge.saveScreenshot({path = path,  captureWithUI = captureWithUI})
+    mge.saveScreenshot({path = path,  captureWithUI = capture_with_ui})
     local resourcePath = pathutil.FromResourceFilePath(path, settings.resourceRootDir)
     if not resourcePath then
         self.logger:error("Failed to convert screenshot file path to resource path: %s", path)
