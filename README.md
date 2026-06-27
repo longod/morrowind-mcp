@@ -73,11 +73,11 @@ Environment variables:
 
 | Variable | Overrides | Meaning |
 |---|---|---|
-| `MWMCP_SERVER_ADDRESS` | `server.address` | MCP server host name or IP address |
-| `MWMCP_SERVER_PORT` | `server.port` | MCP server TCP port |
-| `MWMCP_MO2_EXE_FILE` | `paths.mo2ExeFile` | ModOrganizer2 executable file path |
-| `MWMCP_MO2_APPLICATION` | `paths.mo2Application` | ModOrganizer2 application name to launch |
-| `MWMCP_MO2_PROFILE` | `paths.mo2Profile` | ModOrganizer2 profile name |
+| `MWMCP_SERVER_ADDRESS` | `server.address` | This server host name or IP address |
+| `MWMCP_SERVER_PORT` | `server.port` | This server TCP port |
+| `MWMCP_MO2_EXE_FILE` | `paths.mo2ExeFile` | Mod Organizer 2 executable file path |
+| `MWMCP_MO2_APPLICATION` | `paths.mo2Application` | Mod Organizer 2 application name to launch |
+| `MWMCP_MO2_PROFILE` | `paths.mo2Profile` | Mod Organizer 2 profile name |
 | `MWMCP_MORROWIND_INSTALL_DIR` | `paths.morrowindInstallDir` | Morrowind install directory path |
 | `MWMCP_MWSE_CONFIG_DIR` | `paths.mwseConfigDir` | MWSE config directory path |
 
@@ -85,8 +85,8 @@ Environment variables:
 
 - [tests/unit_test.ps1](tests/unit_test.ps1): Run Lua unit tests for MWSE mod modules
 - [tests/server_test.ps1](tests/server_test.ps1): Start Morrowind/MWSE server, run integration tests, and stop the server
-- [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Launch ModOrganizer2 to start Morrowind with MWSE and the MCP server
-- [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running MCP server
+- [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Launch Mod Organizer 2 to start Morrowind with MWSE and the MCP server
+- [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running Morrowind
 - [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests
 
 ### MCP Inspector
@@ -101,7 +101,13 @@ This automatically resolves the server configuration and opens the Inspector at 
 
 ## SDK
 
-- [base64.lua](MWSE/mods/morrowind-mcp/base64.lua) from [lbase64](https://github.com/iskolbin/lbase64)
+- [base64.lua](./MWSE/mods/morrowind-mcp/core/base64.lua) from [lbase64](https://github.com/iskolbin/lbase64): MIT License or Public Domain
+
+## Known Issues
+
+- During Bink movie playback, MWSE execution can pause completely. While a movie is playing, this server may stop responding to MCP requests until the movie ends.
+- Impact: `tools/call` requests that trigger movie playback (for example, starting a new game from the main menu) can appear to hang, and a response may not be returned until playback finishes.
+- Current workaround: replace movie files under `Data Files/Video` with dummy files to prevent movie playback. **Keep backups of original files and restore them when needed.**
 
 ## TODO
 

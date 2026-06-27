@@ -119,6 +119,8 @@ function this:Execute(params)
     local target_name = target.name
     local target_id = target.id
     self.logger:debug("Performing action %s to menu %s (ID: %d)", action, target_name, target_id)
+    -- FIXME currently, do triggerEvent then transit to movie mode immediately, morrowind completely stops processing lua scripts until movie mode ends.
+    -- use notifications/processing, sent responsse before triggerEvent, patch runtime code or skipping movie mod.
     target:triggerEvent(action)
 
     return jsonrpc.CallToolResult(jsonrpc.TextContent(string.format("Action %s performed to menu %s (ID: %d) successfully.", action, target_name, target_id)), nil, false)
