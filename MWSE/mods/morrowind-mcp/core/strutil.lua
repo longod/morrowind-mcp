@@ -1,4 +1,4 @@
-local this  = {}
+local this = {}
 
 ---@param str string
 ---@return string
@@ -24,7 +24,6 @@ end
 function this.endswith(str, suffix)
     return suffix == "" or string.sub(str, -string.len(suffix)) == suffix
 end
-
 
 ---@param str string?
 ---@param token string

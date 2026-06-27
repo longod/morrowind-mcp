@@ -73,13 +73,13 @@ function this.Test()
         local errorJson = jsonrpc.error(1, jsonrpc.error_code.method_not_found, { reason = "missing" })
         local actual = json.decode(errorJson)
         local expected = json.decode(json.encode({
-        jsonrpc = "2.0",
-        id = 1,
-        error = {
-            code = -32601,
-            message = "Method not found",
-            data = { reason = "missing" },
-        },
+            jsonrpc = "2.0",
+            id = 1,
+            error = {
+                code = -32601,
+                message = "Method not found",
+                data = { reason = "missing" },
+            },
         }))
         unitwind:expect(actual.jsonrpc).toBe("2.0")
         unitwind:expect(actual.id).toBe(1)
@@ -309,14 +309,16 @@ function this.Test()
     end)
 
     unitwind:test("GetPromptResult accepts description", function()
-        local result = jsonrpc.GetPromptResult({ { role = "user", content = { type = "text", text = "hi" } } }, "prompt-desc")
+        local result = jsonrpc.GetPromptResult({ { role = "user", content = { type = "text", text = "hi" } } },
+            "prompt-desc")
         unitwind:expect(getmetatable(result.messages).__jsontype).toBe("array")
         unitwind:expect(result.messages[1].role).toBe("user")
         unitwind:expect(result.description).toBe("prompt-desc")
     end)
 
     unitwind:test("ListResourceTemplatesResult accepts nextCursor", function()
-        local result = jsonrpc.ListResourceTemplatesResult({ { name = "template-1", uriTemplate = "mcp://foo" } }, "cursor-2")
+        local result = jsonrpc.ListResourceTemplatesResult({ { name = "template-1", uriTemplate = "mcp://foo" } },
+            "cursor-2")
         unitwind:expect(getmetatable(result.resourceTemplates).__jsontype).toBe("array")
         unitwind:expect(result.resourceTemplates[1].name).toBe("template-1")
         unitwind:expect(result.nextCursor).toBe("cursor-2")

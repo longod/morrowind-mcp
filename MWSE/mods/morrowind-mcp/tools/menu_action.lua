@@ -32,12 +32,16 @@ function this.new(params)
                     maxMenuNameLength
                 ),
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
-                    { "mouseClick" },
+                    {
+                        -- empty is inspect how to use this menu element?
+                        tes3.uiEvent.mouseClick,
+                        tes3.uiEvent.mouseDoubleClick,
+                    },
                     "Action",
                     "Action to perform on the menu."
                 ),
             },
-            jsonrpc.array({"action"}) -- TODO one of id or name. but specification is not exist.
+            jsonrpc.array({ "action" }) -- TODO one of id or name. but specification is not exist.
         ),
         annotations = jsonrpc.ToolAnnotations(nil, false, false)
     })
@@ -64,8 +68,8 @@ function this:Execute(params)
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
-    if type(action) ~= "string" or action ~= "mouseClick" then
-        local errorContent = jsonrpc.TextContent("Unsupported action: " .. tostring(action))
+    if type(action) ~= "string" then
+        local errorContent = jsonrpc.TextContent("action should be a string.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
@@ -82,10 +86,11 @@ function this:Execute(params)
 
         self.logger:debug("Searching for menu with ID: %d", menu_id)
 
-        target= menu:findChild(menu_id)
+        target = menu:findChild(menu_id)
     elseif menu_name ~= nil then
         if type(menu_name) ~= "string" or #menu_name < minMenuNameLength or #menu_name > maxMenuNameLength then
-            local errorContent = jsonrpc.TextContent(string.format("menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
+            local errorContent = jsonrpc.TextContent(string.format(
+                "menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
             return jsonrpc.CallToolResult(errorContent, nil, true)
         end
 
@@ -105,7 +110,7 @@ function this:Execute(params)
         local errorContent = jsonrpc.TextContent("Menu is disabled.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
-    if target.visible == false then
+    if not target.visible then
         local errorContent = jsonrpc.TextContent("Menu is not visible.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
@@ -123,7 +128,9 @@ function this:Execute(params)
     -- use notifications/processing, sent responsse before triggerEvent, patch runtime code or skipping movie mod.
     target:triggerEvent(action)
 
-    return jsonrpc.CallToolResult(jsonrpc.TextContent(string.format("Action %s performed to menu %s (ID: %d) successfully.", action, target_name, target_id)), nil, false)
+    return jsonrpc.CallToolResult(
+        jsonrpc.TextContent(string.format("Action %s performed to menu %s (ID: %d) successfully.", action, target_name,
+            target_id)), nil, false)
 end
 
 return this

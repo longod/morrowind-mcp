@@ -10,7 +10,7 @@ local function OnModConfigReady(e)
         label = settings.modName,
     })
     local info = page.sidebar:createInfo({
-        label = string.format("%s %s",settings.modName, settings.version),
+        label = string.format("%s Version: %s", settings.modName, settings.version),
         text = "description",
     })
 
@@ -108,7 +108,6 @@ local function OnModConfigReady(e)
             }),
         })
     end
-
 end
 
 event.register(tes3.event.modConfigReady, OnModConfigReady)

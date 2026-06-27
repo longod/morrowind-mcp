@@ -63,8 +63,10 @@ function this.Test()
     unitwind:test("ToResourceFilePath converts to Windows path under resource root", function()
         local rootDir = "X:\\root\\"
         unitwind:expect(pathutil.ToResourceFilePath("test.jpg", rootDir)).toBe("X:\\root\\test.jpg")
-        unitwind:expect(pathutil.ToResourceFilePath("nested/folder/test.png", rootDir)).toBe("X:\\root\\nested\\folder\\test.png")
-        unitwind:expect(pathutil.ToResourceFilePath("nested\\folder\\test.png", rootDir)).toBe("X:\\root\\nested\\folder\\test.png")
+        unitwind:expect(pathutil.ToResourceFilePath("nested/folder/test.png", rootDir)).toBe(
+        "X:\\root\\nested\\folder\\test.png")
+        unitwind:expect(pathutil.ToResourceFilePath("nested\\folder\\test.png", rootDir)).toBe(
+        "X:\\root\\nested\\folder\\test.png")
     end)
 
     unitwind:test("ToResourceFilePath rejects invalid paths", function()
@@ -78,8 +80,10 @@ function this.Test()
     unitwind:test("FromResourceFilePath converts absolute path under root to resource path", function()
         local rootDir = "X:\\root\\"
         unitwind:expect(pathutil.FromResourceFilePath("X:\\root\\test.jpg", rootDir)).toBe("test.jpg")
-        unitwind:expect(pathutil.FromResourceFilePath("X:/root/nested/folder/test.png", rootDir)).toBe("nested/folder/test.png")
-        unitwind:expect(pathutil.FromResourceFilePath("X:\\root\\nested\\folder\\test.png", rootDir)).toBe("nested/folder/test.png")
+        unitwind:expect(pathutil.FromResourceFilePath("X:/root/nested/folder/test.png", rootDir)).toBe(
+        "nested/folder/test.png")
+        unitwind:expect(pathutil.FromResourceFilePath("X:\\root\\nested\\folder\\test.png", rootDir)).toBe(
+        "nested/folder/test.png")
     end)
 
     unitwind:test("FromResourceFilePath rejects paths outside root or invalid resource paths", function()

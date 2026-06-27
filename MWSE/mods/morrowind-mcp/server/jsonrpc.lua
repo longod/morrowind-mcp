@@ -208,7 +208,6 @@ function this.notification(method, params)
         body.params = params
     end
     return json.encode(body, { indent = false })
-
 end
 
 -- ============================================================================
@@ -351,7 +350,6 @@ function this.InputSchema(properties, required, schema)
     end
     return inputSchema, validRequired
 end
-
 
 ---@param properties table<string, MCP.JsonSchemaProperty>?
 ---@param required string[]?
@@ -518,7 +516,7 @@ function this.CallToolResult(content, structuredContent, isError)
     if type(content) == "table" then
         if content.type ~= nil then -- single content block
             result_content = this.array({ content })
-        else -- array of content blocks
+        else                        -- array of content blocks
             result_content = this.array(content)
         end
     else
@@ -645,7 +643,6 @@ function this.BooleanSchema(title, description, default)
     }
 end
 
-
 ---@param object table<string, MCP.JsonSchemaProperty>|number?
 ---@return MCP.JsonObjectSchema
 ---@return boolean validObjectType
@@ -663,7 +660,6 @@ function this.JsonObjectSchema(object)
     return o, validObjectType
 end
 
-
 ---@param array table<string, any>|number?
 ---@return MCP.JsonArraySchema
 ---@return boolean validArrayType
@@ -680,7 +676,6 @@ function this.JsonArraySchema(array)
     a.type = "array"
     return a, validArrayType
 end
-
 
 ---@param const string
 ---@param title string

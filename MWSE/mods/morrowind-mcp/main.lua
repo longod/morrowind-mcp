@@ -18,7 +18,7 @@ local function Test()
     end
 end
 
-local config =require("morrowind-mcp.config")
+local config = require("morrowind-mcp.config")
 
 if config.development.unitTest then
     Test()

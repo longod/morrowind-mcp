@@ -32,13 +32,16 @@ function this.Test()
     end)
 
     unitwind:test("ResolveMimeTypeFromResourcePath uses extension extracted from path", function()
-        unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_newgame.tga")).toBe(mcp.mime_type.image_tga)
-        unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_continue.DDS")).toBe(mcp.mime_type.image_dds)
+        unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_newgame.tga")).toBe(mcp.mime_type
+        .image_tga)
+        unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_continue.DDS")).toBe(mcp.mime_type
+        .image_dds)
         unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("docs/readme.txt")).toBe(mcp.mime_type.text_plain)
     end)
 
     unitwind:test("ResolveMimeTypeFromResourcePath falls back when extension is missing", function()
-        unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_continue")).toBe(mcp.mime_type.application_octet_stream)
+        unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_continue")).toBe(mcp.mime_type
+        .application_octet_stream)
     end)
 
     unitwind:finish()

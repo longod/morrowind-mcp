@@ -4,30 +4,30 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
 
----@class MCP.MenuFind: MCP.ITool
+---@class MCP.MenuFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.MenuFind
+---@return MCP.MenuFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.MenuFind
-    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "menu_find" })
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.MenuFetch
+    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "menu_fetch" })
     instance.definition = jsonrpc.Tool({
-        name = "menu-find",
+        name = "menu-fetch",
         description =
-        "Find current menu hierarchy. `menu` is user interface such as inventory. `help` is overlay such as tooltips.",
+        "Fetch current menu hierarchy. `menu` is user interface such as inventory. `help` is overlay such as tooltips.",
         inputSchema = jsonrpc.InputSchema(
             {
                 menu_id = jsonrpc.NumberSchema(
                     "Menu ID",
-                    "Find a non-root hierarchy of menu by ID (key name is `id`). If not specified, all menus will be returned. One of `menu_id` or `menu_name` should be specified."
+                    "Fetch a non-root hierarchy of menu by ID (key name is `id`). If not specified, all menus will be returned. One of `menu_id` or `menu_name` should be specified."
                 ),
                 menu_name = jsonrpc.StringSchema(
                     "Menu Name",
-                    "Find a non-root hierarchy of menu by name (key name is `name`). If not specified, all menus will be returned. One of `menu_id` or `menu_name` should be specified.",
+                    "Fetch a non-root hierarchy of menu by name (key name is `name`). If not specified, all menus will be returned. One of `menu_id` or `menu_name` should be specified.",
                     minMenuNameLength,
                     maxMenuNameLength
                 ),
@@ -193,7 +193,8 @@ function this:Execute(params)
         help = help:findChild(menu_id)
     elseif menu_name ~= nil then
         if type(menu_name) ~= "string" or #menu_name < minMenuNameLength or #menu_name > maxMenuNameLength then
-            local errorContent = jsonrpc.TextContent(string.format("menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
+            local errorContent = jsonrpc.TextContent(string.format(
+            "menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
             return jsonrpc.CallToolResult(errorContent, nil, true)
         end
 

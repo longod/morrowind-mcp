@@ -1,4 +1,5 @@
-local this  = {}
+local this = {}
+
 local strutil = require("morrowind-mcp.core.strutil")
 
 -- https://defold.com/ref/stable/socket-lua/
@@ -241,8 +242,8 @@ this.header = {
 
 ---@enum Http.MCPHeader
 this.mcp_header = {
-    mcp_protocol_version ="MCP-Protocol-Version",
-    mcp_method ="Mcp-Method",
+    mcp_protocol_version = "MCP-Protocol-Version",
+    mcp_method = "Mcp-Method",
     mcp_name = "Mcp-Name"
 }
 
@@ -382,7 +383,6 @@ function this.ReceiveRequest(client)
         if name and value then
             request.headers[name] = value
         end
-
     end
 
     local body = nil
@@ -397,7 +397,6 @@ function this.ReceiveRequest(client)
 
     return request, nil, nil
 end
-
 
 ---@param client Socket.TcpClient
 ---@param response_code Http.ResponseStatusCodes
@@ -427,6 +426,5 @@ function this.SendResponse(client, response_code, headers, body)
         response = response,
     }
 end
-
 
 return this

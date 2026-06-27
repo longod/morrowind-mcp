@@ -1,4 +1,3 @@
-
 local base = require("morrowind-mcp.core.itool")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
@@ -20,7 +19,8 @@ function this.new(params)
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "screenshot_save" })
     instance.definition = jsonrpc.Tool({
         name = "screenshot-save",
-        description = "Save a screenshot of the current game state to a file. The screenshot will be saved to the resources",
+        description =
+        "Save a screenshot of the current game state to a file. The screenshot will be saved to the resources",
         inputSchema = jsonrpc.InputSchema(
             {
                 capture_with_ui = jsonrpc.BooleanSchema(
@@ -32,7 +32,7 @@ function this.new(params)
                     "File Name",
                     "Screenshot file name (without extension). If not specified, a timestamp will be used.",
                     minMenuNameLength, -- minimum length
-                    maxMenuNameLength -- maximum length
+                    maxMenuNameLength  -- maximum length
                 ),
                 extension = jsonrpc.UntitledSingleSelectEnumSchema(
                     { ".jpg", ".png", ".bmp", ".tga", ".dds" },
@@ -60,7 +60,8 @@ function this:Execute(params)
     local default_name = os.date("%Y%m%d_%H%M%S") .. string.format("_%03d", ms)
     local name = default_name
     local filename = arguments["file_name"]
-    self.logger:debug("arguments file_name=%s, extension=%s, capture_with_ui=%s", tostring(arguments["file_name"]), tostring(arguments["extension"]), tostring(arguments["capture_with_ui"]))
+    self.logger:debug("arguments file_name=%s, extension=%s, capture_with_ui=%s", tostring(arguments["file_name"]),
+        tostring(arguments["extension"]), tostring(arguments["capture_with_ui"]))
 
     if type(filename) == "string" and #filename >= minMenuNameLength and #filename <= maxMenuNameLength then
         -- or sanitize...
@@ -91,7 +92,7 @@ function this:Execute(params)
     if capture_with_ui == nil then
         capture_with_ui = true
     end
-    mge.saveScreenshot({path = path,  captureWithUI = capture_with_ui})
+    mge.saveScreenshot({ path = path, captureWithUI = capture_with_ui })
     local resourcePath = pathutil.FromResourceFilePath(path, settings.resourceRootDir)
     if not resourcePath then
         self.logger:error("Failed to convert screenshot file path to resource path: %s", path)
@@ -110,10 +111,9 @@ function this:Execute(params)
     self.logger:info("Screenshot taken: path=%s, uri=%s", path, resourceUri)
 
     local mimeType = mimeutil.ResolveMimeTypeFromExtension(extension)
-    local content = jsonrpc.ResourceLink(name .. extension, resourceUri, "Screenshot taken at " .. os.date("%Y-%m-%d %H:%M:%S"), nil, mimeType)
+    local content = jsonrpc.ResourceLink(name .. extension, resourceUri,
+        "Screenshot taken at " .. os.date("%Y-%m-%d %H:%M:%S"), nil, mimeType)
     return jsonrpc.CallToolResult(content)
 end
-
-
 
 return this

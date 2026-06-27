@@ -77,13 +77,12 @@ function this.new(params)
     return instance
 end
 
-
 function this:LoadPrompts()
     self.prompts = {}
     local dir = settings.modDir .. "prompts\\"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
-            local prompt  = dofile(dir .. file) ---@type MCP.IPrompt
+            local prompt = dofile(dir .. file) ---@type MCP.IPrompt
             if prompt and type(prompt) == "table" then
                 local instance = prompt.new()
                 self.prompts[instance.definition.name] = instance
@@ -131,8 +130,6 @@ function this:DumpRequest(request)
     end
 end
 
-
-
 --- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
 ---@param params MCP.InitializeRequestParams
 ---@return MethodResult
@@ -175,7 +172,8 @@ function this:OnInitialize(params)
         ["icons"] = jsonrpc.array(),
         ["websiteUrl"] = settings.repository
     }
-    result.instructions = "Provides Morrowind game-state and metadata access plus in-game action tools via MWSE. To reduce failures, inspect current game context and discover available capabilities before invoking state-changing tools, because some operations depend on runtime conditions (target, loaded cell, menu mode, etc.)."
+    result.instructions =
+    "Provides Morrowind game-state and metadata access plus in-game action tools via MWSE. To reduce failures, inspect current game context and discover available capabilities before invoking state-changing tools, because some operations depend on runtime conditions (target, loaded cell, menu mode, etc.)."
 
     ---@type MethodResult
     return {
@@ -499,7 +497,7 @@ function this:OnGET(request)
     if contents then
         for _, value in ipairs(contents) do
             local content = strutil.ltrim(value:lower())
-            if content == http. content_type.event_stream then
+            if content == http.content_type.event_stream then
                 -- no supported SSE
                 self.logger:info("No supported SSE")
                 ---@type ServerResponse
@@ -524,12 +522,12 @@ function this:OnOPTIONS(request)
         [http.header.access_control_allow_origin] = "*", -- or request hosts?
         [http.header.access_control_allow_methods] = "POST, GET, OPTIONS",
         [http.header.access_control_allow_headers] = table.concat(
-        {
-          --http.header.authorization,
-          http.header.content_type,
-          --http.header.x_requested_with,
-        },
-        ", "),
+            {
+                --http.header.authorization,
+                http.header.content_type,
+                --http.header.x_requested_with,
+            },
+            ", "),
     }
 
     ---@type ServerResponse
@@ -579,7 +577,8 @@ function this:Listen(e)
             end
 
             local result = http.SendResponse(client, http.response_code.bad_request) -- TODO add json?
-            self.logger:error("bad request: %d%s", http.response_code.bad_request.code, FormatResponseForLog(result.response))
+            self.logger:error("bad request: %d%s", http.response_code.bad_request.code,
+                FormatResponseForLog(result.response))
 
             pcall(function() client:close() end)
         else
@@ -588,22 +587,30 @@ function this:Listen(e)
             local json_request, json_error = jsonrpc.request(request.body)
             local id = json_request and json_request.id or nil ---@type string|number?
             if not json_error then
-                local response = self:HandleRequest({http_request = request, json_request = json_request})
+                local response = self:HandleRequest({ http_request = request, json_request = json_request })
                 if response then
                     if response.json_error then
-                        local result = http.SendResponse(client, response.http_response, response.http_headers, jsonrpc.error(id, response.json_error) )
-                        self.logger:error("json error: %d\n%s", response.http_response.code, FormatResponseForLog(result.response))
+                        local result = http.SendResponse(client, response.http_response, response.http_headers,
+                            jsonrpc.error(id, response.json_error))
+                        self.logger:error("json error: %d\n%s", response.http_response.code,
+                            FormatResponseForLog(result.response))
                     else
-                        local result = http.SendResponse(client, response.http_response, response.http_headers, jsonrpc.result(id, response.json_result) )
-                        self.logger:debug("success: %d\n%s", response.http_response.code, FormatResponseForLog(result.response))
+                        local result = http.SendResponse(client, response.http_response, response.http_headers,
+                            jsonrpc.result(id, response.json_result))
+                        self.logger:debug("success: %d\n%s", response.http_response.code,
+                            FormatResponseForLog(result.response))
                     end
                 else
-                    local result = http.SendResponse(client, http.response_code.internal_server_error, nil, jsonrpc.error(id, jsonrpc.error_code.internal_error) )
-                    self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code, FormatResponseForLog(result.response))
+                    local result = http.SendResponse(client, http.response_code.internal_server_error, nil,
+                        jsonrpc.error(id, jsonrpc.error_code.internal_error))
+                    self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code,
+                        FormatResponseForLog(result.response))
                 end
             else
-                local result = http.SendResponse(client, http.response_code.bad_request, nil, jsonrpc.error(nil, json_error))
-                self.logger:error("request error: %d\n%s", http.response_code.bad_request.code, FormatResponseForLog(result.response))
+                local result = http.SendResponse(client, http.response_code.bad_request, nil,
+                    jsonrpc.error(nil, json_error))
+                self.logger:error("request error: %d\n%s", http.response_code.bad_request.code,
+                    FormatResponseForLog(result.response))
             end
 
             pcall(function() client:close() end)
@@ -623,7 +630,7 @@ function this:Start()
     end
     self.server:settimeout(0)
 
-    self.enterFrameCallback = function (e)
+    self.enterFrameCallback = function(e)
         self:Listen(e)
         -- broadcast any queued events to connected SSE clients
         -- self:BroadcastEvents()

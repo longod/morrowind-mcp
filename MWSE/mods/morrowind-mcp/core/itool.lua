@@ -14,7 +14,6 @@ function this.new(params)
     return instance
 end
 
-
 ---@public
 ---@param params table
 ---@return boolean

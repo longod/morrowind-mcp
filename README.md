@@ -54,7 +54,7 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 - Prompts and Tools name must be in `kebab-case`.
 - (mcp prefix)-(object)-(action)
     - mcp prefix: `mw` (Morrowind)
-    - Example: `mw-menu-find`, `mw-screenshot-save`
+    - Example: `mw-menu-fetch`, `mw-screenshot-save`
 
 #### Arguments
 

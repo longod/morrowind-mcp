@@ -32,11 +32,11 @@ function this.Test()
 
     unitwind:test("ReceiveRequest reads request line, headers and body", function()
         local responses = {
-            {"POST /hello HTTP/1.1"},
-            {"Host: example.com"},
-            {"Content-Length: 5"},
-            {""},
-            {"world"},
+            { "POST /hello HTTP/1.1" },
+            { "Host: example.com" },
+            { "Content-Length: 5" },
+            { "" },
+            { "world" },
         }
 
         local client = {
