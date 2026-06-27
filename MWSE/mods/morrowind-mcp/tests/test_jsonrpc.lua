@@ -539,6 +539,7 @@ function this.Test()
         unitwind:expect(schema.oneOf[1].const).toBe("red")
     end)
 
+    --[[
     unitwind:test("LegacyTitledEnumSchema creates valid schema", function()
         local enum = { "a", "b", "c" }
         local enumNames = { "Option A", "Option B", "Option C" }
@@ -555,6 +556,7 @@ function this.Test()
         local schema = jsonrpc.LegacyTitledEnumSchema(enum, nil, "NoNames")
         unitwind:expect(schema.enumNames).toBe(nil)
     end)
+    --]]
 
     unitwind:test("UntitledMultiSelectEnumSchemaItems creates valid items", function()
         local enum = { "item1", "item2", "item3" }

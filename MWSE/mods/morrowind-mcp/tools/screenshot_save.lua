@@ -7,16 +7,16 @@ local pathutil = require("morrowind-mcp.core.pathutil")
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
 
----@class MCP.TakeScreenshot: MCP.ITool
+---@class MCP.ScreenshotSave: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.TakeScreenshot
+---@return MCP.ScreenshotSave
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.TakeScreenshot
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.ScreenshotSave
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "screenshot_save" })
     instance.definition = jsonrpc.Tool({
         name = "screenshot-save",
@@ -42,7 +42,7 @@ function this.new(params)
                 ),
             }
         ),
-        annotations = jsonrpc.ToolAnnotations(nil, true, false)
+        annotations = jsonrpc.ToolAnnotations(nil, false, false)
 
     })
     return instance
@@ -82,6 +82,11 @@ function this:Execute(params)
     local dir = settings.resourceRootDir .. "screenshot\\"
     pcall(lfs.mkdir, dir)
     local path = dir .. name .. extension
+    if lfs.attributes(path) then
+        self.logger:warn("Screenshot file already exists: %s.", path)
+        return jsonrpc.CallToolResult(jsonrpc.TextContent("Screenshot file already exists: " .. path), nil, true)
+    end
+
     local capture_with_ui = arguments["capture_with_ui"]
     if capture_with_ui == nil then
         capture_with_ui = true

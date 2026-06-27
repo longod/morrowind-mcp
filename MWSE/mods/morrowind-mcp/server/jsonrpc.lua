@@ -722,6 +722,7 @@ function this.TitledSingleSelectEnumSchema(oneOf, title, description, default)
     }
 end
 
+---@deprecated
 ---@param enum string[]
 ---@param enumNames string[]?
 ---@param title string?

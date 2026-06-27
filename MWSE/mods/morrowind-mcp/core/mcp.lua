@@ -290,6 +290,7 @@ local logging_level = {
 ---@field oneOf MCP.ConstTitle[]
 ---@field default string?
 
+---@deprecated
 ---@class MCP.LegacyTitledEnumSchema
 ---@field type "string"
 ---@field title string?

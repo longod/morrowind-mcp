@@ -4,16 +4,16 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
 
----@class MCP.GetMenu: MCP.ITool
+---@class MCP.MenuFind: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.GetMenu
+---@return MCP.MenuFind
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.GetMenu
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.MenuFind
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "menu_find" })
     instance.definition = jsonrpc.Tool({
         name = "menu-find",
