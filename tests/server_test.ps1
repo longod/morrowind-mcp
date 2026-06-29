@@ -216,10 +216,10 @@ try {
         @("--method", "resources/list"),
         @("--method", "prompts/list"),
         @("--method", "resources/templates/list"),
-        @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=test"), # TODO ファイル名を指定しない。現在上書きできない仕様だからだ。
-        @("--method", "tools/call", "--tool-name", "mw-menu-find"),
+        @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
+        @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
         @("--method", "resources/list"),
-        @("--method", "resources/read", "--uri", "mwmcp://screenshot/test.jpg") # TODO listから取得したファイルを読む
+        @("--method", "resources/read", "--uri", "mwmcp://screenshot/$RunTimestamp.jpg") # TODO listから取得したファイルを読む
         #, @("--method", "prompts/get", "--prompt-name", "placeholder")
     )
 

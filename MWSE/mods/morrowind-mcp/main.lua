@@ -38,4 +38,9 @@ event.register(tes3.event.initialized, OnInitialized)
 
 require("morrowind-mcp.mcm")
 
---- @class tes3scriptVariables
+
+-- missing annotations
+
+---@class tes3scriptVariables
+
+---@class tes3keyframeDefinition

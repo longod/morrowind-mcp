@@ -4,6 +4,7 @@ this.modName = this.metadata.package.name
 this.version = this.metadata.package.version
 this.description = this.metadata.package.description
 this.repository = this.metadata.package.repository
+
 this.shortModName = "morrowind-mcp"
 this.configPath = "morrowind-mcp"
 this.dataFiles = "Data Files\\"
@@ -22,7 +23,6 @@ this.defaultConfig = {
         port = 33427, -- 3E427
     },
 
-    ---@class MCP.MWSEConfig.Development
     development = {
         logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,

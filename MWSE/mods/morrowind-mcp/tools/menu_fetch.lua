@@ -1,5 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+local serializer = require("morrowind-mcp.serializer")
 
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
@@ -60,112 +61,6 @@ function this:CanExecute(params)
     return true
 end
 
-local fonts = {
-    "magic_cards_regular",         -- Magic Cards, default
-    "century_gothic_font_regular", -- Century Sans
-    "daedric_font",
-}
-
---[[
----@param w tes3uiButton|tes3uiColorPicker|tes3uiColorPreview|tes3uiCycleButton|tes3uiFillBar|tes3uiHyperlink|tes3uiParagraphInput|tes3uiScrollPane|tes3uiSlider|tes3uiTabContainer|tes3uiTextInput|tes3uiTextSelect|tes3uiWidget|nil
----@param t tes3.uiElementType
----@return MCP.AnyMap?
-local function ToJsonWidget(w, t)
-    if not w then
-        return nil
-    end
-    return nil
-end
---]]
-
-
----@param e tes3uiElement?
----@return MCP.AnyMap?
-local function ToJsonElement(e)
-    if not e then
-        return nil
-    end
-
-    -- same as human visibility
-    if not e.visible then
-        return nil
-    end
-
-    local s = jsonrpc.object({
-        -- absolutePosAlignX = e.absolutePosAlignX,
-        -- absolutePosAlignY = e.absolutePosAlignY,
-        -- alpha = e.alpha,
-        -- autoHeight = e.autoHeight,
-        -- autoWidth = e.autoWidth,
-        -- borderAllSides = e.borderAllSides,
-        -- borderBottom = e.borderBottom,
-        -- borderLeft = e.borderLeft,
-        -- borderRight = e.borderRight,
-        -- borderTop = e.borderTop,
-        -- childAlignX = e.childAlignX,
-        -- childAlignY = e.childAlignY,
-        -- childOffsetX = e.childOffsetX,
-        -- childOffsetY = e.childOffsetY,
-        -- children = jsonrpc.array(table.size(e.children)), -- later
-        -- color = e.color,
-        consumeMouseEvents = e.consumeMouseEvents,
-        contentPath = e.contentPath,
-        contentType = e.contentType,
-        disabled = e.disabled,
-        -- flowDirection = e.flowDirection,
-        font = fonts[e.font],
-        -- height = e.height,
-        -- heightProportional = e.heightProportional,
-        id = e.id,
-        -- ignoreLayoutX = e.ignoreLayoutX,
-        -- ignoreLayoutY = e.ignoreLayoutY,
-        -- imageFilter = e.imageFilter,
-        -- imageScaleX = e.imageScaleX,
-        -- imageScaleY = e.imageScaleY,
-        -- justifyText = e.justifyText,
-        -- maxHeight = e.maxHeight,
-        -- maxWidth = e.maxWidth,
-        -- minHeight = e.minHeight,
-        -- minWidth = e.minWidth,
-        name = e.name,
-        -- paddingAllSides = e.paddingAllSides,
-        -- paddingBottom = e.paddingBottom,
-        -- paddingLeft = e.paddingLeft,
-        -- paddingRight = e.paddingRight,
-        -- paddingTop = e.paddingTop,
-        -- parent = e.parent,
-        -- positionX = e.positionX,
-        -- positionY = e.positionY,
-        rawText = e.rawText,
-        repeatKeys = e.repeatKeys,
-        -- scaleMode = e.scaleMode,
-        -- sceneNode = e.sceneNode, -- need?
-        text = e.text,
-        -- texture = e.texture, -- need?
-        type = e.type,
-        -- visible = e.visible, -- if element is not terminated, it is needed to contain
-        -- widget = ToJsonWidget(e.widget, e.type), -- need?
-        -- width = e.width,
-        -- widthProportional = e.widthProportional,
-    }) or {}
-
-    local children = jsonrpc.array(table.size(e.children))
-    for _, child in ipairs(e.children) do
-        local c = ToJsonElement(child)
-        if c then
-            table.insert(children, c)
-        end
-    end
-    if table.size(children) > 0 then
-        s.children = children
-    end
-
-    if table.size(s) > 0 then
-        return s
-    end
-    return nil
-end
-
 function this:Execute(params)
     -- TODO validation for injection
     local arguments = params.arguments or {}
@@ -206,7 +101,7 @@ function this:Execute(params)
         self.logger:debug("No menu_id or menu_name specified. Returning all menus.")
     end
 
-    local structuredContent = jsonrpc.object({ menu = ToJsonElement(menu), help = ToJsonElement(help) })
+    local structuredContent = jsonrpc.object({ menu = serializer.tes3uiElement(menu), help = serializer.tes3uiElement(help) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

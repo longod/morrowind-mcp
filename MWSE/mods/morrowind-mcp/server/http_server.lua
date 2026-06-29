@@ -29,27 +29,27 @@ local function FormatResponseForLog(response)
     return r .. "[...too long]"
 end
 
----@class MwseHttpServer : MCP.IServer
+---@class MCP.MwseHttpServer : MCP.IServer
 ---@field logger mwseLogger
 ---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
 ---@field hostname string
 ---@field port integer
 ---@field httpHeaders table<string, string> must headers
----@field requestHandlers table<string, fun(self: MwseHttpServer, request: ClientRequest): ServerResponse?>
----@field methodHandlers table<string, fun(self: MwseHttpServer, params: MCP.RequestParams): MethodResult>
+---@field requestHandlers table<string, fun(self: MCP.MwseHttpServer, request: ClientRequest): ServerResponse?>
+---@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field tools table<string, MCP.ITool>
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MwseHttpServer
+---@return MCP.MwseHttpServer
 function this.new(params)
     jsonrpc.SetPrimitivePrefix(settings.name_prefix, settings.title_prefix, settings.description_prefix)
 
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MwseHttpServer
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.MwseHttpServer
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "http_server" })
     instance.hostname = instance.hostname or settings.defaultConfig.server.address
     instance.port = instance.port or settings.defaultConfig.server.port

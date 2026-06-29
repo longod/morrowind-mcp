@@ -2,11 +2,17 @@
 
 Morrowind Model Context Protocol Server (Morrowind MCP) connects Morrowind to external LLM AIs (such as ChatGPT, Claude, Copilot, or Gemini) using MCP standard.
 
-This allows the AI to learn about the world of Morrowind and interact with it.
+This mod allows the AI to learn about the world of Morrowind and interact with it. 
+
+**This mod contains source code generated or assisted by AI. and all code has been manually reviewed, refactored and verified by a senior software engineer.**
 
 ## Requirements
 - Morrowind full expansion
-- Morrowind Script Extender (MWSE) latest version
+- [Morrowind Graphics Extender XE](https://www.nexusmods.com/morrowind/mods/41102) (MGE XE): Due to contains MWSE. And it extends Morrowind's graphics.
+- **[Morrowind Script Extender](https://github.com/MWSE/MWSE) (MWSE)**: Run MWSE-Update.exe for getting the latest version. It is required for this MCP server mod.
+- [Morrowind Script Extender Community Patch](https://www.nexusmods.com/morrowind/mods/19510) (MCP) or [MCP Beta](https://www.nexusmods.com/morrowind/mods/26348) : Run Morrowind Code Patch.exe. it fixes many bugs in Morrowind.
+- (Optional) [Mod Organizer 2](https://www.nexusmods.com/skyrimspecialedition/mods/6194) (MO2): for managing mods. Also useful for development and testing.
+- (Optional) [MGE XE UF](https://www.nexusmods.com/morrowind/mods/57200): It is unofficial update for MGE XE.
 
 ## Features
 
@@ -15,6 +21,7 @@ This allows the AI to learn about the world of Morrowind and interact with it.
 ## MCP Configuration
 
 ### VS Code
+ 
 - `.vscode/mcp.json`
 
 ```json

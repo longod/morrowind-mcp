@@ -3,9 +3,49 @@ description: lua programming guidelines.
 applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 ---
 
-- クラス名と関数は先頭大文字`CamelCase`で命名してください。
-- 変数は先頭小文字`camelCase`か`snake_case`で命名してください。使い分けは状況次第です。
-- `match` など、pattern matchingやregular expressionを必要とする処理は、使用しない方が高速と思われる簡易の処理の場合は、使用しないでください
-- `table` 型のサイズを取得する場合、`#table` を使用するのではなく、`table.size()` を使用してください
-- `logger` に外部入力や URI を渡す場合は `logger:debug("%s", value)` のように format を明示してください
-- `require` と `include` は完全修飾モジュール名を使用してください（例: `require("morrowind-mcp.core.strutil")`）。
+## 開発規約
+
+- クラス名と関数は先頭大文字 `CamelCase` で命名すること
+- 変数は先頭小文字`camelCase`か`snake_case`で命名すること。使い分けは状況次第。
+- pattern matchingやregular expressionを必要とする処理は、使用しない方が高速と思われる場合は使用しない
+- `table` 型のサイズを取得する場合、`#table` を使用するのではなく、`table.size()` を使用する
+- `logger` に外部入力や URI を渡す場合は `logger:debug("%s", value)` のように format を明示する
+- `require` と `include` は完全修飾モジュール名を使用する（例: `require("morrowind-mcp.core.strutil")`）
+- コメントは英語で書く
+- 英語以外のコメントを検出した場合は、翻訳して英語に置き換えて報告する
+- 文字列はテストケースで使用する場合を除き、英語で書く
+
+## Lua/MWSE Notes
+- LuaJIT を使用している
+- Morrowind Script Extender (MWSE) を使用している
+- MWSEに関する情報は `MWSE Documentation` or `MWSE GitHub` を参照する
+- エントリポイント: [main.lua](MWSE/mods/morrowind-mcp/main.lua)
+- loggerを使用することで `MWSE.log` にログを出力できる
+- `MWSE.log` を確認することで、サーバー側の挙動を検査できるようにする
+- luaSocket を使用したTCP通信
+
+### MCP Resource URI
+- MCP resource URI は物理パスではなく論理 URI として扱う: `mwmcp://`
+- `settings.uriScheme` のルートは `settings.resourceRootDir` を表す
+- `resources/read` は URI prefix 以降を `settings.resourceRootDir` 相対パスとして解決する
+- リソース URI/パス変換は [pathutil.lua](MWSE/mods/morrowind-mcp/core/pathutil.lua) の helper を使用する（`ToUri`, `FromUri`, `ToResourceFilePath`, `FromResourceFilePath`）
+- `string.sub` や `string.gsub` による URI/パス変換の直書き実装は新規に追加しない
+- MO2/USVFS の物理 Overwrite パスは Lua から解決しようとしない
+- 生成ファイルを VFS 対象にしたい場合は `settings.dataFiles` 配下に保存する
+
+### MCP feature definitions
+- `prompts/list`, `resources/list`, `tools/list` で公開される `name`, `title`, `description` は `jsonrpc` の generator 関数経由の最終値を正とする
+- Tool は `jsonrpc.Tool(...)` で定義し、公開名は generator が `settings.name_prefix` を付与する。定義ファイル側で `mw-` を直書きしない
+- Tool の `title` と `description` も generator が `settings.title_prefix`, `settings.description_prefix` を付与する。定義ファイル側で `[Morrowind] ` を直書きしない
+- `tools/call` は公開後の prefixed name を受け取るため、テストやドキュメントでは `mw-` 付きの名前を使う
+
+### MCP schema generators
+- `mcp.lua` の `---@class MCP.*Schema` は型注釈であり、実際の schema table 生成は [jsonrpc.lua](MWSE/mods/morrowind-mcp/server/jsonrpc.lua) の generator 関数で行う
+- MCP schema class を追加・変更した場合は、対応する generator と UnitWind テストを合わせて更新する
+- enum や default などの配列フィールドは `jsonrpc.array()` 経由で JSON array として扱える形にする
+
+## 参考リンク
+
+- [MWSE Documentation](https://mwse.github.io/MWSE/)
+- [MWSE GitHub](https://github.com/MWSE/MWSE)
+- [luaSocket](https://lunarmodules.github.io/luasocket/index.html)

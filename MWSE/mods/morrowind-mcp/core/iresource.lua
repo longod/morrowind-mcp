@@ -1,5 +1,4 @@
 ---@class MCP.IResource
----@field definition MCP.Resource
 local this = {}
 
 ---@param params table?
@@ -12,13 +11,6 @@ function this.new(params)
     ---@type MCP.IResource
     setmetatable(instance, { __index = this })
     return instance
-end
-
----@public
----@param params table
----@return boolean
-function this:CanExecute(params)
-    return true
 end
 
 return this
