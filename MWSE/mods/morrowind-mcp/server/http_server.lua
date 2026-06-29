@@ -2,11 +2,10 @@ local base = require("morrowind-mcp.core.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.core.strutil")
-local pathutil = require("morrowind-mcp.core.pathutil")
 local mcp = require("morrowind-mcp.core.mcp")
-local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
+local resourceManager = require("morrowind-mcp.resources.manager")
 
 ---@type Socket.Module
 local socket = require("socket")
@@ -40,6 +39,7 @@ end
 ---@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field tools table<string, MCP.ITool>
+---@field resources MCP.ResourceManager
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -54,6 +54,7 @@ function this.new(params)
     instance.hostname = instance.hostname or settings.defaultConfig.server.address
     instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}
+    instance.resources = resourceManager.new()
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
         [http.method.GET] = instance.OnGET,
@@ -204,123 +205,19 @@ end
 ---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnResourcesList(params)
-    -- crawl files from resource directory, or maybe only registered resources
-    -- TODO implementation to resources/
-    -- TODO pagenation support
-
-    ---@type MCP.ListResourcesResult
-    local result = jsonrpc.ListResourcesResult()
-
-    ---@param currentDir string
-    ---@param relativeDir string
-    local function CollectResources(currentDir, relativeDir)
-        for file in lfs.dir(currentDir) do
-            if file ~= "." and file ~= ".." then
-                local currentPath = currentDir .. file
-                local mode = lfs.attributes(currentPath, "mode")
-                if mode == "directory" then
-                    CollectResources(currentPath .. "\\", relativeDir .. file .. "/")
-                elseif mode == "file" then
-                    local relativePath = relativeDir .. file
-                    local resourceUri = pathutil.ToUri(relativePath, settings.uriScheme)
-                    if resourceUri then
-                        ---@type MCP.Resource
-                        local resource = {
-                            name = relativePath,
-                            uri = resourceUri,
-                            mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
-                            size = lfs.attributes(currentPath, "size"),
-                        }
-                        table.insert(result.resources, resource)
-                    else
-                        self.logger:warn("Skip invalid resource path: %s", relativePath)
-                    end
-                end
-            end
-        end
-    end
-
-    local rootDir = settings.resourceRootDir
-    CollectResources(rootDir, "")
-    table.sort(result.resources, function(a, b)
-        return a.uri < b.uri
-    end)
-
-    ---@type MethodResult
-    return {
-        http_response = http.response_code.ok,
-        result = result,
-    }
+    return self.resources:OnResourcesList(params)
 end
 
 ---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnResourcesTemplatesList(params)
-    ---@type MCP.ListResourceTemplatesResult
-    local result = jsonrpc.ListResourceTemplatesResult()
-
-    -- TODO present templete path for resource finding.
-    -- TODO implementation to resources/
-
-    ---@type MethodResult
-    return {
-        http_response = http.response_code.ok,
-        result = result,
-    }
+    return self.resources:OnResourcesTemplatesList(params)
 end
 
 ---@param params MCP.ReadResourceRequestParams
 ---@return MethodResult
 function this:OnResourcesRead(params)
-    -- TODO move implementation to resources/
-
-    if not params or type(params.uri) ~= "string" then
-        ---@type MethodResult
-        return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
-        }
-    end
-
-    local resourcePath = pathutil.FromUri(params.uri, settings.uriScheme)
-    if not resourcePath then
-        ---@type MethodResult
-        return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
-        }
-    end
-
-    local resourceFilePath = pathutil.ToResourceFilePath(resourcePath, settings.resourceRootDir)
-    if not resourceFilePath then
-        ---@type MethodResult
-        return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
-        }
-    end
-
-    local file = io.open(resourceFilePath, "rb")
-    if not file then
-        ---@type MethodResult
-        return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
-        }
-    end
-
-    local data = file:read("*a")
-    file:close()
-
-    local base64 = require("morrowind-mcp.core.base64")
-    local mimeType = mimeutil.ResolveMimeTypeFromResourcePath(resourcePath)
-    local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), mimeType)
-
-    ---@type MethodResult
-    return {
-        http_response = http.response_code.ok,
-        result = jsonrpc.ReadResourceResult({ content }),
-    }
+    return self.resources:OnResourcesRead(params)
 end
 
 ---@param params MCP.PaginatedRequestParams

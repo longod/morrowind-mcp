@@ -219,7 +219,7 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
         @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
         @("--method", "resources/list"),
-        @("--method", "resources/read", "--uri", "mwmcp://screenshot/$RunTimestamp.jpg") # TODO listから取得したファイルを読む
+        @("--method", "resources/read", "--uri", "morrowind://screenshot/$RunTimestamp.jpg") # TODO listから取得したファイルを読む
         #, @("--method", "prompts/get", "--prompt-name", "placeholder")
     )
 

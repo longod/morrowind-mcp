@@ -134,3 +134,7 @@ function this:Execute(params)
 end
 
 return this
+
+-- https://mwse.github.io/MWSE/types/tes3uiMenuController/
+-- https://mwse.github.io/MWSE/types/tes3uiMenuInputController/
+-- nameFormat.text = strings.defaultPotionName

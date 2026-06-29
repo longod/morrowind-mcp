@@ -14,21 +14,23 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - コメントは英語で書く
 - 英語以外のコメントを検出した場合は、翻訳して英語に置き換えて報告する
 - 文字列はテストケースで使用する場合を除き、英語で書く
+- [core/](../../MWSE/mods/morrowind-mcp/core/) は MWSE に依存しないコアライブラリにする
 
 ## Lua/MWSE Notes
 - LuaJIT を使用している
 - Morrowind Script Extender (MWSE) を使用している
 - MWSEに関する情報は `MWSE Documentation` or `MWSE GitHub` を参照する
-- エントリポイント: [main.lua](MWSE/mods/morrowind-mcp/main.lua)
+- エントリポイント: [main.lua](../../MWSE/mods/morrowind-mcp/main.lua)
 - loggerを使用することで `MWSE.log` にログを出力できる
 - `MWSE.log` を確認することで、サーバー側の挙動を検査できるようにする
 - luaSocket を使用したTCP通信
 
+## MCP Notes
 ### MCP Resource URI
-- MCP resource URI は物理パスではなく論理 URI として扱う: `mwmcp://`
+- MCP resource URI は物理パスではなく論理 URI として扱う: `morrowind://`
 - `settings.uriScheme` のルートは `settings.resourceRootDir` を表す
 - `resources/read` は URI prefix 以降を `settings.resourceRootDir` 相対パスとして解決する
-- リソース URI/パス変換は [pathutil.lua](MWSE/mods/morrowind-mcp/core/pathutil.lua) の helper を使用する（`ToUri`, `FromUri`, `ToResourceFilePath`, `FromResourceFilePath`）
+- リソース URI/パス変換は `pathutil.lua` の helper を使用する
 - `string.sub` や `string.gsub` による URI/パス変換の直書き実装は新規に追加しない
 - MO2/USVFS の物理 Overwrite パスは Lua から解決しようとしない
 - 生成ファイルを VFS 対象にしたい場合は `settings.dataFiles` 配下に保存する
@@ -40,9 +42,15 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - `tools/call` は公開後の prefixed name を受け取るため、テストやドキュメントでは `mw-` 付きの名前を使う
 
 ### MCP schema generators
-- `mcp.lua` の `---@class MCP.*Schema` は型注釈であり、実際の schema table 生成は [jsonrpc.lua](MWSE/mods/morrowind-mcp/server/jsonrpc.lua) の generator 関数で行う
+- `mcp.lua` の `---@class MCP.*Schema` は型注釈であり、実際の schema table 生成は [jsonrpc.lua](../../MWSE/mods/morrowind-mcp/server/jsonrpc.lua) の generator 関数で行う
 - MCP schema class を追加・変更した場合は、対応する generator と UnitWind テストを合わせて更新する
 - enum や default などの配列フィールドは `jsonrpc.array()` 経由で JSON array として扱える形にする
+
+
+## Tests
+
+- コードの変更後は、[tests/unit_test.ps1](../../tests/unit_test.ps1) を実行して、正しく動作することを確認する（スキル /unittest_run）
+- MCP Serverに関するコードの変更後は、[tests/server_test.ps1](../../tests/server_test.ps1) を実行して、MCP Server が正しく動作することを確認する（/servertest_run）
 
 ## 参考リンク
 
