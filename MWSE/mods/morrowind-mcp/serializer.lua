@@ -46,110 +46,6 @@ local fontName = {
     "daedric_font",
 }
 
-local objectTypeName = nil ---@type table<tes3.objectType, string>
-
----@param objectType tes3.objectType
----@return string
-local function objectTypeToString(objectType)
-    if not objectTypeName then
-        objectTypeName = {}
-        for k, v in pairs(tes3.objectType) do
-            objectTypeName[v] = k
-        end
-    end
-    return objectTypeName[objectType]
-end
-
-
----@param o table
----@param i tes3baseObject
----@return MCP.AnyMap?
-local function _tes3baseObject(o, i)
-    if not i:isValid() then
-        return nil
-    end
-    o.blocked = i.blocked
-    o.deleted = i.deleted
-    o.disabled = i.disabled
-    o.id = i.id
-    o.modified = i.modified
-    o.objectFlags = i.objectFlags
-    o.objectType = objectTypeToString(i.objectType)
-    o.persistent = i.persistent
-    o.sourceless = i.sourceless
-    o.sourceMod = i.sourceMod
-    o.supportsActivate = i.supportsActivate
-    return o
-end
-
----@param o table
----@param i tes3object
----@return MCP.AnyMap?
-local function _tes3object(o, i)
-    if not _tes3baseObject(o, i) then
-        return nil
-    end
-    o.isLocationMarker = i.isLocationMarker
-    -- o.nextInCollection = i.nextInCollection
-    -- o.owningCollection = i.owningCollection
-    -- o.previousInCollection = i.previousInCollection
-    o.scale = i.scale
-    -- o.sceneCollisionRoot = i.sceneCollisionRoot
-    -- o.sceneNode = i.sceneNode
-    return o
-end
-
----@param o table
----@param i tes3reference
----@return MCP.AnyMap?
-local function _tes3reference(o, i)
-    if not _tes3object(o, i) then
-        return nil
-    end
-    --[[
-    -- o.activationReference = i.activationReference
-    -- o.animationData = i.animationData
-    o.attachments = i.attachments
-    o.baseObject = i.baseObject
-    o.bodyPartManager = i.bodyPartManager
-    o.cell = i.cell
-    -- o.context = i.context
-    o.data = i.data
-    o.destination = i.destination
-    o.facing = i.facing
-    o.forwardDirection = i.forwardDirection
-    o.hasNoCollision = i.hasNoCollision
-    o.isDead = i.isDead
-    o.isEmpty = i.isEmpty
-    o.isLeveledSpawn = i.isLeveledSpawn
-    o.isRespawn = i.isRespawn
-    o.itemData = i.itemData
-    o.leveledBaseReference = i.leveledBaseReference
-    -- o.light = i.light
-    o.lockNode = i.lockNode
-    o.mesh = i.mesh
-    o.mobile = i.mobile
-    o.nextNode = i.nextNode
-    o.nodeData = i.nodeData
-    o.object = i.object
-    o.orientation = i.orientation
-    o.position = i.position
-    o.previousNode = i.previousNode
-    o.rightDirection = i.rightDirection
-    -- o.sceneNode = i.sceneNode
-    o.sourceFormId = i.sourceFormId
-    o.sourceModId = i.sourceModId
-    o.stackSize = i.stackSize
-    o.startingOrientation = i.startingOrientation
-    o.startingPosition = i.startingPosition
-    o.supportsLuaData = i.supportsLuaData
-    o.targetFormId = i.targetFormId
-    o.targetModId = i.targetModId
-    o.tempData = i.tempData
-    --]]
-    return o
-end
-
 ---@param i tes3uiElement?
 ---@return MCP.AnyMap?
 local function _tes3uiElement(i)
@@ -240,8 +136,196 @@ local function _tes3uiElement(i)
     return nil
 end
 
+local objectTypeName = nil ---@type table<tes3.objectType, string>
+
+---@param objectType tes3.objectType
+---@return string
+local function objectTypeToString(objectType)
+    if not objectTypeName then
+        objectTypeName = {}
+        for k, v in pairs(tes3.objectType) do
+            objectTypeName[v] = k
+        end
+    end
+    return objectTypeName[objectType]
+end
+
+
+---@param o MCP.AnyMap
+---@param i tes3baseObject
+---@return MCP.AnyMap?
+local function _tes3baseObject(o, i)
+    if not i:isValid() then
+        return nil
+    end
+    o.blocked = i.blocked
+    o.deleted = i.deleted
+    o.disabled = i.disabled
+    o.id = i.id
+    o.modified = i.modified
+    o.objectFlags = i.objectFlags
+    o.objectType = objectTypeToString(i.objectType)
+    o.persistent = i.persistent
+    o.sourceless = i.sourceless
+    o.sourceMod = i.sourceMod
+    o.supportsActivate = i.supportsActivate
+    return o
+end
+
+---@param o MCP.AnyMap
+---@param i tes3object
+---@return MCP.AnyMap?
+local function _tes3object(o, i)
+    if not _tes3baseObject(o, i) then
+        return nil
+    end
+    o.isLocationMarker = i.isLocationMarker
+    -- o.nextInCollection = i.nextInCollection
+    -- o.owningCollection = i.owningCollection
+    -- o.previousInCollection = i.previousInCollection
+    o.scale = i.scale
+    -- o.sceneCollisionRoot = i.sceneCollisionRoot
+    -- o.sceneNode = i.sceneNode
+    return o
+end
+
+---@param o MCP.AnyMap
+---@param i tes3reference
+---@return MCP.AnyMap?
+local function _tes3reference(o, i)
+    if not _tes3object(o, i) then
+        return nil
+    end
+    --[[
+    -- o.activationReference = i.activationReference
+    -- o.animationData = i.animationData
+    o.attachments = i.attachments
+    o.baseObject = i.baseObject
+    o.bodyPartManager = i.bodyPartManager
+    o.cell = i.cell
+    -- o.context = i.context
+    o.data = i.data
+    o.destination = i.destination
+    o.facing = i.facing
+    o.forwardDirection = i.forwardDirection
+    o.hasNoCollision = i.hasNoCollision
+    o.isDead = i.isDead
+    o.isEmpty = i.isEmpty
+    o.isLeveledSpawn = i.isLeveledSpawn
+    o.isRespawn = i.isRespawn
+    o.itemData = i.itemData
+    o.leveledBaseReference = i.leveledBaseReference
+    -- o.light = i.light
+    o.lockNode = i.lockNode
+    o.mesh = i.mesh
+    o.mobile = i.mobile
+    o.nextNode = i.nextNode
+    o.nodeData = i.nodeData
+    o.object = i.object
+    o.orientation = i.orientation
+    o.position = i.position
+    o.previousNode = i.previousNode
+    o.rightDirection = i.rightDirection
+    -- o.sceneNode = i.sceneNode
+    o.sourceFormId = i.sourceFormId
+    o.sourceModId = i.sourceModId
+    o.stackSize = i.stackSize
+    o.startingOrientation = i.startingOrientation
+    o.startingPosition = i.startingPosition
+    o.supportsLuaData = i.supportsLuaData
+    o.targetFormId = i.targetFormId
+    o.targetModId = i.targetModId
+    o.tempData = i.tempData
+    --]]
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3dialogue
+---@return MCP.AnyMap?
+local function _tes3dialogue(o, i)
+    if not _tes3baseObject(o, i) then
+        return nil
+    end
+
+    -- need no serialize option or parent. avoid circular reference. info has dialogue, dialogue has info.
+
+    o.journalIndex = i.journalIndex
+    o.type = i.type -- TODO convert to string. tes3.dialogueType
+
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3dialogueInfo
+---@return MCP.AnyMap?
+local function _tes3dialogueInfo(o, i)
+    if not _tes3baseObject(o, i) then
+        return nil
+    end
+    -- o.actor = i.actor
+    -- o.cell = i.cell
+    o.disposition = i.disposition
+    -- o.firstHeardFrom = i.firstHeardFrom
+    o.isQuestFinished = i.isQuestFinished
+    o.isQuestName = i.isQuestName
+    o.isQuestRestart = i.isQuestRestart
+    o.journalIndex = i.journalIndex
+    -- o.npcClass = i.npcClass
+    -- o.npcFaction = i.npcFaction
+    -- o.npcRace = i.npcRace
+    o.npcRank = i.npcRank
+    o.npcSex = i.npcSex
+    o.pcFaction = i.pcFaction
+    o.pcRank = i.pcRank
+    o.text = i.text
+    o.type = i.type
+
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3quest
+---@return MCP.AnyMap?
+local function _tes3quest(o, i)
+    if not _tes3baseObject(o, i) then
+        return nil
+    end
+
+    -- TODO array and object iterate helper
+
+    if i.dialogue then
+        local dialogueArray = jsonrpc.array(table.size(i.dialogue))
+        for _, dialogue in ipairs(i.dialogue) do
+            local dialogueObject = jsonrpc.object()
+            if _tes3dialogue(dialogueObject, dialogue) then
+                table.insert(dialogueArray, dialogueObject)
+            end
+        end
+        if table.size(dialogueArray) > 0 then
+            o.dialogue = dialogueArray
+        end
+    end
+    if i.info then
+        local infoArray = jsonrpc.array(table.size(i.info))
+        for _, info in ipairs(i.info) do
+            local infoObject = jsonrpc.object()
+            if _tes3dialogueInfo(infoObject, info) then
+                table.insert(infoArray, infoObject)
+            end
+        end
+        if table.size(infoArray) > 0 then
+            o.info = infoArray
+        end
+    end
+    o.isActive = i.isActive
+    o.isFinished = i.isFinished
+    o.isStarted = i.isStarted
+    return o
+end
+
 ---@param i tes3uiElement
----@return table?
+---@return MCP.AnyMap?
 function this.tes3uiElement(i)
     local o = _tes3uiElement(i)
     local _ = ValidateType(o)
@@ -249,10 +333,18 @@ function this.tes3uiElement(i)
 end
 
 ---@param i tes3reference
----@return table?
+---@return MCP.AnyMap?
 function this.tes3reference(i)
     local o = jsonrpc.object()
     local _ = ValidateType(_tes3reference(o, i))
+    return o
+end
+
+---@param i tes3quest
+---@return MCP.AnyMap?
+function this.tes3quest(i)
+    local o = jsonrpc.object()
+    local _ = ValidateType(_tes3quest(o, i))
     return o
 end
 
