@@ -39,6 +39,14 @@ event.register(tes3.event.initialized, OnInitialized)
 require("morrowind-mcp.mcm")
 
 
+--- @param e enterFrameEventData
+local function enterFrameCallback(e)
+    -- jump into game.
+    -- only first time or player died? every time is needed force quit.
+end
+event.register(tes3.event.enterFrame, enterFrameCallback)
+
+
 -- missing annotations
 
 ---@class tes3scriptVariables

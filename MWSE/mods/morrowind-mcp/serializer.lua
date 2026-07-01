@@ -39,6 +39,22 @@ local function ValidateType(i)
 
     return true
 end
+local _objectTypeName = nil ---@type table<tes3.objectType, string>
+
+---@param objectType tes3.objectType
+---@return string
+local function objectTypeToString(objectType)
+    if not _objectTypeName then
+        _objectTypeName = {}
+        for k, v in pairs(tes3.objectType) do
+            _objectTypeName[v] = k
+        end
+    end
+    if objectType == nil then
+        return nil
+    end
+    return _objectTypeName[objectType]
+end
 
 local fontName = {
     "magic_cards_regular",         -- Magic Cards, default
@@ -136,25 +152,13 @@ local function _tes3uiElement(i)
     return nil
 end
 
-local objectTypeName = nil ---@type table<tes3.objectType, string>
-
----@param objectType tes3.objectType
----@return string
-local function objectTypeToString(objectType)
-    if not objectTypeName then
-        objectTypeName = {}
-        for k, v in pairs(tes3.objectType) do
-            objectTypeName[v] = k
-        end
-    end
-    return objectTypeName[objectType]
-end
-
-
 ---@param o MCP.AnyMap
 ---@param i tes3baseObject
 ---@return MCP.AnyMap?
 local function _tes3baseObject(o, i)
+    if not i then
+        return nil
+    end
     if not i:isValid() then
         return nil
     end
@@ -324,6 +328,80 @@ local function _tes3quest(o, i)
     return o
 end
 
+---@param o MCP.AnyMap?
+---@param i tes3mobileObject
+---@return MCP.AnyMap?
+local function _tes3mobileObject(o, i)
+    if not i then
+        return nil
+    end
+    if not i:isValid() then
+        return nil
+    end
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3mobileActor
+---@return MCP.AnyMap?
+local function _tes3mobileActor(o, i)
+    if not _tes3mobileObject(o, i) then
+        return nil
+    end
+    -- o.boundSize = i.boundSize
+    -- o.boundSize2D = i.boundSize2D
+    o.cellX = i.cellX
+    o.cellY = i.cellY
+    -- o.dynamicLightingValid = i.dynamicLightingValid
+    o.flags = i.flags
+    o.height = i.height
+    -- o.impulseVelocity = i.impulseVelocity
+    -- o.inventory = i.inventory
+    -- o.isAffectedByGravity = i.isAffectedByGravity
+    -- o.lightEffectData = i.lightEffectData
+    -- o.mobToMobCollision = i.mobToMobCollision
+    -- o.movementCollision = i.movementCollision
+    -- o.movementFlags = i.movementFlags
+    o.objectType = objectTypeToString(i.objectType)
+    o.playerDistance = i.playerDistance
+    o.position = i.position
+    -- o.prevMovementFlags = i.prevMovementFlags
+    -- o.reference = i.reference
+    o.velocity = i.velocity
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3mobileNPC
+---@return MCP.AnyMap?
+local function _tes3mobileNPC(o, i)
+    if not _tes3mobileActor(o, i) then
+        return nil
+    end
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3mobilePlayer
+---@return MCP.AnyMap?
+local function _tes3mobilePlayer(o, i)
+    if not _tes3mobileNPC(o, i) then
+        return nil
+    end
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3worldController
+---@return MCP.AnyMap?
+local function _tes3worldController(o, i)
+    if not i then
+        return nil
+    end
+
+    return o
+end
+
 ---@param i tes3uiElement
 ---@return MCP.AnyMap?
 function this.tes3uiElement(i)
@@ -345,6 +423,22 @@ end
 function this.tes3quest(i)
     local o = jsonrpc.object()
     local _ = ValidateType(_tes3quest(o, i))
+    return o
+end
+
+---@param i tes3mobilePlayer
+---@return MCP.AnyMap?
+function this.tes3mobilePlayer(i)
+    local o = jsonrpc.object()
+    local _ = ValidateType(_tes3mobilePlayer(o, i))
+    return o
+end
+
+---@param i tes3worldController
+---@return MCP.AnyMap?
+function this.tes3worldController(i)
+    local o = jsonrpc.object()
+    local _ = ValidateType(_tes3worldController(o, i))
     return o
 end
 

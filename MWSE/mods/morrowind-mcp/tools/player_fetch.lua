@@ -1,0 +1,49 @@
+local base = require("morrowind-mcp.core.itool")
+local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+local serializer = require("morrowind-mcp.serializer")
+
+
+---@class MCP.PlayerFetch: MCP.ITool
+---@field logger mwseLogger
+local this = {}
+setmetatable(this, { __index = base })
+
+---@param params table?
+---@return MCP.PlayerFetch
+function this.new(params)
+    local instance = base.new(params)
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.PlayerFetch
+    instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "player_fetch" })
+    instance.definition = jsonrpc.Tool({
+        name = "player-fetch",
+        description =
+        "Fetch current player state.",
+        inputSchema = jsonrpc.InputSchema(
+        ),
+        outputSchema = jsonrpc.OutputSchema(
+            {
+                player = jsonrpc.JsonObjectSchema(),
+            }
+        ),
+        annotations = jsonrpc.ToolAnnotations(nil, true, false)
+    })
+    return instance
+end
+
+function this:CanExecute(params)
+    -- in title?
+    return true
+end
+
+function this:Execute(params)
+    local player = tes3.mobilePlayer
+    if not player then
+        local errorContent = jsonrpc.TextContent("No player found. Please enter the game.")
+        return jsonrpc.CallToolResult(errorContent, nil, true)
+    end
+
+    local structuredContent = jsonrpc.object({ player = serializer.tes3mobilePlayer(player) })
+    return jsonrpc.CallToolResult(nil, structuredContent)
+end
+
+return this
