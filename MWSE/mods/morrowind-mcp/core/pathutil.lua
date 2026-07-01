@@ -1,5 +1,3 @@
-local strutil = require("morrowind-mcp.core.strutil")
-
 local this = {}
 
 ---@param ch integer
@@ -92,7 +90,7 @@ end
 local function IsValidResourcePath(resourcePath)
     -- Accept only safe, resourceRootDir-relative logical paths.
     -- Reject empty input and absolute-style paths.
-    if resourcePath == "" or strutil.startswith(resourcePath, "/") then
+    if resourcePath == "" or string.startswith(resourcePath, "/") then
         return false
     end
 
@@ -101,17 +99,24 @@ local function IsValidResourcePath(resourcePath)
         return false
     end
 
-    -- Split by logical URI/resource separator.
-    local segments = strutil.split(resourcePath, "/")
-    if not segments then
-        return false
-    end
-
-    -- Reject empty segments and traversal markers.
-    for _, segment in ipairs(segments) do
+    -- Parse each slash-delimited segment manually so we can reject malformed paths
+    -- (for example, "folder//file", trailing slash, ".", or "..") without
+    -- relying on external split helper behavior.
+    local pathLen = string.len(resourcePath)
+    local segmentStart = 1
+    while segmentStart <= pathLen + 1 do
+        local separatorIndex = string.find(resourcePath, "/", segmentStart, true)
+        local segmentEnd = separatorIndex and (separatorIndex - 1) or pathLen
+        local segment = string.sub(resourcePath, segmentStart, segmentEnd)
+        -- Empty segment means repeated or trailing slash.
+        -- "." and ".." are blocked to prevent directory traversal semantics.
         if segment == "" or segment == "." or segment == ".." then
             return false
         end
+        if not separatorIndex then
+            break
+        end
+        segmentStart = separatorIndex + 1
     end
 
     return true
@@ -136,7 +141,7 @@ end
 ---@return string?
 function this.FromUri(uri, uriScheme)
     -- URI must belong to this scheme before extracting the relative path.
-    if not strutil.startswith(uri, uriScheme) then
+    if not string.startswith(uri, uriScheme) then
         return nil
     end
 
@@ -174,11 +179,11 @@ function this.FromResourceFilePath(resourceFilePath, resourceRootDir)
     -- Convert to slash-separated form so prefix matching works across OS-style separators.
     local normalizedRootDir = string.gsub(resourceRootDir, "\\", "/")
     local normalizedFilePath = string.gsub(resourceFilePath, "\\", "/")
-    if not strutil.endswith(normalizedRootDir, "/") then
+    if not string.endswith(normalizedRootDir, "/") then
         normalizedRootDir = normalizedRootDir .. "/"
     end
 
-    if not strutil.startswith(normalizedFilePath, normalizedRootDir) then
+    if not string.startswith(normalizedFilePath, normalizedRootDir) then
         return nil
     end
 

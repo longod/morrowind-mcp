@@ -1,5 +1,6 @@
 local this = {}
 
+---@deprecated
 ---@param str string
 ---@return string
 function this.ltrim(str)
@@ -11,6 +12,7 @@ function this.ltrim(str)
     return str:sub(i)
 end
 
+---@deprecated
 ---@param str string
 ---@param prefix string
 ---@return boolean
@@ -18,6 +20,7 @@ function this.startswith(str, prefix)
     return string.sub(str, 1, #prefix) == prefix
 end
 
+---@deprecated
 ---@param str string
 ---@param suffix string
 ---@return boolean
@@ -25,6 +28,7 @@ function this.endswith(str, suffix)
     return suffix == "" or string.sub(str, -string.len(suffix)) == suffix
 end
 
+---@deprecated
 ---@param str string?
 ---@param token string
 ---@return string[]?

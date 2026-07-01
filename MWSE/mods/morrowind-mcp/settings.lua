@@ -23,6 +23,10 @@ this.defaultConfig = {
         port = 33427, -- 3E427
     },
 
+    autoplay = {
+        skipMainMenu = false,
+    },
+
     development = {
         logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,

@@ -50,9 +50,6 @@ local function objectTypeToString(objectType)
             _objectTypeName[v] = k
         end
     end
-    if objectType == nil then
-        return nil
-    end
     return _objectTypeName[objectType]
 end
 

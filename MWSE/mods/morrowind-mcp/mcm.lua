@@ -52,6 +52,22 @@ local function OnModConfigReady(e)
         })
     end
 
+    do
+        local autoplay = page:createCategory({
+            label = "Autoplay",
+            description = "Settings for autoplay features.",
+        })
+        autoplay:createOnOffButton({
+            label = "Skip Main Menu",
+            description = "Automatically skip the main menu and load the newest save.",
+            variable = mwse.mcm.createTableVariable({
+                id = "skipMainMenu",
+                table = config.autoplay,
+            }),
+            restartRequired = true,
+        })
+    end
+
     -- history
     -- dev menu
     do

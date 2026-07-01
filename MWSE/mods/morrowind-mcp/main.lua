@@ -24,13 +24,60 @@ if config.development.unitTest then
     Test()
 end
 
+---@return string?
+local function GetNewestSave()
+
+    local newestSave = nil
+    local newestTimestamp = 0
+    for file in lfs.dir("saves") do
+        if (string.endswith(file, ".ess")) then
+            -- Check to see if the file is newer than our current newest file.
+            local lastModified = lfs.attributes("saves/" .. file, "modification")
+            if (lastModified > newestTimestamp) then
+                newestSave = file
+                newestTimestamp = lastModified;
+            end
+        end
+    end
+
+    if (newestSave ~= nil) then
+        return string.sub(newestSave, 1, -5)
+    end
+    return nil
+end
+
+--- @param e enterFrameEventData
+local function SkipMainMenu(e)
+    if not tes3.onMainMenu() then
+        return
+    end
+    if not e.menuMode then
+        return
+    end
+
+    -- jump into game.
+    -- only first time or player died? every time is needed force quit.
+    event.unregister(tes3.event.enterFrame, SkipMainMenu) -- once
+
+    local save = GetNewestSave()
+    if save then
+        tes3.loadGame(save)
+    else
+        tes3.newGame()
+    end
+end
+
 local server = require("morrowind-mcp.server.http_server").new({
-    hostname = config.server.hostname,
+    hostname = config.server.address,
     port = config.server.port,
 })
 
 ---@param e initializedEventData
 local function OnInitialized(e)
+    if config.autoplay.skipMainMenu then
+        event.register(tes3.event.enterFrame, SkipMainMenu)
+    end
+
     server:Start()
 end
 
@@ -39,12 +86,7 @@ event.register(tes3.event.initialized, OnInitialized)
 require("morrowind-mcp.mcm")
 
 
---- @param e enterFrameEventData
-local function enterFrameCallback(e)
-    -- jump into game.
-    -- only first time or player died? every time is needed force quit.
-end
-event.register(tes3.event.enterFrame, enterFrameCallback)
+
 
 
 -- missing annotations

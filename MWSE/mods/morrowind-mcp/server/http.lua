@@ -329,7 +329,7 @@ this.response_code = {
 --- @return string? endpoint
 --- @return string? protocol
 function this.ParseRequestMethod(requestLine)
-    local parts = strutil.split(requestLine, " ")
+    local parts = string.split(requestLine, " ")
     if not parts or #parts ~= 3 then
         return nil, nil, nil
     end
@@ -342,7 +342,7 @@ function this.ParseHeader(line)
     local sep = line:find(":", 1, true)
     if sep then
         local name = line:sub(1, sep - 1):lower()
-        local value = strutil.ltrim(line:sub(sep + 1))
+        local value = string.trim(line:sub(sep + 1))
         return name, value
     end
     return nil, nil

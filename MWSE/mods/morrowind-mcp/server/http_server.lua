@@ -390,10 +390,10 @@ end
 function this:OnGET(request)
     -- server is supported SSE?
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
-    local contents = strutil.split(request.http_request.headers[http.header.accept], ",")
+    local contents = string.split(request.http_request.headers[http.header.accept], ",")
     if contents then
         for _, value in ipairs(contents) do
-            local content = strutil.ltrim(value:lower())
+            local content = string.trim(value:lower())
             if content == http.content_type.event_stream then
                 -- no supported SSE
                 self.logger:info("No supported SSE")
