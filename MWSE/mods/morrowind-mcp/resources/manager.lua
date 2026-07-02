@@ -6,10 +6,12 @@ local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local base64 = require("morrowind-mcp.core.base64")
 
----@class MCP.ResourceManager: MCP.IResource
+---@class MCP.ResourceManager: MCP.IResourceManager
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
+
+-- TODO cache resource list and resources.
 
 ---@param params table?
 ---@return MCP.ResourceManager

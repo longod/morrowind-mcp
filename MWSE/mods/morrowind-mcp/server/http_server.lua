@@ -11,6 +11,9 @@ local resourceManager = require("morrowind-mcp.resources.manager")
 local socket = require("socket")
 
 local maxResponseLogLength = config.development.debug and 2048 or 256
+local maxNotificationQueueSize = 128
+local sessionIdleTimeoutSeconds = 300
+local protocolVersion = "2025-11-25"
 
 ---@param response string?
 ---@return string
@@ -28,6 +31,24 @@ local function FormatResponseForLog(response)
     return r .. "[...too long]"
 end
 
+---@param headers table<string, string>?
+---@param name string
+---@return string?
+local function GetHeader(headers, name)
+    if not headers then
+        return nil
+    end
+    return headers[name] or headers[name:lower()]
+end
+
+---@class MCP.HttpSession
+---@field id string
+---@field initialized boolean
+---@field sseClient Socket.TcpClient?
+---@field notificationQueue string[]
+---@field nextEventId integer
+---@field lastAccessedAt integer
+
 ---@class MCP.MwseHttpServer : MCP.IServer
 ---@field logger mwseLogger
 ---@field server Socket.TcpServer?
@@ -36,10 +57,12 @@ end
 ---@field port integer
 ---@field httpHeaders table<string, string> must headers
 ---@field requestHandlers table<string, fun(self: MCP.MwseHttpServer, request: ClientRequest): ServerResponse?>
----@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams): MethodResult>
+---@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams, request: ClientRequest?): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field tools table<string, MCP.ITool>
 ---@field resources MCP.ResourceManager
+---@field sessions table<string, MCP.HttpSession>
+---@field nextSessionIndex integer
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -55,15 +78,18 @@ function this.new(params)
     instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}
     instance.resources = resourceManager.new()
+    instance.sessions = {}
+    instance.nextSessionIndex = 0
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
         [http.method.GET] = instance.OnGET,
+        [http.method.DELETE] = instance.OnDELETE,
         [http.method.OPTIONS] = instance.OnOPTIONS,
     }
     -- or split sub-category
     instance.methodHandlers = {
         [mcp.method.initialize] = instance.OnInitialize,
-        [mcp.method.notifications_initialized] = instance.OnNotification,
+        [mcp.method.notifications_initialized] = instance.OnInitializedNotification,
         [mcp.method.logging_setlevel] = instance.OnLoggingSetLevel,
         [mcp.method.prompts_list] = instance.OnPromptsList,
         [mcp.method.resources_list] = instance.OnResourcesList,
@@ -76,6 +102,244 @@ function this.new(params)
     instance:LoadPrompts()
     instance:LoadTools()
     return instance
+end
+
+---@return string
+function this:GenerateSessionId()
+    -- The MCP session id must be visible ASCII; uniqueness only needs to hold for this local process.
+    self.nextSessionIndex = self.nextSessionIndex + 1
+    local sessionId = string.format("mwmcp-%d-%d-%d", os.time(), math.random(0, 999999999), self.nextSessionIndex)
+    while self.sessions[sessionId] do
+        self.nextSessionIndex = self.nextSessionIndex + 1
+        sessionId = string.format("mwmcp-%d-%d-%d", os.time(), math.random(0, 999999999), self.nextSessionIndex)
+    end
+    return sessionId
+end
+
+---@return integer
+function this:CountSSEClients()
+    local count = 0
+    for _, session in pairs(self.sessions) do
+        if session.sseClient then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+---@return MCP.HttpSession
+function this:CreateSession()
+    -- Keep transport state separate from game state so sessions can be replaced without side effects.
+    local sessionId = self:GenerateSessionId()
+    ---@type MCP.HttpSession
+    local session = {
+        id = sessionId,
+        initialized = false,
+        sseClient = nil,
+        notificationQueue = {},
+        nextEventId = 0,
+        lastAccessedAt = os.time(),
+    }
+    self.sessions[sessionId] = session
+    self.logger:debug("Session created: %s (sessions=%d, sseClients=%d)", sessionId, table.size(self.sessions),
+        self:CountSSEClients())
+    return session
+end
+
+---@param session MCP.HttpSession
+function this:TouchSession(session)
+    session.lastAccessedAt = os.time()
+end
+
+---@param session MCP.HttpSession
+---@return boolean
+function this:IsSessionExpired(session)
+    return os.difftime(os.time(), session.lastAccessedAt) >= sessionIdleTimeoutSeconds
+end
+
+---@param sessionId string
+---@return boolean
+function this:DeleteSession(sessionId)
+    local session = self.sessions[sessionId]
+    if not session then
+        return false
+    end
+
+    self:RemoveSSEClient(session)
+    self.sessions[sessionId] = nil
+    self.logger:debug("Session deleted: %s (sessions=%d, sseClients=%d)", sessionId, table.size(self.sessions),
+        self:CountSSEClients())
+    return true
+end
+
+function this:CloseExpiredSessions()
+    for sessionId, session in pairs(self.sessions) do
+        if self:IsSessionExpired(session) then
+            self.logger:debug("Session expired: %s (idleSeconds=%d, queuedNotifications=%d, hasSseClient=%s)",
+                sessionId, os.difftime(os.time(), session.lastAccessedAt), table.size(session.notificationQueue),
+                tostring(session.sseClient ~= nil))
+            self:DeleteSession(sessionId)
+        end
+    end
+end
+
+---@param request Http.Request
+---@return string?
+function this:GetSessionId(request)
+    return GetHeader(request.headers, http.mcp_header.mcp_session_id)
+end
+
+---@param request Http.Request
+---@return MCP.HttpSession?
+function this:GetSession(request)
+    local sessionId = self:GetSessionId(request)
+    if not sessionId then
+        return nil
+    end
+    local session = self.sessions[sessionId]
+    if session then
+        self:TouchSession(session)
+    end
+    return session
+end
+
+---@param request Http.Request
+---@return boolean
+function this:IsAllowedOrigin(request)
+    -- Origin validation is a Streamable HTTP DNS-rebinding mitigation for local servers.
+    local origin = GetHeader(request.headers, http.header.origin)
+    if not origin or origin == "" then
+        return true
+    end
+
+    local lowerOrigin = origin:lower()
+    local lowerHostname = tostring(self.hostname):lower()
+    return lowerOrigin:find("://localhost", 1, true) ~= nil
+        or lowerOrigin:find("://127.0.0.1", 1, true) ~= nil
+        or lowerOrigin:find("://" .. lowerHostname, 1, true) ~= nil
+end
+
+---@param request Http.Request
+---@return boolean
+function this:IsSupportedProtocolVersion(request)
+    -- Missing protocol version is tolerated for compatibility, but invalid explicit versions are rejected.
+    local version = GetHeader(request.headers, http.mcp_header.mcp_protocol_version)
+    return not version or version == protocolVersion
+end
+
+---@param request Http.Request
+---@return boolean
+function this:IsSupportedPostContentType(request)
+    local contentType = GetHeader(request.headers, http.header.content_type)
+    return http.AcceptsContentType(contentType, http.content_type.json)
+end
+
+---@param request Http.Request
+---@return boolean
+function this:IsAcceptedPostResponseContentType(request)
+    -- MCP POST requests can receive a JSON response, or an SSE stream in richer implementations.
+    local accept = GetHeader(request.headers, http.header.accept)
+    return not accept
+        or http.AcceptsContentType(accept, http.content_type.json)
+        or http.AcceptsContentType(accept, http.content_type.event_stream)
+end
+
+---@param session MCP.HttpSession
+function this:RemoveSSEClient(session)
+    if session.sseClient then
+        pcall(function() session.sseClient:close() end)
+        session.sseClient = nil
+        self.logger:debug("SSE client removed: %s (sessions=%d, sseClients=%d)", session.id, table.size(self.sessions),
+            self:CountSSEClients())
+    end
+end
+
+---@param session MCP.HttpSession
+---@param client Socket.TcpClient
+function this:ReplaceSSEClient(session, client)
+    -- Treat a duplicate GET for the same session as a reconnect; newest stream wins.
+    local hadSSEClient = session.sseClient ~= nil
+    self:RemoveSSEClient(session)
+    client:settimeout(0)
+    session.sseClient = client
+    if hadSSEClient then
+        self.logger:debug("SSE client replaced: %s (sessions=%d, sseClients=%d)", session.id, table.size(self.sessions),
+            self:CountSSEClients())
+    end
+    self.logger:debug("SSE client added: %s (sessions=%d, sseClients=%d)", session.id, table.size(self.sessions),
+        self:CountSSEClients())
+end
+
+---@param session MCP.HttpSession
+---@param method MCP.Method|string
+---@param params table?
+function this:EnqueueNotification(session, method, params)
+    -- Queue by session rather than socket so unsent notifications survive SSE reconnects.
+    table.insert(session.notificationQueue, jsonrpc.notification(method, params))
+    local droppedCount = 0
+    while table.size(session.notificationQueue) > maxNotificationQueueSize do
+        table.remove(session.notificationQueue, 1)
+        droppedCount = droppedCount + 1
+    end
+    if droppedCount > 0 then
+        self.logger:warn("Dropped %d queued notification(s) for session %s", droppedCount, session.id)
+    end
+end
+
+---@param sessionId string?
+---@param method MCP.Method|string
+---@param params table?
+---@return boolean
+function this:NotifySession(sessionId, method, params)
+    if not sessionId then
+        self.logger:debug("Skipped notification without session id: %s", method)
+        return false
+    end
+    local session = self.sessions[sessionId]
+    if not session then
+        self.logger:debug("Skipped notification for unknown session: %s (method=%s)", sessionId, method)
+        return false
+    end
+    self:EnqueueNotification(session, method, params)
+    return true
+end
+
+---@param method MCP.Method|string
+---@param params table?
+function this:NotifyAll(method, params)
+    for _, session in pairs(self.sessions) do
+        self:EnqueueNotification(session, method, params)
+    end
+end
+
+---@param session MCP.HttpSession
+function this:FlushSessionNotifications(session)
+    if not session.sseClient or table.size(session.notificationQueue) == 0 then
+        return
+    end
+
+    -- Send at most once on the active stream; failed writes are restored for a later reconnect.
+    while session.sseClient and table.size(session.notificationQueue) > 0 do
+        local notification = table.remove(session.notificationQueue, 1)
+        session.nextEventId = session.nextEventId + 1
+        local eventId = tostring(session.nextEventId)
+        local result = http.SendServerSentEvent(session.sseClient, notification, nil, eventId)
+        if result.error then
+            table.insert(session.notificationQueue, 1, notification)
+            self.logger:debug(
+                "SSE client send error, closing stream: %s (session=%s, eventId=%s, queuedNotifications=%d)",
+                result.error, session.id, eventId, table.size(session.notificationQueue))
+            self:RemoveSSEClient(session)
+            break
+        end
+        self.logger:trace("SSE notification sent: %s", FormatResponseForLog(result.response))
+    end
+end
+
+function this:BroadcastNotifications()
+    for _, session in pairs(self.sessions) do
+        self:FlushSessionNotifications(session)
+    end
 end
 
 function this:LoadPrompts()
@@ -138,10 +402,12 @@ function this:OnInitialize(params)
     -- TODO reset state
 
     local settings = require("morrowind-mcp.settings")
+    -- Streamable HTTP sessions begin at initialize and are returned as an HTTP header.
+    local session = self:CreateSession()
 
     ---@type MCP.InitializeResult
     local result = jsonrpc.InitializeResult()
-    result.protocolVersion = "2025-11-25"
+    result.protocolVersion = protocolVersion
     -- TODO generator, can be flatten arguments
     result.capabilities = {
         ["logging"] = jsonrpc.object(),
@@ -179,6 +445,9 @@ function this:OnInitialize(params)
     ---@type MethodResult
     return {
         http_response = http.response_code.ok,
+        http_headers = {
+            [http.mcp_header.mcp_session_id] = session.id,
+        },
         result = result,
     }
 end
@@ -314,14 +583,34 @@ function this:OnPromptsGet(params)
 end
 
 ---@param params MCP.SetLevelRequestParams
+---@param request ClientRequest?
 ---@return MethodResult
-function this:OnLoggingSetLevel(params)
+function this:OnLoggingSetLevel(params, request)
     -- TODO set log level for client logging
     self.logger:info("Set log level for client to: %s", params.level)
+    -- Use logging/setLevel as a low-risk observable trigger for the SSE notification path.
+    local sessionId = request and self:GetSessionId(request.http_request) or nil
+    self:NotifySession(sessionId, mcp.method.notifications_message, {
+        level = params.level,
+        logger = settings.shortModName,
+        data = "Logging level changed",
+    })
     ---@type MethodResult
     return {
         http_response = http.response_code.ok,
     }
+end
+
+---@param params MCP.NotificationParams
+---@param request ClientRequest?
+---@return MethodResult
+function this:OnInitializedNotification(params, request)
+    -- The initialized notification marks the session ready for server-initiated messages.
+    local session = request and self:GetSession(request.http_request) or nil
+    if session then
+        session.initialized = true
+    end
+    return self:OnNotification(params)
 end
 
 ---@param params MCP.NotificationParams
@@ -338,8 +627,6 @@ end
 ---@param request ClientRequest
 ---@return ServerResponse?
 function this:OnPOST(request)
-    -- TODO check headers
-
     if not request.json_request then
         ---@type ServerResponse
         return {
@@ -360,9 +647,10 @@ function this:OnPOST(request)
 
     self.logger:info("handle method: %s", request.json_request.method)
     local param = request.json_request.params or {}
+    local isNotification = request.json_request.id == nil
     local success, result = xpcall(
         function()
-            return handler(self, param)
+            return handler(self, param, request)
         end,
         function(err)
             return debug.traceback(tostring(err), 2)
@@ -379,49 +667,114 @@ function this:OnPOST(request)
 
     ---@type ServerResponse
     return {
-        http_response = result.http_response,
+        -- JSON-RPC notifications are acknowledged by HTTP only and must not receive a result body.
+        http_response = isNotification and http.response_code.accepted or result.http_response,
+        http_headers = result.http_headers,
         json_result = result.result,
         json_error = result.error,
+        no_body = isNotification and not result.error,
     }
 end
 
 ---@param request ClientRequest
 ---@return ServerResponse?
 function this:OnGET(request)
-    -- server is supported SSE?
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
-    local contents = string.split(request.http_request.headers[http.header.accept], ",")
-    if contents then
-        for _, value in ipairs(contents) do
-            local content = string.trim(value:lower())
-            if content == http.content_type.event_stream then
-                -- no supported SSE
-                self.logger:info("No supported SSE")
-                ---@type ServerResponse
-                return {
-                    http_response = http.response_code.method_not_allowed,
-                    -- json_error = jsonrpc.error_code.method_not_found,
-                }
-            end
-        end
+    -- GET is only used to listen for server-to-client messages over SSE.
+    if not http.AcceptsContentType(request.http_request.headers[http.header.accept], http.content_type.event_stream) then
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.method_not_allowed,
+            no_body = true,
+        }
     end
-    -- TODO return
+
+    local session = self:GetSession(request.http_request)
+    if not session then
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.not_found,
+            no_body = true,
+        }
+    end
+
+    if not request.client then
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.internal_server_error,
+            no_body = true,
+        }
+    end
+
+    self:ReplaceSSEClient(session, request.client)
+    local result = http.SendSSEHeaders(request.client, {
+        [http.mcp_header.mcp_session_id] = session.id,
+    })
+    if result.error then
+        self.logger:error("Failed to open SSE stream: %s", result.error)
+        self:RemoveSSEClient(session)
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.internal_server_error,
+            response_sent = true,
+        }
+    end
+
+    self.logger:debug("SSE stream opened for session: %s", session.id)
+    ---@type ServerResponse
+    return {
+        -- Headers have already been written; keep the socket open for future SSE events.
+        http_response = http.response_code.ok,
+        response_sent = true,
+        keep_open = true,
+    }
+end
+
+---@param request ClientRequest
+---@return ServerResponse?
+function this:OnDELETE(request)
+    -- Clients can explicitly terminate Streamable HTTP sessions with MCP-Session-Id.
+    local sessionId = self:GetSessionId(request.http_request)
+    if not sessionId then
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.bad_request,
+            no_body = true,
+        }
+    end
+
+    if not self:DeleteSession(sessionId) then
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.not_found,
+            no_body = true,
+        }
+    end
+
+    ---@type ServerResponse
+    return {
+        http_response = http.response_code.no_content,
+        no_body = true,
+    }
 end
 
 ---@param request ClientRequest
 ---@return ServerResponse?
 function this:OnOPTIONS(request)
-    -- Streamable http
-
     -- Handle OPTIONS requests for CORS preflight
     -- https://github.com/modelcontextprotocol/python-sdk/issues/1079
     local cros = {
         [http.header.access_control_allow_origin] = "*", -- or request hosts?
-        [http.header.access_control_allow_methods] = "POST, GET, OPTIONS",
+        [http.header.access_control_allow_methods] = "POST, GET, DELETE, OPTIONS",
         [http.header.access_control_allow_headers] = table.concat(
             {
                 --http.header.authorization,
+                -- Browser clients need these custom MCP headers to survive preflight checks.
+                http.header.accept,
                 http.header.content_type,
+                http.mcp_header.mcp_protocol_version,
+                http.mcp_header.mcp_session_id,
+                "Last-Event-ID",
                 --http.header.x_requested_with,
             },
             ", "),
@@ -449,6 +802,142 @@ function this:HandleRequest(request)
 
     self.logger:trace("handle request: %s", request.http_request.method)
     return handler(self, request)
+end
+
+---@param request Http.Request
+---@return ServerResponse?
+function this:ValidateTransportRequest(request)
+    if not self:IsAllowedOrigin(request) then
+        self.logger:warn("Rejected request from forbidden origin: %s", GetHeader(request.headers, http.header.origin) or "nil")
+        return {
+            http_response = http.response_code.forbidden,
+            json_error = jsonrpc.error_code.invalid_request,
+        }
+    end
+
+    if not self:IsSupportedProtocolVersion(request) then
+        self.logger:warn("Rejected request with unsupported protocol version: %s",
+            GetHeader(request.headers, http.mcp_header.mcp_protocol_version) or "nil")
+        return {
+            http_response = http.response_code.bad_request,
+            json_error = jsonrpc.error_code.invalid_request,
+        }
+    end
+
+    if request.method == http.method.POST then
+        if not self:IsSupportedPostContentType(request) then
+            self.logger:warn("Rejected POST with unsupported content type: %s",
+                GetHeader(request.headers, http.header.content_type) or "nil")
+            return {
+                http_response = http.response_code.unsupported_media_type,
+                json_error = jsonrpc.error_code.invalid_request,
+            }
+        end
+        if not self:IsAcceptedPostResponseContentType(request) then
+            self.logger:warn("Rejected POST with unacceptable response content type: %s",
+                GetHeader(request.headers, http.header.accept) or "nil")
+            return {
+                http_response = http.response_code.not_acceptable,
+                json_error = jsonrpc.error_code.invalid_request,
+            }
+        end
+    end
+
+    local sessionId = self:GetSessionId(request)
+    if request.method ~= http.method.DELETE and sessionId and not self:GetSession(request) then
+        self.logger:warn("Rejected request for unknown session: %s", sessionId)
+        return {
+            http_response = http.response_code.not_found,
+            no_body = true,
+        }
+    end
+
+    return nil
+end
+
+---@param client Socket.TcpClient
+---@param request Http.Request
+---@return ServerResponse?
+function this:DispatchHttpRequest(client, request)
+    -- Only POST carries JSON-RPC messages; GET/DELETE/OPTIONS are transport-level requests.
+    if request.method ~= http.method.POST then
+        return self:HandleRequest({ client = client, http_request = request })
+    end
+
+    local json_request, json_error = jsonrpc.request(request.body)
+    if json_error then
+        return {
+            http_response = http.response_code.bad_request,
+            json_error = json_error,
+        }
+    end
+
+    local response = self:HandleRequest({ client = client, http_request = request, json_request = json_request })
+    if response then
+        response.request_id = json_request and json_request.id or nil
+    end
+    return response
+end
+
+---@param client Socket.TcpClient
+---@param response ServerResponse?
+---@param requestId MCP.RequestId?
+---@return boolean keepOpen
+function this:SendServerResponse(client, response, requestId)
+    if not response then
+        local result = http.SendResponse(client, http.response_code.internal_server_error, nil,
+            jsonrpc.error(requestId, jsonrpc.error_code.internal_error))
+        self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code,
+            FormatResponseForLog(result.response))
+        return false
+    end
+
+    if response.response_sent then
+        -- SSE handlers write their own response headers before returning.
+        return response.keep_open == true
+    end
+
+    if response.json_error then
+        local result = http.SendResponse(client, response.http_response, response.http_headers,
+            jsonrpc.error(requestId, response.json_error))
+        self.logger:error("json error: %d\n%s", response.http_response.code,
+            FormatResponseForLog(result.response))
+        return false
+    end
+
+    if response.no_body then
+        local result = http.SendResponse(client, response.http_response, response.http_headers)
+        self.logger:debug("success: %d\n%s", response.http_response.code,
+            FormatResponseForLog(result.response))
+        return response.keep_open == true
+    end
+
+    local result = http.SendResponse(client, response.http_response, response.http_headers,
+        jsonrpc.result(requestId, response.json_result))
+    self.logger:debug("success: %d\n%s", response.http_response.code,
+        FormatResponseForLog(result.response))
+    return response.keep_open == true
+end
+
+---@param client Socket.TcpClient
+---@param request Http.Request
+function this:ProcessClientRequest(client, request)
+    self:DumpRequest(request)
+
+    -- Transport errors are checked before JSON-RPC parsing so non-POST methods can have empty bodies.
+    local response = self:ValidateTransportRequest(request)
+    local requestId = nil
+    if not response then
+        response = self:DispatchHttpRequest(client, request)
+        if response and response.request_id then
+            requestId = response.request_id
+        end
+    end
+
+    local keepOpen = self:SendServerResponse(client, response, requestId)
+    if not keepOpen then
+        pcall(function() client:close() end)
+    end
 end
 
 --- @param e enterFrameEventData
@@ -479,38 +968,7 @@ function this:Listen(e)
 
             pcall(function() client:close() end)
         else
-            self:DumpRequest(request)
-
-            local json_request, json_error = jsonrpc.request(request.body)
-            local id = json_request and json_request.id or nil ---@type string|number?
-            if not json_error then
-                local response = self:HandleRequest({ http_request = request, json_request = json_request })
-                if response then
-                    if response.json_error then
-                        local result = http.SendResponse(client, response.http_response, response.http_headers,
-                            jsonrpc.error(id, response.json_error))
-                        self.logger:error("json error: %d\n%s", response.http_response.code,
-                            FormatResponseForLog(result.response))
-                    else
-                        local result = http.SendResponse(client, response.http_response, response.http_headers,
-                            jsonrpc.result(id, response.json_result))
-                        self.logger:debug("success: %d\n%s", response.http_response.code,
-                            FormatResponseForLog(result.response))
-                    end
-                else
-                    local result = http.SendResponse(client, http.response_code.internal_server_error, nil,
-                        jsonrpc.error(id, jsonrpc.error_code.internal_error))
-                    self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code,
-                        FormatResponseForLog(result.response))
-                end
-            else
-                local result = http.SendResponse(client, http.response_code.bad_request, nil,
-                    jsonrpc.error(nil, json_error))
-                self.logger:error("request error: %d\n%s", http.response_code.bad_request.code,
-                    FormatResponseForLog(result.response))
-            end
-
-            pcall(function() client:close() end)
+            self:ProcessClientRequest(client, request)
         end
     end
 end
@@ -529,8 +987,8 @@ function this:Start()
 
     self.enterFrameCallback = function(e)
         self:Listen(e)
-        -- broadcast any queued events to connected SSE clients
-        -- self:BroadcastEvents()
+        self:BroadcastNotifications()
+        self:CloseExpiredSessions()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
@@ -549,7 +1007,9 @@ function this:Shutdown()
         self.enterFrameCallback = nil
     end
 
-    -- self:CloseAllClients()
+    for _, session in pairs(self.sessions) do
+        self:RemoveSSEClient(session)
+    end
     self.server:close()
     self.server = nil
     self.logger:info("server stopped")

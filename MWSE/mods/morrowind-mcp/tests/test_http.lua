@@ -82,6 +82,52 @@ function this.Test()
         unitwind:expect(result.response:match('{"ok":true}')).toBe('{"ok":true}')
     end)
 
+    unitwind:test("SendResponse terminates empty response headers", function()
+        local sentData = ""
+        local client = {
+            send = function(self, data, i, j)
+                sentData = data
+                return #data, nil, #data
+            end,
+        }
+
+        local result = http.SendResponse(client, http.response_code.accepted)
+        unitwind:expect(result.error).toBe(nil)
+        unitwind:expect(result.response).toBe("HTTP/1.1 202 Accepted\r\n\r\n")
+        unitwind:expect(sentData).toBe(result.response)
+    end)
+
+    unitwind:test("AcceptsContentType handles exact and wildcard media ranges", function()
+        unitwind:expect(http.AcceptsContentType("application/json, text/event-stream", http.content_type.event_stream)).toBe(true)
+        unitwind:expect(http.AcceptsContentType("text/*;q=0.9", http.content_type.event_stream)).toBe(true)
+        unitwind:expect(http.AcceptsContentType("*/*", http.content_type.json)).toBe(true)
+        unitwind:expect(http.AcceptsContentType("application/json", http.content_type.event_stream)).toBe(false)
+        unitwind:expect(http.AcceptsContentType(nil, http.content_type.event_stream)).toBe(false)
+    end)
+
+    unitwind:test("FormatServerSentEvent writes SSE data frame", function()
+        local event = http.FormatServerSentEvent('{"jsonrpc":"2.0","method":"notifications/message"}', "message", "1", 1000)
+        unitwind:expect(event).toBe("id: 1\nevent: message\nretry: 1000\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\"}\n\n")
+    end)
+
+    unitwind:test("SendSSEHeaders writes event-stream response headers without body", function()
+        local sentData = ""
+        local client = {
+            send = function(self, data, i, j)
+                sentData = data
+                return #data, nil, #data
+            end,
+        }
+
+        local result = http.SendSSEHeaders(client, { [http.mcp_header.mcp_session_id] = "session-1" })
+        unitwind:expect(result.error).toBe(nil)
+        unitwind:expect(result.response).toBe(sentData)
+        unitwind:expect(result.response:match("HTTP/1%.1 200 OK")).toBe("HTTP/1.1 200 OK")
+        unitwind:expect(result.response:match("content%-type: text/event%-stream")).toBe("content-type: text/event-stream")
+        unitwind:expect(result.response:match("cache%-control: no%-cache")).toBe("cache-control: no-cache")
+        unitwind:expect(result.response:match("MCP%-Session%-Id: session%-1")).toBe("MCP-Session-Id: session-1")
+    end)
+
     unitwind:finish()
 end
 

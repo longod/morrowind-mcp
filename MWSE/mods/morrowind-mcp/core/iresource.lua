@@ -1,14 +1,14 @@
----@class MCP.IResource
+---@class MCP.IResourceManager
 local this = {}
 
 ---@param params table?
----@return MCP.IResource
+---@return MCP.IResourceManager
 function this.new(params)
     local instance = {}
     if params then
         table.copymissing(instance, table.deepcopy(params))
     end
-    ---@type MCP.IResource
+    ---@type MCP.IResourceManager
     setmetatable(instance, { __index = this })
     return instance
 end

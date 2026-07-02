@@ -53,6 +53,13 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 }
 ```
 
+### Transport behavior
+
+- Client-to-server JSON-RPC requests and notifications are sent with HTTP `POST`.
+- Server-to-client notifications are delivered over a session-scoped SSE stream opened with HTTP `GET` and `Accept: text/event-stream`.
+- The server returns `MCP-Session-Id` on `initialize`; clients must send it on subsequent `POST` and `GET` requests for that session.
+- If the same session opens another SSE `GET`, the server replaces the previous SSE stream with the newest one.
+
 ## Development
 
 ### Naming Convention
@@ -92,6 +99,7 @@ Environment variables:
 
 - [tests/unit_test.ps1](tests/unit_test.ps1): Run Lua unit tests for MWSE mod modules
 - [tests/server_test.ps1](tests/server_test.ps1): Start Morrowind/MWSE server, run integration tests, and stop the server
+- [tests/sse_test.ps1](tests/sse_test.ps1): Start Morrowind/MWSE server, open an SSE stream, and verify a server-to-client notification
 - [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Launch Mod Organizer 2 to start Morrowind with MWSE and the MCP server
 - [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running Morrowind
 - [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests

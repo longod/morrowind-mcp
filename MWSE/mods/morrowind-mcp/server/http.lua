@@ -243,6 +243,7 @@ this.header = {
 ---@enum Http.MCPHeader
 this.mcp_header = {
     mcp_protocol_version = "MCP-Protocol-Version",
+    mcp_session_id = "MCP-Session-Id",
     mcp_method = "Mcp-Method",
     mcp_name = "Mcp-Name"
 }
@@ -257,6 +258,100 @@ this.content_type = {
     json = "application/json",
     event_stream = "text/event-stream",
 }
+
+---@param acceptHeader string?
+---@param contentType Http.ContentType|string
+---@return boolean
+function this.AcceptsContentType(acceptHeader, contentType)
+    -- Accept can contain comma-separated media ranges with parameters; compare only the media range.
+    if not acceptHeader or not contentType then
+        return false
+    end
+
+    local expected = contentType:lower()
+    local slash = expected:find("/", 1, true)
+    local expectedType = slash and expected:sub(1, slash - 1) or nil
+
+    for _, value in ipairs(string.split(acceptHeader, ",")) do
+        local accepted = string.trim(value:lower())
+        local paramsStart = accepted:find(";", 1, true)
+        if paramsStart then
+            accepted = string.trim(accepted:sub(1, paramsStart - 1))
+        end
+
+        if accepted == expected or accepted == "*/*" then
+            return true
+        end
+
+        if expectedType and accepted == expectedType .. "/*" then
+            return true
+        end
+    end
+
+    return false
+end
+
+---@param data string
+---@param eventName string?
+---@param eventId string?
+---@param retry integer?
+---@return string
+function this.FormatServerSentEvent(data, eventName, eventId, retry)
+    -- SSE frames use LF-delimited fields; HTTP headers still use CRLF in SendResponse.
+    local event = ""
+    if eventId then
+        event = event .. string.format("id: %s\n", eventId)
+    end
+    if eventName then
+        event = event .. string.format("event: %s\n", eventName)
+    end
+    if retry then
+        event = event .. string.format("retry: %d\n", retry)
+    end
+
+    local normalizedData = string.gsub(data or "", "\r", "")
+    for _, line in ipairs(string.split(normalizedData, "\n")) do
+        event = event .. string.format("data: %s\n", line)
+    end
+    return event .. "\n"
+end
+
+---@param client Socket.TcpClient
+---@param headers table<Http.Header|Http.MCPHeader, string>?
+---@return Http.Result
+function this.SendSSEHeaders(client, headers)
+    -- Send only the stream-opening headers here; the caller keeps the socket open for later events.
+    local sseHeaders = {
+        [this.header.content_type] = this.content_type.event_stream,
+        [this.header.cache_control] = "no-cache",
+        [this.header.connection] = this.connection_type.keep,
+    }
+    if headers then
+        for name, value in pairs(headers) do
+            sseHeaders[name] = value
+        end
+    end
+    return this.SendResponse(client, this.response_code.ok, sseHeaders)
+end
+
+---@param client Socket.TcpClient
+---@param data string
+---@param eventName string?
+---@param eventId string?
+---@param retry integer?
+---@return Http.Result
+function this.SendServerSentEvent(client, data, eventName, eventId, retry)
+    -- Write one already-encoded JSON-RPC message as one SSE event.
+    local event = this.FormatServerSentEvent(data, eventName, eventId, retry)
+    local index, error, lastIndex = client:send(event)
+    ---@type Http.Result
+    return {
+        index = index,
+        error = error,
+        lastIndex = lastIndex,
+        response = event,
+    }
+end
 
 
 ---@enum Http.ResponseCode
@@ -414,7 +509,9 @@ function this.SendResponse(client, response_code, headers, body)
     if body and #body > 0 then
         response = response .. string.format("%s: %s\r\n", this.header.content_type, this.content_type.json)
         response = response .. string.format("%s: %s\r\n", this.header.content_length, #body)
-        response = response .. "\r\n"
+    end
+    response = response .. "\r\n"
+    if body and #body > 0 then
         response = response .. body
     end
     local index, error, lastIndex = client:send(response)
