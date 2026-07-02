@@ -53,6 +53,7 @@ end
 ---@field logger mwseLogger
 ---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
+---@field debugKeyCallback fun(e : keyDownEventData)?
 ---@field hostname string
 ---@field port integer
 ---@field httpHeaders table<string, string> must headers
@@ -412,14 +413,14 @@ function this:OnInitialize(params)
     result.capabilities = {
         ["logging"] = jsonrpc.object(),
         ["prompts"] = {
-            ["listChanged"] = false,
+            ["listChanged"] = true,
         },
         ["resources"] = {
             ["subscribe"] = false,
-            ["listChanged"] = false,
+            ["listChanged"] = true,
         },
         ["tools"] = {
-            ["listChanged"] = false,
+            ["listChanged"] = true,
         },
         ["tasks"] = {
             ["list"] = jsonrpc.object(),
@@ -808,7 +809,8 @@ end
 ---@return ServerResponse?
 function this:ValidateTransportRequest(request)
     if not self:IsAllowedOrigin(request) then
-        self.logger:warn("Rejected request from forbidden origin: %s", GetHeader(request.headers, http.header.origin) or "nil")
+        self.logger:warn("Rejected request from forbidden origin: %s",
+            GetHeader(request.headers, http.header.origin) or "nil")
         return {
             http_response = http.response_code.forbidden,
             json_error = jsonrpc.error_code.invalid_request,
@@ -973,6 +975,45 @@ function this:Listen(e)
     end
 end
 
+--- @param e keyDownEventData
+function this:OnDebugKeyCallback(e)
+    self.logger:debug("Debug key pressed, opening MCP log level and tool selection menu")
+
+    ---@type string[]
+    local texts = {
+        mcp.method.notifications_cancelled,
+        mcp.method.notifications_tasks_status,
+        mcp.method.notifications_message,
+        mcp.method.notifications_progress,
+        mcp.method.notifications_prompts_listchanged,
+        mcp.method.notifications_resources_listchanged,
+        mcp.method.notifications_resources_updated,
+        mcp.method.notifications_roots_listchanged,
+        mcp.method.notifications_tools_listchanged,
+        mcp.method.notifications_elicitation_complete,
+    }
+
+    --- @type tes3ui.showMessageMenu.params.button[]
+    local buttons = table.new(table.size(texts), 0)
+    for i, text in ipairs(texts) do
+        buttons[i] = {
+            text = text,
+            callback = function()
+                self.logger:debug("Broadcasting notification: %s", text)
+                local params = nil -- TODO
+                self:NotifyAll(text, params)
+            end
+        }
+    end
+
+    tes3ui.showMessageMenu({
+        header = "MCP Notifications",
+        message = "Broadcast notifications event.",
+        cancels = true,
+        buttons = buttons
+    })
+end
+
 function this:Start()
     if self.server then
         self.logger:warn("MCP server is already running")
@@ -991,8 +1032,15 @@ function this:Start()
         self:CloseExpiredSessions()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
-
     self.logger:info("server started on %s:%d", self.hostname, self.port)
+
+    if config.development.debug then
+        -- register debug command
+        self.debugKeyCallback = function(e)
+            self:OnDebugKeyCallback(e)
+        end
+        event.register(tes3.event.keyDown, self.debugKeyCallback, { filter = tes3.scanCode.F4 })
+    end
     return true
 end
 
@@ -1000,6 +1048,11 @@ function this:Shutdown()
     if not self.server then
         self.logger:warn("server is already stopped.")
         return false
+    end
+
+    if self.debugKeyCallback then
+        event.unregister(tes3.event.keyDown, self.debugKeyCallback)
+        self.debugKeyCallback = nil
     end
 
     if self.enterFrameCallback then
