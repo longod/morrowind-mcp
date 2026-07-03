@@ -1,7 +1,6 @@
 local base = require("morrowind-mcp.core.iserver")
 local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local strutil = require("morrowind-mcp.core.strutil")
 local mcp = require("morrowind-mcp.core.mcp")
 local pathutil = require("morrowind-mcp.core.pathutil")
 local settings = require("morrowind-mcp.settings")
@@ -16,6 +15,7 @@ local maxNotificationQueueSize = 128
 local serverPingIntervalSeconds = 60
 local serverPingTimeoutSeconds = 30
 local sessionIdleTimeoutSeconds = 300
+local pollingIntervalSeconds = 5.0
 local protocolVersion = "2025-11-25"
 
 ---@param response string?
@@ -72,9 +72,13 @@ end
 ---@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams, request: ClientRequest?): MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field tools table<string, MCP.ITool>
+---@field promptsStatus table<string, boolean>
+---@field toolsStatus table<string, boolean>
 ---@field resources MCP.ResourceManager
 ---@field sessions table<string, MCP.HttpSession>
 ---@field nextSessionIndex integer
+---@field lastPollingPromptsInterval number
+---@field lastPollingToolsInterval number
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -92,6 +96,8 @@ function this.new(params)
     instance.resources = resourceManager.new()
     instance.sessions = {}
     instance.nextSessionIndex = 0
+    instance.lastPollingPromptsInterval = 0
+    instance.lastPollingToolsInterval = pollingIntervalSeconds / 2.0 -- cycle prompts and tools polling to avoid simultaneous polling
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
         [http.method.GET] = instance.OnGET,
@@ -344,8 +350,23 @@ end
 
 ---@param session MCP.HttpSession
 ---@param method MCP.Method|string
+---@return boolean
+function this:CanSendServerMessage(session, method)
+    if session.initialized then
+        return true
+    end
+    return method == mcp.method.ping or method == mcp.method.notifications_message
+end
+
+---@param session MCP.HttpSession
+---@param method MCP.Method|string
 ---@param params table?
 function this:EnqueueNotification(session, method, params)
+    if not self:CanSendServerMessage(session, method) then
+        self.logger:debug("Skipped server notification before initialized: %s (session=%s)", method, session.id)
+        return
+    end
+
     local notification = jsonrpc.notification(method, params)
     self:EnqueueSessionMessage(session, notification, method, true)
 end
@@ -568,6 +589,7 @@ function this:LoadPrompts()
             end
         end
     end
+    self.promptsStatus = table.new(0, table.size(self.prompts))
 end
 
 function this:LoadTools()
@@ -584,6 +606,7 @@ function this:LoadTools()
             end
         end
     end
+    self.toolsStatus = table.new(0, table.size(self.tools))
 end
 
 ---@param request Http.Request
@@ -664,17 +687,46 @@ function this:OnInitialize(params)
     }
 end
 
+function this:CanExecuteAllPrompts()
+    local changed = false
+    for name, prompt in pairs(self.prompts) do
+        local can = prompt:CanExecute({})
+        if self.promptsStatus[name] ~= can then
+            changed = true
+            self.promptsStatus[name] = can
+            self.logger:trace("Prompt executable changed: %s is %s", name, tostring(can))
+        end
+    end
+    return changed
+end
+
+function this:CanExecuteAllTools()
+    local changed = false
+    for name, tool in pairs(self.tools) do
+        local can = tool:CanExecute({})
+        if self.toolsStatus[name] ~= can then
+            changed = true
+            self.toolsStatus[name] = can
+            self.logger:trace("Tool executable changed: %s is %s", name, tostring(can))
+        end
+    end
+    return changed
+end
+
 ---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnPromptsList(params)
     ---@type MCP.ListPromptsResult
     local result = jsonrpc.ListPromptsResult(table.size(self.prompts))
 
-    for name, value in pairs(self.prompts) do
-        if value:CanExecute({}) then
-            table.insert(result.prompts, value.definition)
+    for name, prompt in pairs(self.prompts) do
+        local can = prompt:CanExecute({})
+        if can then
+            table.insert(result.prompts, prompt.definition)
         end
+        self.promptsStatus[name] = can
     end
+    self.lastPollingPromptsInterval = 0
 
     ---@type MethodResult
     return {
@@ -767,11 +819,14 @@ function this:OnToolsList(params)
     ---@type MCP.ListToolsResult
     local result = jsonrpc.ListToolsResult(table.size(self.tools))
 
-    for name, value in pairs(self.tools) do
-        if value:CanExecute({}) then
-            table.insert(result.tools, value.definition)
+    for name, tool in pairs(self.tools) do
+        local can = tool:CanExecute({})
+        if can then
+            table.insert(result.tools, tool.definition)
         end
+        self.toolsStatus[name] = can
     end
+    self.lastPollingToolsInterval = 0
 
     ---@type MethodResult
     return {
@@ -1323,6 +1378,25 @@ function this:Listen(e)
     end
 end
 
+--- @param e enterFrameEventData
+function this:PollPrimitiveCondition(e)
+    self.lastPollingPromptsInterval = self.lastPollingPromptsInterval + e.delta
+    self.lastPollingToolsInterval = self.lastPollingToolsInterval + e.delta
+    if self.lastPollingToolsInterval >= pollingIntervalSeconds then
+        if self:CanExecuteAllTools() then
+            self:NotifyToolListChanged()
+        end
+        self.logger:trace("Polling tools for executable changes (interval=%f seconds)", self.lastPollingToolsInterval)
+        self.lastPollingToolsInterval = 0
+    elseif self.lastPollingPromptsInterval >= pollingIntervalSeconds then
+        if self:CanExecuteAllPrompts() then
+            self:NotifyPromptListChanged()
+        end
+        self.logger:trace("Polling prompts for executable changes (interval=%f seconds)", self.lastPollingPromptsInterval)
+        self.lastPollingPromptsInterval = 0
+    end
+end
+
 --- @param e keyDownEventData
 function this:OnDebugKeyCallback(e)
     self.logger:debug("Debug key pressed, opening MCP log level and tool selection menu")
@@ -1385,6 +1459,7 @@ function this:Start()
 
     self.enterFrameCallback = function(e)
         self:Listen(e)
+        self:PollPrimitiveCondition(e)
         self:MaintainServerPings()
         self:BroadcastNotifications()
         self:CloseExpiredSessions()
