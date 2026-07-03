@@ -9,13 +9,59 @@ $SseReadTimeoutMilliseconds = 10000
 $ProtocolVersion = "2025-11-25"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LogsRoot = Join-Path $ScriptDir "logs\sse_test"
+$RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$SseLogPath = Join-Path $LogsRoot "sse_$RunTimestamp.log"
+$MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
+$MwseLogSourcePath = $null
+
+function Convert-ToFileUri {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+        return ([System.Uri]::new($fullPath)).AbsoluteUri
+    }
+    catch {
+        return $Path
+    }
+}
+
+function Write-SseLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+        [System.ConsoleColor]$ForegroundColor = [System.ConsoleColor]::Gray
+    )
+
+    Write-Host $Message -ForegroundColor $ForegroundColor
+    Add-Content -LiteralPath $SseLogPath -Value $Message
+}
+
+try {
+    $null = New-Item -Path $LogsRoot -ItemType Directory -Force
+    Set-Content -LiteralPath $SseLogPath -Value @(
+        "# Morrowind MCP sse_test log"
+        "# StartedAt: $(Get-Date -Format o)"
+        ""
+    )
+}
+catch {
+    Write-Host "[ERROR] Failed to initialize SSE log file: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+
 . (Join-Path $ScriptDir "mwmcp_config.ps1")
 
 try {
     $Config = Get-MwmcpConfig
+    $MwseLogSourcePath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
 }
 catch {
-    Write-Host "[ERROR] Failed to resolve configuration: $($_.Exception.Message)" -ForegroundColor Red
+    Write-SseLog "[ERROR] Failed to resolve configuration: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
 
@@ -128,10 +174,10 @@ $ExitCode = 0
 
 try {
     if (-not $NoStart) {
-        Write-Host "[INFO] Starting server..." -ForegroundColor Cyan
+        Write-SseLog "[INFO] Starting server..." -ForegroundColor Cyan
         & $StartScriptPath
         if ([int]$LASTEXITCODE -ne 0) {
-            Write-Host "[WARN] start_server_mo2.ps1 exited non-zero: $LASTEXITCODE" -ForegroundColor Yellow
+            Write-SseLog "[WARN] start_server_mo2.ps1 exited non-zero: $LASTEXITCODE" -ForegroundColor Yellow
         }
     }
 
@@ -170,8 +216,21 @@ try {
         if ($initializeResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
             throw "Initialize failed: HTTP $([int]$initializeResponse.StatusCode)"
         }
+        $initializeBody = $initializeResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -ErrorAction Stop
+        if ($initializeBody.result.capabilities.prompts.listChanged -ne $true) {
+            throw "Initialize did not advertise prompts.listChanged capability."
+        }
+        if ($initializeBody.result.capabilities.resources.subscribe -ne $true) {
+            throw "Initialize did not advertise resources.subscribe capability."
+        }
+        if ($initializeBody.result.capabilities.resources.listChanged -ne $true) {
+            throw "Initialize did not advertise resources.listChanged capability."
+        }
+        if ($initializeBody.result.capabilities.tools.listChanged -ne $true) {
+            throw "Initialize did not advertise tools.listChanged capability."
+        }
         $sessionId = Get-RequiredHeaderValue -Response $initializeResponse -Name "MCP-Session-Id"
-        Write-Host "[INFO] Session: $sessionId" -ForegroundColor Cyan
+        Write-SseLog "[INFO] Session: $sessionId" -ForegroundColor Cyan
 
         # Client-to-server notifications are POST requests and should be acknowledged with no body.
         $initialized = @{
@@ -185,6 +244,20 @@ try {
         }
         if (-not [string]::IsNullOrEmpty($initializedBody)) {
             throw "Initialized notification returned a body, expected empty response."
+        }
+
+        $resourceUri = "morrowind://sse-test.txt"
+        $subscribe = @{
+            jsonrpc = "2.0"
+            id = 2
+            method = "resources/subscribe"
+            params = @{
+                uri = $resourceUri
+            }
+        }
+        $subscribeResponse = Send-McpJson -Client $postClient -Url $EndpointUrl -SessionId $sessionId -Message $subscribe
+        if ($subscribeResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+            throw "resources/subscribe failed: HTTP $([int]$subscribeResponse.StatusCode)"
         }
 
     # Open the session-scoped server-to-client stream before triggering a notification.
@@ -204,7 +277,7 @@ try {
     # logging/setLevel is used as a harmless trigger for a notifications/message event.
         $setLevel = @{
             jsonrpc = "2.0"
-            id = 2
+            id = 3
             method = "logging/setLevel"
             params = @{
                 level = "debug"
@@ -227,6 +300,19 @@ try {
             throw "SSE notification unexpectedly included an id."
         }
 
+        $unsubscribe = @{
+            jsonrpc = "2.0"
+            id = 4
+            method = "resources/unsubscribe"
+            params = @{
+                uri = $resourceUri
+            }
+        }
+        $unsubscribeResponse = Send-McpJson -Client $postClient -Url $EndpointUrl -SessionId $sessionId -Message $unsubscribe
+        if ($unsubscribeResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+            throw "resources/unsubscribe failed: HTTP $([int]$unsubscribeResponse.StatusCode)"
+        }
+
         $deleteResponse = Send-McpDelete -Client $postClient -Url $EndpointUrl -SessionId $sessionId
         if ($deleteResponse.StatusCode -ne [System.Net.HttpStatusCode]::NoContent) {
             throw "Session DELETE failed: HTTP $([int]$deleteResponse.StatusCode)"
@@ -237,7 +323,7 @@ try {
             throw "Deleted session GET should return 404, got HTTP $([int]$deletedSseResponse.StatusCode)"
         }
 
-        Write-Host "[PASSED] Received SSE notification: $($notification.method)" -ForegroundColor Green
+        Write-SseLog "[PASSED] Received SSE notification: $($notification.method)" -ForegroundColor Green
     }
     finally {
         if ($reader) { $reader.Dispose() }
@@ -248,17 +334,32 @@ try {
     }
 }
 catch {
-    Write-Host "[FAILED] $($_.Exception.Message)" -ForegroundColor Red
+    Write-SseLog "[FAILED] $($_.Exception.Message)" -ForegroundColor Red
     $ExitCode = 1
 }
 finally {
     if (-not $NoStop) {
-        Write-Host "[INFO] Stopping server..." -ForegroundColor Cyan
+        Write-SseLog "[INFO] Stopping server..." -ForegroundColor Cyan
         & $StopScriptPath
         if ([int]$LASTEXITCODE -ne 0) {
-            Write-Host "[WARN] stop_server.ps1 exit code: $LASTEXITCODE" -ForegroundColor Yellow
+            Write-SseLog "[WARN] stop_server.ps1 exit code: $LASTEXITCODE" -ForegroundColor Yellow
         }
     }
+
+    if ($MwseLogSourcePath -and (Test-Path -LiteralPath $MwseLogSourcePath)) {
+        try {
+            Copy-Item -LiteralPath $MwseLogSourcePath -Destination $MwseLogCopyPath -Force
+            Write-SseLog "[INFO] MWSE log copy: $(Convert-ToFileUri -Path $MwseLogCopyPath)" -ForegroundColor Cyan
+        }
+        catch {
+            Write-SseLog "[WARN] Failed to copy MWSE.log: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+    elseif ($MwseLogSourcePath) {
+        Write-SseLog "[WARN] MWSE.log not found: $MwseLogSourcePath" -ForegroundColor Yellow
+    }
+
+    Write-SseLog "[INFO] SSE test log: $(Convert-ToFileUri -Path $SseLogPath)" -ForegroundColor Cyan
 }
 
 exit $ExitCode

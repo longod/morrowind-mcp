@@ -3,6 +3,7 @@ local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local strutil = require("morrowind-mcp.core.strutil")
 local mcp = require("morrowind-mcp.core.mcp")
+local pathutil = require("morrowind-mcp.core.pathutil")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.manager")
@@ -46,6 +47,7 @@ end
 ---@field initialized boolean
 ---@field sseClient Socket.TcpClient?
 ---@field notificationQueue string[]
+---@field resourceSubscriptions table<string, boolean>
 ---@field nextEventId integer
 ---@field lastAccessedAt integer
 
@@ -95,6 +97,8 @@ function this.new(params)
         [mcp.method.prompts_list] = instance.OnPromptsList,
         [mcp.method.resources_list] = instance.OnResourcesList,
         [mcp.method.resources_templates_list] = instance.OnResourcesTemplatesList,
+        [mcp.method.resources_subscribe] = instance.OnResourcesSubscribe,
+        [mcp.method.resources_unsubscribe] = instance.OnResourcesUnsubscribe,
         [mcp.method.tools_list] = instance.OnToolsList,
         [mcp.method.tools_call] = instance.OnToolsCall,
         [mcp.method.resources_read] = instance.OnResourcesRead,
@@ -138,6 +142,7 @@ function this:CreateSession()
         initialized = false,
         sseClient = nil,
         notificationQueue = {},
+        resourceSubscriptions = {},
         nextEventId = 0,
         lastAccessedAt = os.time(),
     }
@@ -235,6 +240,12 @@ function this:IsSupportedPostContentType(request)
     return http.AcceptsContentType(contentType, http.content_type.json)
 end
 
+---@param uri any
+---@return boolean
+function this:IsValidResourceUri(uri)
+    return type(uri) == "string" and pathutil.FromUri(uri, settings.uriScheme) ~= nil
+end
+
 ---@param request Http.Request
 ---@return boolean
 function this:IsAcceptedPostResponseContentType(request)
@@ -276,7 +287,15 @@ end
 ---@param params table?
 function this:EnqueueNotification(session, method, params)
     -- Queue by session rather than socket so unsent notifications survive SSE reconnects.
-    table.insert(session.notificationQueue, jsonrpc.notification(method, params))
+    local notification = jsonrpc.notification(method, params)
+    for _, queuedNotification in ipairs(session.notificationQueue) do
+        if queuedNotification == notification then
+            self.logger:debug("Skipped duplicate queued notification: %s (session=%s)", method, session.id)
+            return
+        end
+    end
+
+    table.insert(session.notificationQueue, notification)
     local droppedCount = 0
     while table.size(session.notificationQueue) > maxNotificationQueueSize do
         table.remove(session.notificationQueue, 1)
@@ -307,10 +326,48 @@ end
 
 ---@param method MCP.Method|string
 ---@param params table?
+---@return integer notifiedCount
 function this:NotifyAll(method, params)
+    local notifiedCount = 0
     for _, session in pairs(self.sessions) do
         self:EnqueueNotification(session, method, params)
+        notifiedCount = notifiedCount + 1
     end
+    return notifiedCount
+end
+
+function this:NotifyPromptListChanged()
+    local notifiedCount = self:NotifyAll(mcp.method.notifications_prompts_listchanged)
+    self.logger:debug("Queued prompt list changed notification (sessions=%d)", notifiedCount)
+end
+
+function this:NotifyResourceListChanged()
+    local notifiedCount = self:NotifyAll(mcp.method.notifications_resources_listchanged)
+    self.logger:debug("Queued resource list changed notification (sessions=%d)", notifiedCount)
+end
+
+---@param uri string
+---@return integer notifiedCount
+function this:NotifyResourceUpdated(uri)
+    if not self:IsValidResourceUri(uri) then
+        self.logger:warn("Skipped resource updated notification for invalid URI: %s", tostring(uri))
+        return 0
+    end
+
+    local notifiedCount = 0
+    for _, session in pairs(self.sessions) do
+        if session.resourceSubscriptions[uri] then
+            self:EnqueueNotification(session, mcp.method.notifications_resources_updated, { uri = uri })
+            notifiedCount = notifiedCount + 1
+        end
+    end
+    self.logger:debug("Queued resource updated notification: %s (sessions=%d)", uri, notifiedCount)
+    return notifiedCount
+end
+
+function this:NotifyToolListChanged()
+    local notifiedCount = self:NotifyAll(mcp.method.notifications_tools_listchanged)
+    self.logger:debug("Queued tool list changed notification (sessions=%d)", notifiedCount)
 end
 
 ---@param session MCP.HttpSession
@@ -416,7 +473,7 @@ function this:OnInitialize(params)
             ["listChanged"] = true,
         },
         ["resources"] = {
-            ["subscribe"] = false,
+            ["subscribe"] = true,
             ["listChanged"] = true,
         },
         ["tools"] = {
@@ -488,6 +545,66 @@ end
 ---@return MethodResult
 function this:OnResourcesRead(params)
     return self.resources:OnResourcesRead(params)
+end
+
+---@param params MCP.SubscribeRequestParams
+---@param request ClientRequest?
+---@return MethodResult
+function this:OnResourcesSubscribe(params, request)
+    if not params or not self:IsValidResourceUri(params.uri) then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local session = request and self:GetSession(request.http_request) or nil
+    if not session then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_request,
+        }
+    end
+
+    session.resourceSubscriptions[params.uri] = true
+    self.logger:debug("Resource subscribed: %s (session=%s, subscriptions=%d)", params.uri, session.id,
+        table.size(session.resourceSubscriptions))
+    ---@type MethodResult
+    return {
+        http_response = http.response_code.ok,
+    }
+end
+
+---@param params MCP.UnsubscribeRequestParams
+---@param request ClientRequest?
+---@return MethodResult
+function this:OnResourcesUnsubscribe(params, request)
+    if not params or not self:IsValidResourceUri(params.uri) then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
+    local session = request and self:GetSession(request.http_request) or nil
+    if not session then
+        ---@type MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_request,
+        }
+    end
+
+    session.resourceSubscriptions[params.uri] = nil
+    self.logger:debug("Resource unsubscribed: %s (session=%s, subscriptions=%d)", params.uri, session.id,
+        table.size(session.resourceSubscriptions))
+    ---@type MethodResult
+    return {
+        http_response = http.response_code.ok,
+    }
 end
 
 ---@param params MCP.PaginatedRequestParams
@@ -1000,8 +1117,17 @@ function this:OnDebugKeyCallback(e)
             text = text,
             callback = function()
                 self.logger:debug("Broadcasting notification: %s", text)
-                local params = nil -- TODO
-                self:NotifyAll(text, params)
+                if text == mcp.method.notifications_prompts_listchanged then
+                    self:NotifyPromptListChanged()
+                elseif text == mcp.method.notifications_resources_listchanged then
+                    self:NotifyResourceListChanged()
+                elseif text == mcp.method.notifications_resources_updated then
+                    self:NotifyResourceUpdated(settings.uriScheme .. "debug-notification.txt")
+                elseif text == mcp.method.notifications_tools_listchanged then
+                    self:NotifyToolListChanged()
+                else
+                    self:NotifyAll(text)
+                end
             end
         }
     end

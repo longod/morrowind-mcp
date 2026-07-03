@@ -2,7 +2,7 @@
 
 Morrowind Model Context Protocol Server (Morrowind MCP) connects Morrowind to external LLM AIs (such as ChatGPT, Claude, Copilot, or Gemini) using MCP standard.
 
-This mod allows the AI to learn about the world of Morrowind and interact with it. 
+This mod allows the AI to learn about the world of Morrowind and interact with it.
 
 **This mod contains source code generated or assisted by AI. and all code has been manually reviewed, refactored and verified by a senior software engineer.**
 
@@ -21,7 +21,7 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 ## MCP Configuration
 
 ### VS Code
- 
+
 - `.vscode/mcp.json`
 
 ```json
@@ -99,7 +99,7 @@ Environment variables:
 
 - [tests/unit_test.ps1](tests/unit_test.ps1): Run Lua unit tests for MWSE mod modules
 - [tests/server_test.ps1](tests/server_test.ps1): Start Morrowind/MWSE server, run integration tests, and stop the server
-- [tests/sse_test.ps1](tests/sse_test.ps1): Start Morrowind/MWSE server, open an SSE stream, and verify a server-to-client notification
+- [tests/sse_test.ps1](tests/sse_test.ps1): Start Morrowind/MWSE server, open an SSE stream, verify a server-to-client notification
 - [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Launch Mod Organizer 2 to start Morrowind with MWSE and the MCP server
 - [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running Morrowind
 - [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests
