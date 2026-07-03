@@ -232,6 +232,25 @@ try {
         $sessionId = Get-RequiredHeaderValue -Response $initializeResponse -Name "MCP-Session-Id"
         Write-SseLog "[INFO] Session: $sessionId" -ForegroundColor Cyan
 
+        # Ping is the only client request allowed during the initialization gap.
+        $ping = @{
+            jsonrpc = "2.0"
+            id = 2
+            method = "ping"
+        }
+        $pingResponse = Send-McpJson -Client $postClient -Url $EndpointUrl -SessionId $sessionId -Message $ping
+        if ($pingResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+            throw "ping failed: HTTP $([int]$pingResponse.StatusCode)"
+        }
+        $pingResponseText = $pingResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $pingBody = $pingResponseText | ConvertFrom-Json -ErrorAction Stop
+        if ($pingBody.id -ne 2) {
+            throw "ping response id mismatch: $($pingBody.id)"
+        }
+        if ($pingResponseText -notmatch '"result"\s*:\s*\{\s*\}') {
+            throw "ping response result should be an empty object."
+        }
+
         # Client-to-server notifications are POST requests and should be acknowledged with no body.
         $initialized = @{
             jsonrpc = "2.0"
@@ -246,10 +265,27 @@ try {
             throw "Initialized notification returned a body, expected empty response."
         }
 
+        $cancelled = @{
+            jsonrpc = "2.0"
+            method = "notifications/cancelled"
+            params = @{
+                requestId = 999
+                reason = "sse cancellation smoke test"
+            }
+        }
+        $cancelledResponse = Send-McpJson -Client $postClient -Url $EndpointUrl -SessionId $sessionId -Message $cancelled
+        $cancelledBody = $cancelledResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        if ($cancelledResponse.StatusCode -ne [System.Net.HttpStatusCode]::Accepted) {
+            throw "Cancelled notification failed: HTTP $([int]$cancelledResponse.StatusCode)"
+        }
+        if (-not [string]::IsNullOrEmpty($cancelledBody)) {
+            throw "Cancelled notification returned a body, expected empty response."
+        }
+
         $resourceUri = "morrowind://sse-test.txt"
         $subscribe = @{
             jsonrpc = "2.0"
-            id = 2
+            id = 3
             method = "resources/subscribe"
             params = @{
                 uri = $resourceUri
@@ -262,7 +298,7 @@ try {
 
         $toolCallWithProgressToken = @{
             jsonrpc = "2.0"
-            id = 3
+            id = 4
             method = "tools/call"
             params = @{
                 _meta = @{
@@ -294,7 +330,7 @@ try {
     # logging/setLevel is used as a harmless trigger for a notifications/message event.
         $setLevel = @{
             jsonrpc = "2.0"
-            id = 4
+            id = 5
             method = "logging/setLevel"
             params = @{
                 level = "debug"
@@ -319,7 +355,7 @@ try {
 
         $unsubscribe = @{
             jsonrpc = "2.0"
-            id = 5
+            id = 6
             method = "resources/unsubscribe"
             params = @{
                 uri = $resourceUri

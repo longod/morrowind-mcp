@@ -38,7 +38,9 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 
 4. `mwse_<timestamp>.log` を確認する。
    - `initialize` が成功し、`MCP-Session-Id` が発行されていること。
+   - `ping` が `200 OK` と空の JSON-RPC result で処理されていること。
    - `notifications/initialized` が `202 Accepted` で no body として処理されていること。
+   - `notifications/cancelled` が `202 Accepted` で no body として処理され、request id と reason がログに出ていること。
    - `GET` SSE stream が開かれていること。
    - `logging/setLevel` により `notifications/message` が queued/sent されていること。
    - `resources/subscribe` と `resources/unsubscribe` が成功していること。
@@ -51,7 +53,9 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
   - `resources.subscribe = true`
   - `resources.listChanged = true`
   - `tools.listChanged = true`
+- `ping` は initialize 応答後、`notifications/initialized` 前でも HTTP `200 OK` と空 result を返す。
 - Client-to-server notification は POST で受け付けられ、HTTP `202 Accepted` no body になる。
+- `notifications/cancelled` は client-to-server notification として受け付けられ、対象 request id と reason が記録される。
 - Server-to-client notification は session-scoped SSE stream に流れる。
 - `resources/subscribe` / `resources/unsubscribe` が HTTP `200 OK` で処理される。
 - Session DELETE が HTTP `204 No Content` で処理され、削除済み session の SSE GET は HTTP `404 Not Found` になる。
@@ -71,15 +75,23 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 4. `Initialized notification returned a body`
    - JSON-RPC notification に `id` がない場合、HTTP のみで ack し、JSON-RPC result body を返していないか確認する。
 
-5. `SSE GET failed` / unexpected SSE content type
+5. `ping failed` / `ping response result should be an empty object`
+   - `ping` が `methodHandlers` に登録されているか確認する。
+   - JSON-RPC result が `{}` になっているか確認する。
+
+6. `Cancelled notification failed` / `Cancelled notification returned a body`
+   - `notifications/cancelled` が `methodHandlers` に登録されているか確認する。
+   - JSON-RPC notification として `id` を含めず、HTTP `202 Accepted` no body で処理されているか確認する。
+
+7. `SSE GET failed` / unexpected SSE content type
    - GET request の `Accept: text/event-stream` と `MCP-Session-Id` を確認する。
    - duplicate GET の latest-stream-wins 処理や session timeout を確認する。
 
-6. Unexpected SSE notification method
+8. Unexpected SSE notification method
    - `logging/setLevel` が `notifications/message` を enqueue しているか確認する。
    - `notificationQueue` の重複排除や SSE flush の順序を確認する。
 
-7. DELETE / deleted session GET failure
+9. DELETE / deleted session GET failure
    - `OnDELETE`, `DeleteSession`, `ValidateTransportRequest` の session lookup と close 処理を確認する。
 
 ## Notes

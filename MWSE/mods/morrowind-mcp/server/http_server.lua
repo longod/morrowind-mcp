@@ -13,6 +13,8 @@ local socket = require("socket")
 
 local maxResponseLogLength = config.development.debug and 2048 or 256
 local maxNotificationQueueSize = 128
+local serverPingIntervalSeconds = 60
+local serverPingTimeoutSeconds = 30
 local sessionIdleTimeoutSeconds = 300
 local protocolVersion = "2025-11-25"
 
@@ -47,9 +49,16 @@ end
 ---@field initialized boolean
 ---@field sseClient Socket.TcpClient?
 ---@field notificationQueue string[]
+---@field pendingServerRequests table<string, MCP.PendingServerRequest>
 ---@field resourceSubscriptions table<string, boolean>
 ---@field nextEventId integer
+---@field nextServerRequestId integer
+---@field lastServerPingAt integer
 ---@field lastAccessedAt integer
+
+---@class MCP.PendingServerRequest
+---@field method MCP.Method|string
+---@field createdAt integer
 
 ---@class MCP.MwseHttpServer : MCP.IServer
 ---@field logger mwseLogger
@@ -92,7 +101,9 @@ function this.new(params)
     -- or split sub-category
     instance.methodHandlers = {
         [mcp.method.initialize] = instance.OnInitialize,
+        [mcp.method.notifications_cancelled] = instance.OnCancelledNotification,
         [mcp.method.notifications_initialized] = instance.OnInitializedNotification,
+        [mcp.method.ping] = instance.OnPing,
         [mcp.method.logging_setlevel] = instance.OnLoggingSetLevel,
         [mcp.method.prompts_list] = instance.OnPromptsList,
         [mcp.method.resources_list] = instance.OnResourcesList,
@@ -142,8 +153,11 @@ function this:CreateSession()
         initialized = false,
         sseClient = nil,
         notificationQueue = {},
+        pendingServerRequests = {},
         resourceSubscriptions = {},
         nextEventId = 0,
+        nextServerRequestId = 0,
+        lastServerPingAt = os.time(),
         lastAccessedAt = os.time(),
     }
     self.sessions[sessionId] = session
@@ -258,6 +272,13 @@ function this:GetProgressToken(params)
     return params.progressToken
 end
 
+---@param session MCP.HttpSession
+---@return MCP.RequestId
+function this:GenerateServerRequestId(session)
+    session.nextServerRequestId = session.nextServerRequestId + 1
+    return string.format("server-%d", session.nextServerRequestId)
+end
+
 ---@param request Http.Request
 ---@return boolean
 function this:IsAcceptedPostResponseContentType(request)
@@ -286,6 +307,7 @@ function this:ReplaceSSEClient(session, client)
     self:RemoveSSEClient(session)
     client:settimeout(0)
     session.sseClient = client
+    session.lastServerPingAt = os.time()
     if hadSSEClient then
         self.logger:debug("SSE client replaced: %s (sessions=%d, sseClients=%d)", session.id, table.size(self.sessions),
             self:CountSSEClients())
@@ -295,27 +317,115 @@ function this:ReplaceSSEClient(session, client)
 end
 
 ---@param session MCP.HttpSession
----@param method MCP.Method|string
----@param params table?
-function this:EnqueueNotification(session, method, params)
-    -- Queue by session rather than socket so unsent notifications survive SSE reconnects.
-    local notification = jsonrpc.notification(method, params)
-    for _, queuedNotification in ipairs(session.notificationQueue) do
-        if queuedNotification == notification then
-            self.logger:debug("Skipped duplicate queued notification: %s (session=%s)", method, session.id)
-            return
+---@param message string
+---@param label string
+---@param dedupe boolean
+function this:EnqueueSessionMessage(session, message, label, dedupe)
+    -- Queue by session rather than socket so unsent SSE messages survive reconnects.
+    if dedupe then
+        for _, queuedMessage in ipairs(session.notificationQueue) do
+            if queuedMessage == message then
+                self.logger:debug("Skipped duplicate queued message: %s (session=%s)", label, session.id)
+                return
+            end
         end
     end
 
-    table.insert(session.notificationQueue, notification)
+    table.insert(session.notificationQueue, message)
     local droppedCount = 0
     while table.size(session.notificationQueue) > maxNotificationQueueSize do
         table.remove(session.notificationQueue, 1)
         droppedCount = droppedCount + 1
     end
     if droppedCount > 0 then
-        self.logger:warn("Dropped %d queued notification(s) for session %s", droppedCount, session.id)
+        self.logger:warn("Dropped %d queued message(s) for session %s", droppedCount, session.id)
     end
+end
+
+---@param session MCP.HttpSession
+---@param method MCP.Method|string
+---@param params table?
+function this:EnqueueNotification(session, method, params)
+    local notification = jsonrpc.notification(method, params)
+    self:EnqueueSessionMessage(session, notification, method, true)
+end
+
+---@param sessionId string?
+---@return MCP.RequestId?
+function this:PingSession(sessionId)
+    if not sessionId then
+        self.logger:debug("Skipped server ping without session id")
+        return nil
+    end
+    local session = self.sessions[sessionId]
+    if not session then
+        self.logger:debug("Skipped server ping for unknown session: %s", sessionId)
+        return nil
+    end
+    if not session.sseClient then
+        self.logger:debug("Skipped server ping without active SSE client: %s", sessionId)
+        return nil
+    end
+
+    local requestId = self:GenerateServerRequestId(session)
+    session.pendingServerRequests[tostring(requestId)] = {
+        method = mcp.method.ping,
+        createdAt = os.time(),
+    }
+    self:EnqueueSessionMessage(session, jsonrpc.RequestMessage(requestId, mcp.method.ping), mcp.method.ping, false)
+    session.lastServerPingAt = os.time()
+    self.logger:debug("Queued server ping request: requestId=%s, session=%s", tostring(requestId), session.id)
+    return requestId
+end
+
+---@param session MCP.HttpSession
+---@param method MCP.Method|string
+---@return boolean
+function this:HasPendingServerRequest(session, method)
+    for _, pendingRequest in pairs(session.pendingServerRequests) do
+        if pendingRequest.method == method then
+            return true
+        end
+    end
+    return false
+end
+
+---@param session MCP.HttpSession
+---@param now integer
+function this:CloseTimedOutServerRequests(session, now)
+    for requestId, pendingRequest in pairs(session.pendingServerRequests) do
+        if os.difftime(now, pendingRequest.createdAt) >= serverPingTimeoutSeconds then
+            session.pendingServerRequests[requestId] = nil
+            self.logger:warn("Server request timed out: requestId=%s, method=%s, session=%s", requestId,
+                pendingRequest.method, session.id)
+            if pendingRequest.method == mcp.method.ping then
+                self:RemoveSSEClient(session)
+            end
+        end
+    end
+end
+
+function this:MaintainServerPings()
+    local now = os.time()
+    for sessionId, session in pairs(self.sessions) do
+        self:CloseTimedOutServerRequests(session, now)
+        if session.sseClient
+            and not self:HasPendingServerRequest(session, mcp.method.ping)
+            and os.difftime(now, session.lastServerPingAt) >= serverPingIntervalSeconds then
+            self:PingSession(sessionId)
+        end
+    end
+end
+
+---@return integer queuedCount
+function this:PingAll()
+    local queuedCount = 0
+    for sessionId, _ in pairs(self.sessions) do
+        if self:PingSession(sessionId) then
+            queuedCount = queuedCount + 1
+        end
+    end
+    return queuedCount
 end
 
 ---@param sessionId string?
@@ -786,6 +896,32 @@ function this:OnInitializedNotification(params, request)
     return self:OnNotification(params)
 end
 
+---@param params MCP.CancelledNotificationParams
+---@param request ClientRequest?
+---@return MethodResult
+function this:OnCancelledNotification(params, request)
+    -- TODO: Track in-flight requests by session/request id and expose a cooperative cancellation flag to long-running tools.
+    local sessionId = request and self:GetSessionId(request.http_request) or nil
+    if not params or params.requestId == nil then
+        self.logger:warn("Received cancelled notification without request id (session=%s)", tostring(sessionId))
+        return self:OnNotification(params)
+    end
+
+    self.logger:info("Received cancelled notification: requestId=%s, reason=%s, session=%s", tostring(params.requestId),
+        tostring(params.reason), tostring(sessionId))
+    return self:OnNotification(params)
+end
+
+---@param params MCP.RequestParams?
+---@return MethodResult
+function this:OnPing(params)
+    ---@type MethodResult
+    return {
+        http_response = http.response_code.ok,
+        result = jsonrpc.object(),
+    }
+end
+
 ---@param params MCP.NotificationParams
 ---@return MethodResult
 function this:OnNotification(params)
@@ -846,6 +982,42 @@ function this:OnPOST(request)
         json_result = result.result,
         json_error = result.error,
         no_body = isNotification and not result.error,
+    }
+end
+
+---@param request ClientRequest
+---@return ServerResponse?
+function this:OnClientResponse(request)
+    local response = request.json_request
+    local session = self:GetSession(request.http_request)
+    if not response or response.id == nil or not session then
+        ---@type ServerResponse
+        return {
+            http_response = http.response_code.bad_request,
+            json_error = jsonrpc.error_code.invalid_request,
+        }
+    end
+
+    local requestKey = tostring(response.id)
+    local pendingRequest = session.pendingServerRequests[requestKey]
+    if pendingRequest then
+        session.pendingServerRequests[requestKey] = nil
+        local responseError = response["error"]
+        if responseError then
+            self.logger:warn("Received client error response: requestId=%s, method=%s, message=%s", requestKey,
+                pendingRequest.method, tostring(responseError.message))
+        else
+            self.logger:debug("Received client response: requestId=%s, method=%s", requestKey, pendingRequest.method)
+        end
+    else
+        self.logger:warn("Received response for unknown server request: requestId=%s, session=%s", requestKey,
+            session.id)
+    end
+
+    ---@type ServerResponse
+    return {
+        http_response = http.response_code.accepted,
+        no_body = true,
     }
 end
 
@@ -1046,6 +1218,10 @@ function this:DispatchHttpRequest(client, request)
         }
     end
 
+    if json_request and not json_request.method then
+        return self:OnClientResponse({ client = client, http_request = request, json_request = json_request })
+    end
+
     local response = self:HandleRequest({ client = client, http_request = request, json_request = json_request })
     if response then
         response.request_id = json_request and json_request.id or nil
@@ -1209,6 +1385,7 @@ function this:Start()
 
     self.enterFrameCallback = function(e)
         self:Listen(e)
+        self:MaintainServerPings()
         self:BroadcastNotifications()
         self:CloseExpiredSessions()
     end

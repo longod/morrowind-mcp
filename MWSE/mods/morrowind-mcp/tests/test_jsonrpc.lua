@@ -60,12 +60,36 @@ function this.Test()
         end
     end)
 
+    unitwind:test("request parses JSON-RPC response", function()
+        local payload = json.encode({
+            jsonrpc = "2.0",
+            id = "server-1",
+            result = {},
+        })
+        local response, err = jsonrpc.request(payload)
+        unitwind:expect(err).toBe(nil)
+        if response then
+            unitwind:expect(response.jsonrpc).toBe("2.0")
+            unitwind:expect(response.id).toBe("server-1")
+            unitwind:expect(response.result == nil).toBe(false)
+        end
+    end)
+
     unitwind:test("result encodes JSON-RPC result", function()
         local resultJson = jsonrpc.result(1, { hello = "world" })
         unitwind:expect(resultJson).toBe(json.encode({
             jsonrpc = "2.0",
             id = 1,
             result = { hello = "world" },
+        }, { indent = false }))
+    end)
+
+    unitwind:test("RequestMessage encodes JSON-RPC request", function()
+        local requestJson = jsonrpc.RequestMessage("server-1", "ping")
+        unitwind:expect(requestJson).toBe(json.encode({
+            jsonrpc = "2.0",
+            id = "server-1",
+            method = "ping",
         }, { indent = false }))
     end)
 

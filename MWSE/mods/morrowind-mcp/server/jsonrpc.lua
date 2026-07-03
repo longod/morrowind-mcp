@@ -81,7 +81,7 @@ end
 local dummy_object = this.object()
 
 ---@param str string
----@return MCP.JSONRPCRequest|MCP.JSONRPCNotification? json
+---@return MCP.JSONRPCMessage? json
 ---@return MCP.Error?
 function this.request(str)
     if not str then -- allow nil
@@ -100,14 +100,37 @@ function this.request(str)
     -- if t ~= "string" and t ~= "number" then
     --     return nil, this.error_code.invalid_request
     -- end
-    if type(result.method) ~= "string" then
+    if result.method ~= nil then
+        if type(result.method) ~= "string" then
+            return nil, this.error_code.invalid_request
+        end
+        if result.params and type(result.params) ~= "table" then
+            return nil, this.error_code.invalid_request
+        end
+        return result
+    end
+
+    if result.id == nil or (result.result == nil and result.error == nil) then
         return nil, this.error_code.invalid_request
     end
-    if result.params and type(result.params) ~= "table" then
-        return nil, this.error_code.invalid_request
-    end
-    -- typeがあったらキャストする？
     return result
+end
+
+---@param id string|number
+---@param method MCP.Method|string
+---@param params table?
+---@return string
+function this.RequestMessage(id, method, params)
+    ---@type MCP.JSONRPCRequest
+    local body = {
+        jsonrpc = "2.0",
+        id = id,
+        method = method,
+    }
+    if params then
+        body.params = params
+    end
+    return json.encode(body, { indent = false })
 end
 
 ---@param id string|number?
@@ -120,7 +143,6 @@ function this.result(id, params)
         id = id,
         result = params or dummy_object,
     }
-    -- TODO typeの追加... deepcopyがいる？
     local encoded = json.encode(body, { indent = false })
     return encoded
 end
@@ -142,7 +164,6 @@ function this.error(id, err, data)
     if data then
         body.error = table.deepcopy(body.error) -- const original table
         body.error.data = data
-        -- TODO typeの追加
     end
     return json.encode(body, { indent = false })
 end
