@@ -33,7 +33,9 @@ function this.new(params)
 end
 
 function this:CanExecute(params)
-    -- in title?
+    if tes3.onMainMenu() then
+        return false
+    end
     return true
 end
 

@@ -31,11 +31,14 @@ function this.new(params)
 end
 
 function this:CanExecute(params)
-    -- in title?
+    if tes3.onMainMenu() then
+        return false
+    end
     return true
 end
 
 function this:Execute(params, context)
+    -- it seems always returns non nil array, but it contains only valid references.
     local cells = tes3.getActiveCells()
     if not cells then
         local errorContent = jsonrpc.TextContent("no active cells found. Please enter a cell first.")

@@ -22,15 +22,16 @@ function this.new(params)
             -- active,
             -- finished, unfinished
         ),
-        outputSchema = jsonrpc.OutputSchema(
-        ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
     })
     return instance
 end
 
 function this:CanExecute(params)
-    -- in title?
+    if tes3.onMainMenu() then
+        return false
+    end
+    -- exclude tutorial?
     return true
 end
 
@@ -52,11 +53,11 @@ function this:Execute(params, context)
             return jsonrpc.CallToolResult(content)
         else
             local errorContent = jsonrpc.TextContent("failed to open Journal.htm.")
-            return jsonrpc.CallToolResult(errorContent, nil)
+            return jsonrpc.CallToolResult(errorContent, nil, true)
         end
     else
         local errorContent = jsonrpc.TextContent("Journal.htm not found.")
-        return jsonrpc.CallToolResult(errorContent, nil)
+        return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
 end

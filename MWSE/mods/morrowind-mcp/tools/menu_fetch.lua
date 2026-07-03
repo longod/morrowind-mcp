@@ -57,7 +57,6 @@ function this:CanExecute(params)
     if not tes3.worldController or not tes3.worldController.menuController then
         return false
     end
-
     return true
 end
 

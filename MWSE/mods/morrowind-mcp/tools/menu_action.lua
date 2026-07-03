@@ -49,11 +49,9 @@ function this.new(params)
 end
 
 function this:CanExecute(params)
-    -- TODO exists elements
     if not tes3.worldController or not tes3.worldController.menuController then
         return false
     end
-
     return true
 end
 

@@ -92,7 +92,10 @@ function this:Execute(params, context)
     if capture_with_ui == nil then
         capture_with_ui = true
     end
+
+    -- it seems to save to files is no latency, syncronous. it can be readed immidiately.
     mge.saveScreenshot({ path = path, captureWithUI = capture_with_ui })
+
     local resourcePath = pathutil.FromResourceFilePath(path, settings.resourceRootDir)
     if not resourcePath then
         self.logger:error("Failed to convert screenshot file path to resource path: %s", path)
