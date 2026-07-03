@@ -15,7 +15,7 @@ local maxNotificationQueueSize = 128
 local serverPingIntervalSeconds = 60
 local serverPingTimeoutSeconds = 30
 local sessionIdleTimeoutSeconds = 300
-local pollingIntervalSeconds = 5.0
+local pollingIntervalSeconds = 10.0
 local protocolVersion = "2025-11-25"
 
 ---@param response string?
@@ -42,6 +42,55 @@ local function GetHeader(headers, name)
         return nil
     end
     return headers[name] or headers[name:lower()]
+end
+
+---@param error MCP.Error?
+---@return string
+local function FormatJsonRpcError(error)
+    if not error then
+        return "nil"
+    end
+    return string.format("%s:%s", tostring(error.code), tostring(error.message))
+end
+
+---@param responseCode Http.ResponseStatusCodes?
+---@return boolean
+local function IsFailureHttpStatus(responseCode)
+    return responseCode ~= nil and responseCode.code >= 400
+end
+
+---@param partial string?
+---@return boolean
+local function IsEmptyPartial(partial)
+    return not partial or partial == ""
+end
+
+---@param request Http.Request?
+---@param err string?
+---@param partial string?
+---@return boolean
+local function IsClosedBeforeRequest(request, err, partial)
+    return not request and err == "closed" and IsEmptyPartial(partial)
+end
+
+---@param headers table<string, string>?
+---@param keepOpen boolean
+---@return table<string, string>?
+local function PrepareResponseHeaders(headers, keepOpen)
+    if keepOpen then
+        return headers
+    end
+
+    local responseHeaders = {}
+    if headers then
+        for name, value in pairs(headers) do
+            responseHeaders[name] = value
+        end
+    end
+    if not GetHeader(responseHeaders, http.header.connection) then
+        responseHeaders[http.header.connection] = "close"
+    end
+    return responseHeaders
 end
 
 ---@class MCP.HttpSession
@@ -238,6 +287,7 @@ function this:IsAllowedOrigin(request)
         return true
     end
 
+    -- TODO validate more strictly, e.g. http://localhost.othersite.example should not be allowed.
     local lowerOrigin = origin:lower()
     local lowerHostname = tostring(self.hostname):lower()
     return lowerOrigin:find("://localhost", 1, true) ~= nil
@@ -992,6 +1042,8 @@ end
 ---@return ServerResponse?
 function this:OnPOST(request)
     if not request.json_request then
+        self.logger:warn("Rejected POST without a JSON-RPC request (session=%s)",
+            tostring(self:GetSessionId(request.http_request)))
         ---@type ServerResponse
         return {
             http_response = http.response_code.bad_request,
@@ -1001,7 +1053,9 @@ function this:OnPOST(request)
 
     local handler = self.methodHandlers[request.json_request.method]
     if not handler then
-        self.logger:warn("No handler for method: %s", request.json_request.method)
+        self.logger:warn("No handler for method: %s (requestId=%s, session=%s)",
+            tostring(request.json_request.method), tostring(request.json_request.id),
+            tostring(self:GetSessionId(request.http_request)))
         ---@type ServerResponse
         return {
             http_response = http.response_code.not_implemented, -- ?
@@ -1027,6 +1081,13 @@ function this:OnPOST(request)
             http_response = http.response_code.internal_server_error,
             json_error = jsonrpc.error_code.internal_error,
         }
+    end
+
+    if result.error or IsFailureHttpStatus(result.http_response) then
+        self.logger:warn("Method returned failure: %s (httpStatus=%s, jsonError=%s, requestId=%s, notification=%s, session=%s)",
+            tostring(request.json_request.method), tostring(result.http_response and result.http_response.code),
+            FormatJsonRpcError(result.error), tostring(request.json_request.id), tostring(isNotification),
+            tostring(self:GetSessionId(request.http_request)))
     end
 
     ---@type ServerResponse
@@ -1081,7 +1142,11 @@ end
 function this:OnGET(request)
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
     -- GET is only used to listen for server-to-client messages over SSE.
-    if not http.AcceptsContentType(request.http_request.headers[http.header.accept], http.content_type.event_stream) then
+    local accept = GetHeader(request.http_request.headers, http.header.accept)
+    local sessionId = self:GetSessionId(request.http_request)
+    if not http.AcceptsContentType(accept, http.content_type.event_stream) then
+        self.logger:warn("Rejected GET without SSE accept header (accept=%s, session=%s)", tostring(accept),
+            tostring(sessionId))
         ---@type ServerResponse
         return {
             http_response = http.response_code.method_not_allowed,
@@ -1091,6 +1156,8 @@ function this:OnGET(request)
 
     local session = self:GetSession(request.http_request)
     if not session then
+        self.logger:warn("Rejected GET for missing or unknown session (session=%s, accept=%s)", tostring(sessionId),
+            tostring(accept))
         ---@type ServerResponse
         return {
             http_response = http.response_code.not_found,
@@ -1099,6 +1166,7 @@ function this:OnGET(request)
     end
 
     if not request.client then
+        self.logger:error("Rejected GET without TCP client (session=%s)", tostring(session.id))
         ---@type ServerResponse
         return {
             http_response = http.response_code.internal_server_error,
@@ -1136,6 +1204,7 @@ function this:OnDELETE(request)
     -- Clients can explicitly terminate Streamable HTTP sessions with MCP-Session-Id.
     local sessionId = self:GetSessionId(request.http_request)
     if not sessionId then
+        self.logger:warn("Rejected DELETE without session id")
         ---@type ServerResponse
         return {
             http_response = http.response_code.bad_request,
@@ -1144,6 +1213,7 @@ function this:OnDELETE(request)
     end
 
     if not self:DeleteSession(sessionId) then
+        self.logger:debug("DELETE requested for unknown session: %s (sessions=%d)", sessionId, table.size(self.sessions))
         ---@type ServerResponse
         return {
             http_response = http.response_code.not_found,
@@ -1163,8 +1233,13 @@ end
 function this:OnOPTIONS(request)
     -- Handle OPTIONS requests for CORS preflight
     -- https://github.com/modelcontextprotocol/python-sdk/issues/1079
+    self.logger:debug("Handling OPTIONS preflight (origin=%s, requestMethod=%s, requestHeaders=%s)",
+        tostring(GetHeader(request.http_request.headers, http.header.origin)),
+        tostring(GetHeader(request.http_request.headers, http.header.access_control_request_method)),
+        tostring(GetHeader(request.http_request.headers, http.header.access_control_request_headers)))
+
     local cros = {
-        [http.header.access_control_allow_origin] = "*", -- or request hosts?
+        [http.header.access_control_allow_origin] = "*", -- TODO return Origin if exist.
         [http.header.access_control_allow_methods] = "POST, GET, DELETE, OPTIONS",
         [http.header.access_control_allow_headers] = table.concat(
             {
@@ -1290,7 +1365,8 @@ end
 ---@return boolean keepOpen
 function this:SendServerResponse(client, response, requestId)
     if not response then
-        local result = http.SendResponse(client, http.response_code.internal_server_error, nil,
+        local result = http.SendResponse(client, http.response_code.internal_server_error,
+            PrepareResponseHeaders(nil, false),
             jsonrpc.error(requestId, jsonrpc.error_code.internal_error))
         self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code,
             FormatResponseForLog(result.response))
@@ -1303,7 +1379,8 @@ function this:SendServerResponse(client, response, requestId)
     end
 
     if response.json_error then
-        local result = http.SendResponse(client, response.http_response, response.http_headers,
+        local result = http.SendResponse(client, response.http_response,
+            PrepareResponseHeaders(response.http_headers, response.keep_open == true),
             jsonrpc.error(requestId, response.json_error))
         self.logger:error("json error: %d\n%s", response.http_response.code,
             FormatResponseForLog(result.response))
@@ -1311,13 +1388,15 @@ function this:SendServerResponse(client, response, requestId)
     end
 
     if response.no_body then
-        local result = http.SendResponse(client, response.http_response, response.http_headers)
+        local result = http.SendResponse(client, response.http_response,
+            PrepareResponseHeaders(response.http_headers, response.keep_open == true))
         self.logger:debug("success: %d\n%s", response.http_response.code,
             FormatResponseForLog(result.response))
         return response.keep_open == true
     end
 
-    local result = http.SendResponse(client, response.http_response, response.http_headers,
+    local result = http.SendResponse(client, response.http_response,
+        PrepareResponseHeaders(response.http_headers, response.keep_open == true),
         jsonrpc.result(requestId, response.json_result))
     self.logger:debug("success: %d\n%s", response.http_response.code,
         FormatResponseForLog(result.response))
@@ -1362,16 +1441,22 @@ function this:Listen(e)
         client:settimeout(5)
         local request, err, partial = http.ReceiveRequest(client)
         if (not request) or err then
-            self.logger:error("Reading HTTP request: %s", err)
-            if partial then
-                self.logger:debug("Partial data received: %s", partial)
+            if IsClosedBeforeRequest(request, err, partial) then
+                self.logger:debug("HTTP client closed connection before sending a request")
+                pcall(function() client:close() end)
+            else
+                self.logger:error("Reading HTTP request: %s", err)
+                if partial then
+                    self.logger:debug("Partial data received: %s", partial)
+                end
+
+                local result = http.SendResponse(client, http.response_code.bad_request,
+                    PrepareResponseHeaders(nil, false)) -- TODO add json?
+                self.logger:error("bad request: %d%s", http.response_code.bad_request.code,
+                    FormatResponseForLog(result.response))
+
+                pcall(function() client:close() end)
             end
-
-            local result = http.SendResponse(client, http.response_code.bad_request) -- TODO add json?
-            self.logger:error("bad request: %d%s", http.response_code.bad_request.code,
-                FormatResponseForLog(result.response))
-
-            pcall(function() client:close() end)
         else
             self:ProcessClientRequest(client, request)
         end
