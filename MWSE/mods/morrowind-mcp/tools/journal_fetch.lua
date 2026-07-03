@@ -34,7 +34,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params)
+function this:Execute(params, context)
 
     -- load <Morrowind>/Journal.htm ?
     -- perphaps, we can not access to journal entries in a save data.

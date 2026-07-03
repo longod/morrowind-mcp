@@ -246,6 +246,18 @@ function this:IsValidResourceUri(uri)
     return type(uri) == "string" and pathutil.FromUri(uri, settings.uriScheme) ~= nil
 end
 
+---@param params MCP.RequestParams?
+---@return MCP.ProgressToken?
+function this:GetProgressToken(params)
+    if not params then
+        return nil
+    end
+    if params._meta and params._meta.progressToken ~= nil then
+        return params._meta.progressToken
+    end
+    return params.progressToken
+end
+
 ---@param request Http.Request
 ---@return boolean
 function this:IsAcceptedPostResponseContentType(request)
@@ -368,6 +380,38 @@ end
 function this:NotifyToolListChanged()
     local notifiedCount = self:NotifyAll(mcp.method.notifications_tools_listchanged)
     self.logger:debug("Queued tool list changed notification (sessions=%d)", notifiedCount)
+end
+
+---@param sessionId string?
+---@param progressToken MCP.ProgressToken?
+---@param progress number
+---@param total number?
+---@param message string?
+---@return boolean
+function this:NotifyProgress(sessionId, progressToken, progress, total, message)
+    if not progressToken then
+        self.logger:debug("Skipped progress notification without progress token")
+        return false
+    end
+    if type(progress) ~= "number" then
+        self.logger:warn("Skipped progress notification with invalid progress value: %s", tostring(progress))
+        return false
+    end
+    if total ~= nil and type(total) ~= "number" then
+        self.logger:warn("Skipped progress notification with invalid total value: %s", tostring(total))
+        return false
+    end
+    if message ~= nil and type(message) ~= "string" then
+        self.logger:warn("Skipped progress notification with invalid message value: %s", tostring(message))
+        return false
+    end
+
+    return self:NotifySession(sessionId, mcp.method.notifications_progress, {
+        progressToken = progressToken,
+        progress = progress,
+        total = total,
+        message = message,
+    })
 end
 
 ---@param session MCP.HttpSession
@@ -627,8 +671,9 @@ function this:OnToolsList(params)
 end
 
 ---@param params MCP.CallToolRequestParams
+---@param request ClientRequest?
 ---@return MethodResult
-function this:OnToolsCall(params)
+function this:OnToolsCall(params, request)
     if not params or not params.name then
         ---@type MethodResult
         return {
@@ -653,8 +698,18 @@ function this:OnToolsCall(params)
         }
     end
 
-    -- TODO maybe need more context table (world, player, etc...)
-    local result = tool:Execute(params)
+    local sessionId = request and self:GetSessionId(request.http_request) or nil
+    local progressToken = self:GetProgressToken(params)
+    ---@type MCP.ToolExecutionContext
+    local context = {
+        sessionId = sessionId,
+        progressToken = progressToken,
+        NotifyProgress = function(progress, total, message)
+            return self:NotifyProgress(sessionId, progressToken, progress, total, message)
+        end,
+    }
+
+    local result = tool:Execute(params, context)
 
     ---@type MethodResult
     return {
@@ -1105,7 +1160,6 @@ function this:OnDebugKeyCallback(e)
         mcp.method.notifications_prompts_listchanged,
         mcp.method.notifications_resources_listchanged,
         mcp.method.notifications_resources_updated,
-        mcp.method.notifications_roots_listchanged,
         mcp.method.notifications_tools_listchanged,
         mcp.method.notifications_elicitation_complete,
     }
@@ -1126,6 +1180,7 @@ function this:OnDebugKeyCallback(e)
                 elseif text == mcp.method.notifications_tools_listchanged then
                     self:NotifyToolListChanged()
                 else
+                    -- TODO
                     self:NotifyAll(text)
                 end
             end

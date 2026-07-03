@@ -260,6 +260,23 @@ try {
             throw "resources/subscribe failed: HTTP $([int]$subscribeResponse.StatusCode)"
         }
 
+        $toolCallWithProgressToken = @{
+            jsonrpc = "2.0"
+            id = 3
+            method = "tools/call"
+            params = @{
+                _meta = @{
+                    progressToken = "sse-test-progress"
+                }
+                name = "mw-menu-fetch"
+                arguments = @{}
+            }
+        }
+        $toolCallWithProgressTokenResponse = Send-McpJson -Client $postClient -Url $EndpointUrl -SessionId $sessionId -Message $toolCallWithProgressToken
+        if ($toolCallWithProgressTokenResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+            throw "tools/call with progress token failed: HTTP $([int]$toolCallWithProgressTokenResponse.StatusCode)"
+        }
+
     # Open the session-scoped server-to-client stream before triggering a notification.
         $sseRequest = New-McpRequest -Method "Get" -Url $EndpointUrl -SessionId $sessionId -Body $null -Accept "text/event-stream"
         $sseResponse = $sseClient.SendAsync($sseRequest, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
@@ -277,7 +294,7 @@ try {
     # logging/setLevel is used as a harmless trigger for a notifications/message event.
         $setLevel = @{
             jsonrpc = "2.0"
-            id = 3
+            id = 4
             method = "logging/setLevel"
             params = @{
                 level = "debug"
@@ -302,7 +319,7 @@ try {
 
         $unsubscribe = @{
             jsonrpc = "2.0"
-            id = 4
+            id = 5
             method = "resources/unsubscribe"
             params = @{
                 uri = $resourceUri

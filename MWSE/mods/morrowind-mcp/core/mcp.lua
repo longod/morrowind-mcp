@@ -149,8 +149,12 @@ local logging_level = {
 
 ---@class MCP.NotificationParams
 
----@class MCP.RequestParams
+---@class MCP.RequestMeta
 ---@field progressToken MCP.ProgressToken?
+
+---@class MCP.RequestParams
+---@field _meta MCP.RequestMeta?
+---@field progressToken MCP.ProgressToken? deprecated compatibility field
 
 ---@class MCP.PaginatedRequestParams: MCP.RequestParams
 ---@field cursor MCP.Cursor?
@@ -479,7 +483,7 @@ local logging_level = {
 ---@field method "logging/setLevel"
 ---@field params MCP.SetLevelRequestParams
 
----@class MCP.LoggingMessageNotificationParams
+---@class MCP.LoggingMessageNotificationParams: MCP.NotificationParams
 ---@field level MCP.LoggingLevel
 ---@field logger string?
 ---@field data MCP.JsonValue
@@ -493,7 +497,7 @@ local logging_level = {
 -- Notifications
 -- ============================================================================
 
----@class MCP.CancelledNotificationParams
+---@class MCP.CancelledNotificationParams: MCP.NotificationParams
 ---@field requestId MCP.RequestId?
 ---@field reason string?
 
@@ -507,7 +511,7 @@ local logging_level = {
 ---@field method "notifications/initialized"
 ---@field params MCP.NotificationParams?
 
----@class MCP.ProgressNotificationParams
+---@class MCP.ProgressNotificationParams: MCP.NotificationParams
 ---@field progressToken MCP.ProgressToken
 ---@field progress number
 ---@field total number?
@@ -518,7 +522,7 @@ local logging_level = {
 ---@field method "notifications/progress"
 ---@field params MCP.ProgressNotificationParams
 
----@class MCP.ResourceUpdatedNotificationParams
+---@class MCP.ResourceUpdatedNotificationParams: MCP.NotificationParams
 ---@field uri string
 
 ---@class MCP.ResourceUpdatedNotification
@@ -546,7 +550,7 @@ local logging_level = {
 ---@field method "notifications/tools/list_changed"
 ---@field params MCP.NotificationParams?
 
----@class MCP.ElicitationCompleteNotificationParams
+---@class MCP.ElicitationCompleteNotificationParams: MCP.NotificationParams
 ---@field elicitationId string
 
 ---@class MCP.ElicitationCompleteNotification
@@ -642,7 +646,7 @@ local logging_level = {
 ---@field ttl number|nil
 ---@field pollInterval number?
 
----@class MCP.TaskStatusNotificationParams
+---@class MCP.TaskStatusNotificationParams: MCP.NotificationParams
 ---@field taskId string
 ---@field status MCP.TaskStatus
 ---@field statusMessage string?

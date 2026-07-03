@@ -35,7 +35,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params)
+function this:Execute(params, context)
     local player = tes3.mobilePlayer
     if not player then
         local errorContent = jsonrpc.TextContent("No player found. Please enter the game.")

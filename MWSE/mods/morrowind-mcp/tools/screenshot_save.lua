@@ -52,7 +52,7 @@ function this:CanExecute(params)
     return true -- tes3.game.screenShotsEnabled does not work.
 end
 
-function this:Execute(params)
+function this:Execute(params, context)
     -- TODO validation for injection
     local arguments = params.arguments or {}
 

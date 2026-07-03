@@ -35,7 +35,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params)
+function this:Execute(params, context)
     local world = tes3.worldController
     if not world then
         local errorContent = jsonrpc.TextContent("No world found. Please enter the game.")

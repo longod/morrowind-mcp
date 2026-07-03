@@ -2,6 +2,11 @@
 ---@field definition MCP.Tool
 local this = {}
 
+---@class MCP.ToolExecutionContext
+---@field sessionId string?
+---@field progressToken MCP.ProgressToken?
+---@field NotifyProgress fun(progress: number, total: number?, message: string?): boolean
+
 ---@param params table?
 ---@return MCP.ITool
 function this.new(params)
@@ -23,8 +28,12 @@ end
 
 ---@public
 ---@param params MCP.CallToolRequestParams
+---@param context MCP.ToolExecutionContext?
 ---@return MCP.CallToolResult?
-function this:Execute(params)
+function this:Execute(params, context)
+    -- if context and context.progressToken then
+    --     context.NotifyProgress(0.5, 1, "Halfway done")
+    -- end
 end
 
 return this

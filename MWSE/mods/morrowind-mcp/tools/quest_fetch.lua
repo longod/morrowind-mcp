@@ -37,7 +37,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params)
+function this:Execute(params, context)
 
     -- contain all quests.
     local quests = tes3.worldController.quests
