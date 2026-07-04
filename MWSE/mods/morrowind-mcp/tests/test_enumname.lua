@@ -41,6 +41,11 @@ function this.Test()
         unitwind:expect(name).toBe(nil)
     end)
 
+    unitwind:test("EnumName returns nil for nil value", function()
+        local name = enumname.objectType(nil) ---@diagnostic disable-line: param-type-mismatch
+        unitwind:expect(name).toBe(nil)
+    end)
+
     unitwind:test("EnumName returns nil for unmapped numeric value", function()
         local name = enumname.dialogueType(999)
         unitwind:expect(name).toBe(nil)
@@ -48,7 +53,12 @@ function this.Test()
 
     unitwind:test("BitFlagNames returns empty array for invalid value type", function()
         local names = enumname.actionFlag("bad") ---@diagnostic disable-line: param-type-mismatch
-        unitwind:expect(table.size(names)).toBe(0)
+        unitwind:expect(names).toBe(nil)
+    end)
+
+    unitwind:test("BitFlagNames returns nil for nil value", function()
+        local names = enumname.actionFlag(nil) ---@diagnostic disable-line: param-type-mismatch
+        unitwind:expect(names).toBe(nil)
     end)
 
     unitwind:test("BitFlagNames returns empty array when non-zero value matches no flags", function()

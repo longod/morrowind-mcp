@@ -76,6 +76,10 @@ local function EnumName(enumTable, value)
         logger:error("EnumName expected table, got %s", type(enumTable))
         return nil
     end
+    -- allow nil
+    if value == nil then
+        return nil
+    end
     if type(value) ~= "number" then
         logger:error("EnumName expected number for %s, got %s", GetEnumTableName(enumTable), type(value))
         return nil
@@ -89,7 +93,8 @@ local function EnumName(enumTable, value)
 
     local name = nameCache[value]
     if name == nil then
-        logger:error("EnumName found no mapping for %s value=%s", GetEnumTableName(enumTable), value)
+        -- possible modding extend enum value, or invalid value
+        logger:warn("EnumName found no mapping for %s value=%s", GetEnumTableName(enumTable), value)
     end
     return name
 end
@@ -122,15 +127,19 @@ end
 -- For value == 0, only explicit zero-valued flags are returned.
 ---@param enumTable table
 ---@param value number
----@return string[]
+---@return string[]|nil
 local function BitFlagNames(enumTable, value)
     if type(enumTable) ~= "table" then
         logger:error("BitFlagNames expected table, got %s", type(enumTable))
-        return {}
+        return nil
+    end
+    -- allow nil
+    if value == nil then
+        return nil
     end
     if type(value) ~= "number" then
         logger:error("BitFlagNames expected number for %s, got %s", GetEnumTableName(enumTable), type(value))
-        return {}
+        return nil
     end
 
     local entries = _bitFlagEntryCacheByTable[enumTable]
@@ -171,7 +180,7 @@ end
 
 -- Bitflag decoders: a single numeric value can contain multiple names.
 ---@param value number
----@return string[]
+---@return string[]|nil
 function this.actionFlag(value)
     return BitFlagNames(tes3.actionFlag, value)
 end
@@ -220,7 +229,7 @@ end
 
 -- animationStartFlag is used as bitmask flags in MWSE APIs.
 ---@param value number
----@return string[]
+---@return string[]|nil
 function this.animationStartFlag(value)
     return BitFlagNames(tes3.animationStartFlag, value)
 end
@@ -454,7 +463,7 @@ function this.magicSourceType(value)
 end
 
 ---@param value number
----@return string[]
+---@return string[]|nil
 function this.merchantService(value)
     return BitFlagNames(tes3.merchantService, value)
 end
@@ -598,7 +607,7 @@ function this.uiProperty(value)
 end
 
 ---@param value number
----@return string[]
+---@return string[]|nil
 function this.uiState(value)
     return BitFlagNames(tes3.uiState, value)
 end

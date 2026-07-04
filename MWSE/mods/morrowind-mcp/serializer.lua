@@ -175,7 +175,7 @@ local function _tes3baseObject(o, i)
     return o
 end
 
-
+--- just returns value is better?
 ---@param o MCP.AnyMap
 ---@param i tes3globalVariable
 ---@return MCP.AnyMap?
@@ -208,6 +208,24 @@ end
 
 
 ---@param o MCP.AnyMap
+---@param i tes3effect
+---@return MCP.AnyMap?
+local function _tes3effect(o, i)
+    o.attribute = enumname.attribute(i.attribute)
+    o.cost = i.cost
+    o.duration = i.duration
+    o.id = enumname.effect(i.id) or i.id -- possible modding extend id, its out of range (nil)
+    o.max = i.max
+    o.min = i.min
+    o.object = i.object
+    o.radius = i.radius
+    o.rangeType = enumname.effectRange(i.rangeType)
+    o.skill = enumname.skill(i.skill)
+    return o
+end
+
+
+---@param o MCP.AnyMap
 ---@param i tes3spell
 ---@return MCP.AnyMap?
 local function _tes3spell(o, i)
@@ -218,7 +236,14 @@ local function _tes3spell(o, i)
     o.autoCalc = i.autoCalc
     o.basePurchaseCost = i.basePurchaseCost
     o.castType = enumname.spellType(i.castType)
-    o.effects = i.effects
+    if i.effects and table.size(i.effects) > 0 then
+        local effects = jsonrpc.array(table.size(i.effects))
+        for _, effect in ipairs(i.effects) do
+            -- no nil return
+            table.insert(effects, _tes3effect(jsonrpc.object(), effect))
+        end
+        o.effects = effects
+    end
     -- o.flags = i.flags -- TODO means flags
     o.isAbility = i.isAbility
     o.isActiveCast = i.isActiveCast
@@ -245,7 +270,7 @@ local function _tes3birthsign(o, i)
     end
     o.description = i.description
     o.name = i.name
-    o.spells = i.spells
+    o.spells = _tes3spell(jsonrpc.object(), i.spells)
     -- o.texturePath = i.texturePath
     return o
 end
@@ -439,6 +464,25 @@ local function _tes3mobileNPC(o, i)
 end
 
 ---@param o MCP.AnyMap?
+---@param i tes3bountyData
+---@return MCP.AnyMap?
+local function _tes3bountyData(o, i)
+    if not i then
+        return nil
+    end
+    if table.size(i) == 0 then
+        return nil
+    end
+    for _, key in ipairs(i.keys) do
+        if key then
+            local value  = i:getValue(key)
+            o[key] = value
+        end
+    end
+    return o
+end
+
+---@param o MCP.AnyMap?
 ---@param i tes3mobilePlayer
 ---@return MCP.AnyMap?
 local function _tes3mobilePlayer(o, i)
@@ -449,34 +493,47 @@ local function _tes3mobilePlayer(o, i)
     -- o.animationController = i.animationController
     o.attackDisabled = i.attackDisabled
     o.autoRun = i.autoRun
-    o.birthsign = i.birthsign
+    o.birthsign = _tes3birthsign(jsonrpc.object(), i.birthsign)
     o.bounty = i.bounty
-    o.bountyData = i.bountyData
-    o.cameraHeight = i.cameraHeight
+    o.bountyData = _tes3bountyData(jsonrpc.object(), i.bountyData)
+    -- o.cameraHeight = i.cameraHeight
     o.castReady = i.castReady
-    o.clawMultiplier = i.clawMultiplier
+    o.clawMultiplier = _tes3globalVariable(jsonrpc.object(), i.clawMultiplier)
     o.controlsDisabled = i.controlsDisabled
-    o.dialogueList = i.dialogueList
-    o.firstPerson = i.firstPerson
-    o.firstPersonReference = i.firstPersonReference
+
+    if i.dialogueList then
+        local dialogueArray = jsonrpc.array(table.size(i.dialogueList))
+        for _, dialogue in ipairs(i.dialogueList) do
+            local dialogueObject = jsonrpc.object()
+            if _tes3dialogue(dialogueObject, dialogue) then
+                table.insert(dialogueArray, dialogueObject)
+            end
+        end
+        if table.size(dialogueArray) > 0 then
+            o.dialogueList = dialogueArray
+        end
+    end
+
+    -- o.firstPerson = i.firstPerson
+    -- o.firstPersonReference = i.firstPersonReference
     o.inactivityTime = i.inactivityTime
     o.inJail = i.inJail
     o.is3rdPerson = i.is3rdPerson
     o.jumpingDisabled = i.jumpingDisabled
-    o.knownWerewolf = i.knownWerewolf
-    o.lastUsedAlembic = i.lastUsedAlembic
+    o.knownWerewolf = _tes3globalVariable(jsonrpc.object(), i.knownWerewolf)
+    o.lastUsedAlembic = i.lastUsedAlembic -- TODO
     o.lastUsedAmmoCount = i.lastUsedAmmoCount
-    o.lastUsedCalcinator = i.lastUsedCalcinator
-    o.lastUsedMortar = i.lastUsedMortar
-    o.lastUsedRetort = i.lastUsedRetort
-    o.levelupPerSpecialization = i.levelupPerSpecialization
+    o.lastUsedCalcinator = i.lastUsedCalcinator -- TODO
+    o.lastUsedMortar = i.lastUsedMortar -- TODO
+    o.lastUsedRetort = i.lastUsedRetort -- TODO
+    o.levelupPerSpecialization = jsonrpc.array(i.levelupPerSpecialization)
     o.levelUpProgress = i.levelUpProgress
-    o.levelupsPerAttribute = i.levelupsPerAttribute
+    o.levelupsPerAttribute = jsonrpc.array(i.levelupsPerAttribute)
     o.magicDisabled = i.magicDisabled
-    o.markLocation = i.markLocation
+    o.markLocation = i.markLocation -- TODO
     o.mouseLookDisabled = i.mouseLookDisabled
     o.restHoursRemaining = i.restHoursRemaining
-    o.skillProgress = i.skillProgress
+    o.skillProgress = jsonrpc.array(i.skillProgress)
     o.sleeping = i.sleeping
     o.telekinesis = i.telekinesis
     o.traveling = i.traveling

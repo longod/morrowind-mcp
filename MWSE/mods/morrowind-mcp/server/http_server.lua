@@ -7,6 +7,8 @@ local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.manager")
 
+-- TODO split implementations, such as session manager?
+
 ---@type Socket.Module
 local socket = require("socket")
 
