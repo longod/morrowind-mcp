@@ -1,7 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.serializer")
-
 
 ---@class MCP.JournalFetch: MCP.ITool
 ---@field logger mwseLogger
@@ -41,6 +39,10 @@ function this:Execute(params, context)
     -- perphaps, we can not access to journal entries in a save data.
     -- "JOUR"  recourds in ess stores just html same as journal.htm.
     -- https://en.uesp.net/morrow/tech/mw_esm.txt
+
+    -- https://pt.uesp.net/wiki/Morrowind_Mod:Text_Defines
+    -- https://wiki.openmw.org/index.php?title=Research:Dialogue_and_Messages
+    -- hyperlink (@*#): https://github.com/OpenMW/openmw/blob/master/apps/openmw/mwdialogue/keywordsearch.cpp#L140
 
     local path = tes3.installDirectory .. "\\Journal.htm"
     if lfs.attributes(path) then

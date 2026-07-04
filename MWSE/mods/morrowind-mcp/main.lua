@@ -92,5 +92,7 @@ require("morrowind-mcp.mcm")
 -- missing annotations
 
 ---@class tes3scriptVariables
-
 ---@class tes3keyframeDefinition
+---@class tes3mapController
+---@class HINSTANCE
+---@class HWND

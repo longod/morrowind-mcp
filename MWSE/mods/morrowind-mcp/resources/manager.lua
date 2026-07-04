@@ -6,6 +6,22 @@ local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local base64 = require("morrowind-mcp.core.base64")
 
+--- I want to idendify same or difference character.
+---@class MCP.SaveGameState
+---@field playerName string
+-----@field modifiedTime string
+-----@field filename string
+-----@field fileSize number
+
+-- IGT useful for loading save game.
+
+---@class MCP.ResourceCacheState
+---@field save MCP.SaveGameState
+---@field lastModifiedInSystemTime number
+---@field lastModifiedInGameTime number
+---@field lastAccessedInSystemTime number
+---@field lastAccessedInGameTime number
+
 ---@class MCP.ResourceManager: MCP.IResourceManager
 ---@field logger mwseLogger
 local this = {}

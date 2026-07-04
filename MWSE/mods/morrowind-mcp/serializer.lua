@@ -1,6 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local config = require("morrowind-mcp.config")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "serializer" })
+local enumname = require("morrowind-mcp.enumname")
 
 local this = {}
 
@@ -39,24 +40,17 @@ local function ValidateType(i)
 
     return true
 end
-local _objectTypeName = nil ---@type table<tes3.objectType, string>
 
----@param objectType tes3.objectType
----@return string
-local function objectTypeToString(objectType)
-    if not _objectTypeName then
-        _objectTypeName = {}
-        for k, v in pairs(tes3.objectType) do
-            _objectTypeName[v] = k
-        end
-    end
-    return _objectTypeName[objectType]
-end
 
 local fontName = {
     "magic_cards_regular",         -- Magic Cards, default
     "century_gothic_font_regular", -- Century Sans
     "daedric_font",
+}
+
+local npcSexName = {
+    [0] = "male",
+    [1] = "female",
 }
 
 ---@param i tes3uiElement?
@@ -93,9 +87,9 @@ local function _tes3uiElement(i)
         -- color = i.color,
         consumeMouseEvents = i.consumeMouseEvents,
         contentPath = i.contentPath,
-        contentType = i.contentType,
+        contentType = enumname.contentType(i.contentType),
         disabled = i.disabled,
-        -- flowDirection = i.flowDirection,
+        -- flowDirection = enumname.flowDirection(i.flowDirection),
         font = fontName[i.font],
         -- height = i.height,
         -- heightProportional = i.heightProportional,
@@ -125,7 +119,7 @@ local function _tes3uiElement(i)
         -- sceneNode = i.sceneNode, -- need?
         text = i.text,
         -- texture = i.texture, -- need?
-        type = i.type,
+        type = enumname.uiElementType(i.type),
         -- visible = i.visible, -- if element is not terminated, it is needed to contain
         -- widget = ToJsonWidget(i.widget, i.type), -- need?
         -- width = i.width,
@@ -150,6 +144,14 @@ local function _tes3uiElement(i)
 end
 
 ---@param o MCP.AnyMap
+---@param i tes3fader
+---@return MCP.AnyMap?
+local function _tes3fader(o, i)
+    o.active = i.active
+    return o
+end
+
+---@param o MCP.AnyMap
 ---@param i tes3baseObject
 ---@return MCP.AnyMap?
 local function _tes3baseObject(o, i)
@@ -164,14 +166,28 @@ local function _tes3baseObject(o, i)
     o.disabled = i.disabled
     o.id = i.id
     o.modified = i.modified
-    o.objectFlags = i.objectFlags
-    o.objectType = objectTypeToString(i.objectType)
+    -- o.objectFlags = i.objectFlags -- TODO means flags
+    o.objectType = enumname.objectType(i.objectType)
     o.persistent = i.persistent
     o.sourceless = i.sourceless
     o.sourceMod = i.sourceMod
     o.supportsActivate = i.supportsActivate
     return o
 end
+
+
+---@param o MCP.AnyMap
+---@param i tes3globalVariable
+---@return MCP.AnyMap?
+local function _tes3globalVariable(o, i)
+    if not _tes3baseObject(o, i) then
+        return nil
+    end
+    o.value = i.value
+    return o
+end
+
+
 
 ---@param o MCP.AnyMap
 ---@param i tes3object
@@ -187,6 +203,50 @@ local function _tes3object(o, i)
     o.scale = i.scale
     -- o.sceneCollisionRoot = i.sceneCollisionRoot
     -- o.sceneNode = i.sceneNode
+    return o
+end
+
+
+---@param o MCP.AnyMap
+---@param i tes3spell
+---@return MCP.AnyMap?
+local function _tes3spell(o, i)
+    if not _tes3object(o, i) then
+        return nil
+    end
+    o.alwaysSucceeds = i.alwaysSucceeds
+    o.autoCalc = i.autoCalc
+    o.basePurchaseCost = i.basePurchaseCost
+    o.castType = enumname.spellType(i.castType)
+    o.effects = i.effects
+    -- o.flags = i.flags -- TODO means flags
+    o.isAbility = i.isAbility
+    o.isActiveCast = i.isActiveCast
+    o.isBlightDisease = i.isBlightDisease
+    o.isCommonDisease = i.isCommonDisease
+    o.isCorprusDisease = i.isCorprusDisease
+    o.isCurse = i.isCurse
+    o.isDisease = i.isDisease
+    o.isPower = i.isPower
+    o.isSpell = i.isSpell
+    o.magickaCost = i.magickaCost
+    o.name = i.name
+    o.playerStart = i.playerStart
+    o.value = i.value
+    return o
+end
+
+---@param o MCP.AnyMap
+---@param i tes3birthsign
+---@return MCP.AnyMap?
+local function _tes3birthsign(o, i)
+    if not _tes3baseObject(o, i) then
+        return nil
+    end
+    o.description = i.description
+    o.name = i.name
+    o.spells = i.spells
+    -- o.texturePath = i.texturePath
     return o
 end
 
@@ -252,7 +312,7 @@ local function _tes3dialogue(o, i)
     -- need no serialize option or parent. avoid circular reference. info has dialogue, dialogue has info.
 
     o.journalIndex = i.journalIndex
-    o.type = i.type -- TODO convert to string. tes3.dialogueType
+    o.type = enumname.dialogueType(i.type)
 
     return o
 end
@@ -276,11 +336,11 @@ local function _tes3dialogueInfo(o, i)
     -- o.npcFaction = i.npcFaction
     -- o.npcRace = i.npcRace
     o.npcRank = i.npcRank
-    o.npcSex = i.npcSex
+    o.npcSex = npcSexName[i.npcSex] or i.npcSex
     o.pcFaction = i.pcFaction
     o.pcRank = i.pcRank
     o.text = i.text
-    o.type = i.type
+    o.type = enumname.dialogueType(i.type)
 
     return o
 end
@@ -350,7 +410,7 @@ local function _tes3mobileActor(o, i)
     o.cellX = i.cellX
     o.cellY = i.cellY
     -- o.dynamicLightingValid = i.dynamicLightingValid
-    o.flags = i.flags
+    -- o.flags = i.flags -- TODO means flags
     o.height = i.height
     -- o.impulseVelocity = i.impulseVelocity
     -- o.inventory = i.inventory
@@ -358,8 +418,8 @@ local function _tes3mobileActor(o, i)
     -- o.lightEffectData = i.lightEffectData
     -- o.mobToMobCollision = i.mobToMobCollision
     -- o.movementCollision = i.movementCollision
-    -- o.movementFlags = i.movementFlags
-    o.objectType = objectTypeToString(i.objectType)
+    -- o.movementFlags = i.movementFlags -- TODO means flags
+    o.objectType = enumname.objectType(i.objectType)
     o.playerDistance = i.playerDistance
     o.position = i.position
     -- o.prevMovementFlags = i.prevMovementFlags
@@ -385,9 +445,50 @@ local function _tes3mobilePlayer(o, i)
     if not _tes3mobileNPC(o, i) then
         return nil
     end
+    o.alwaysRun = i.alwaysRun
+    -- o.animationController = i.animationController
+    o.attackDisabled = i.attackDisabled
+    o.autoRun = i.autoRun
+    o.birthsign = i.birthsign
+    o.bounty = i.bounty
+    o.bountyData = i.bountyData
+    o.cameraHeight = i.cameraHeight
+    o.castReady = i.castReady
+    o.clawMultiplier = i.clawMultiplier
+    o.controlsDisabled = i.controlsDisabled
+    o.dialogueList = i.dialogueList
+    o.firstPerson = i.firstPerson
+    o.firstPersonReference = i.firstPersonReference
+    o.inactivityTime = i.inactivityTime
+    o.inJail = i.inJail
+    o.is3rdPerson = i.is3rdPerson
+    o.jumpingDisabled = i.jumpingDisabled
+    o.knownWerewolf = i.knownWerewolf
+    o.lastUsedAlembic = i.lastUsedAlembic
+    o.lastUsedAmmoCount = i.lastUsedAmmoCount
+    o.lastUsedCalcinator = i.lastUsedCalcinator
+    o.lastUsedMortar = i.lastUsedMortar
+    o.lastUsedRetort = i.lastUsedRetort
+    o.levelupPerSpecialization = i.levelupPerSpecialization
+    o.levelUpProgress = i.levelUpProgress
+    o.levelupsPerAttribute = i.levelupsPerAttribute
+    o.magicDisabled = i.magicDisabled
+    o.markLocation = i.markLocation
+    o.mouseLookDisabled = i.mouseLookDisabled
+    o.restHoursRemaining = i.restHoursRemaining
+    o.skillProgress = i.skillProgress
+    o.sleeping = i.sleeping
+    o.telekinesis = i.telekinesis
+    o.traveling = i.traveling
+    o.vanityDisabled = i.vanityDisabled
+    o.viewSwitchDisabled = i.viewSwitchDisabled
+    o.visionBonus = i.visionBonus
+    o.waiting = i.waiting
+    o.weaponReady = i.weaponReady
     return o
 end
 
+--- it seems worldcontoller has not useful variables.
 ---@param o MCP.AnyMap?
 ---@param i tes3worldController
 ---@return MCP.AnyMap?
@@ -395,6 +496,89 @@ local function _tes3worldController(o, i)
     if not i then
         return nil
     end
+    -- o.aiDistanceScale = i.aiDistanceScale
+    -- o.allMobileActors = i.allMobileActors
+    -- o.armCamera = i.armCamera
+    -- o.audioController = i.audioController
+    o.blindnessFader =  _tes3fader(jsonrpc.object(), i.blindnessFader)
+    -- o.characterRenderTarget = i.characterRenderTarget
+    -- o.charGenState = i.charGenState -- TODO
+    -- o.countMusicTracksBattle = i.countMusicTracksBattle
+    -- o.countMusicTracksExplore = i.countMusicTracksExplore
+    -- o.criticalDamageSound = i.criticalDamageSound
+    -- o.cursorOff = i.cursorOff
+    o.day = _tes3globalVariable(jsonrpc.object(), i.day)
+    o.daysPassed = _tes3globalVariable(jsonrpc.object(), i.daysPassed)
+    -- o.deadFloatScale = i.deadFloatScale
+    -- o.defaultLandSound = i.defaultLandSound
+    -- o.defaultLandWaterSound = i.defaultLandWaterSound
+    -- o.deltaTime = i.deltaTime
+    o.difficulty = i.difficulty
+    -- o.drowningDamageSound = i.drowningDamageSound
+    -- o.drownSound = i.drownSound
+    -- o.enchantedItemEffect = i.enchantedItemEffect
+    -- o.enchantedItemEffectCreated = i.enchantedItemEffectCreated
+    -- o.enchantedItemEffectTextures = i.enchantedItemEffectTextures
+    o.flagLevitationDisabled = i.flagLevitationDisabled
+    o.flagTeleportingDisabled = i.flagTeleportingDisabled
+    -- o.globalScripts = i.globalScripts
+    -- o.handToHandHit2Sound = i.handToHandHit2Sound
+    -- o.handToHandHitSound = i.handToHandHitSound
+    -- o.healthDamageSound = i.healthDamageSound
+    -- o.heavyArmorHitSound = i.heavyArmorHitSound
+    -- o.helpDelay = i.helpDelay
+    o.hitFader = _tes3fader(jsonrpc.object(), i.hitFader)
+    o.hour = _tes3globalVariable(jsonrpc.object(), i.hour)
+    -- o.hudStyle = i.hudStyle -- TODO
+    -- o.inputController = i.inputController
+    -- o.instance = i.instance
+    -- o.itemRepairSound = i.itemRepairSound
+    -- o.lastFrameTime = i.lastFrameTime
+    -- o.lightArmorHitSound = i.lightArmorHitSound
+    -- o.mapController = i.mapController
+    -- o.maxFPS = i.maxFPS
+    -- o.mediumArmorHitSound = i.mediumArmorHitSound
+    -- o.menuAlpha = i.menuAlpha
+    -- o.menuCamera = i.menuCamera
+    -- o.menuClickSound = i.menuClickSound
+    -- o.menuController = i.menuController
+    -- o.menuSizeSound = i.menuSizeSound
+    -- o.missSound = i.missSound
+    -- o.mobManager = i.mobManager
+    o.month = _tes3globalVariable(jsonrpc.object(), i.month)
+    o.monthsToRespawn = _tes3globalVariable(jsonrpc.object(), i.monthsToRespawn)
+    -- o.mouseSensitivityX = i.mouseSensitivityX
+    -- o.mouseSensitivityY = i.mouseSensitivityY
+    o.musicSituation = enumname.musicSituation(i.musicSituation)
+    -- o.nodeCursor = i.nodeCursor
+    -- o.parentWindowHandle = i.parentWindowHandle
+    -- o.projectionDistance = i.projectionDistance
+    -- o.quests = i.quests
+    -- o.quickSaveWhenResting = i.quickSaveWhenResting
+    -- o.rechargingItems = i.rechargingItems -- need?
+    -- o.shaderWaterReflectTerrain = i.shaderWaterReflectTerrain
+    -- o.shaderWaterReflectUpdate = i.shaderWaterReflectUpdate
+    -- o.shadowCamera = i.shadowCamera
+    -- o.shadows = i.shadows
+    -- o.showSubtitles = i.showSubtitles
+    o.simulationTimeScalar = i.simulationTimeScalar
+    -- o.splashController = i.splashController
+    -- o.splashscreenCamera = i.splashscreenCamera
+    o.stopGameLoop = i.stopGameLoop
+    o.sunglareFader = _tes3fader(jsonrpc.object(), i.sunglareFader)
+    o.systemTime = i.systemTime
+    o.timescale = _tes3globalVariable(jsonrpc.object(), i.timescale)
+    o.transitionFader = _tes3fader(jsonrpc.object(), i.transitionFader)
+    o.useBestAttack = i.useBestAttack
+    -- o.vfxManager = i.vfxManager
+    -- o.viewHeight = i.viewHeight
+    -- o.viewWidth = i.viewWidth
+    -- o.weaponSwishSound = i.weaponSwishSound
+    -- o.weatherController = i.weatherController -- TODO needs to know current weather.
+    o.werewolfFader = _tes3fader(jsonrpc.object(), i.werewolfFader)
+    -- o.werewolfFOV = i.werewolfFOV
+    -- o.worldCamera = i.worldCamera
+    o.year = _tes3globalVariable(jsonrpc.object(), i.year)
 
     return o
 end
