@@ -545,7 +545,127 @@ local function _tes3mobilePlayer(o, i)
     return o
 end
 
---- it seems worldcontoller has not useful variables.
+--- TODO inheritance types: tes3weatherAsh|tes3weatherBlight|tes3weatherBlizzard|tes3weatherClear|tes3weatherCloudy|tes3weatherFoggy|tes3weatherOvercast|tes3weatherRain|tes3weatherSnow|tes3weatherThunder
+--- but not important, because  thet contain some filed for less needed for AI.
+---@param o MCP.AnyMap?
+---@param i tes3weather
+---@return MCP.AnyMap?
+local function _tes3weather(o, i)
+    if not i then
+        return nil
+    end
+    o.ambientDayColor = i.ambientDayColor
+    -- o.ambientLoopSound = i.ambientLoopSound
+    -- o.ambientLoopSoundId = i.ambientLoopSoundId
+    o.ambientNightColor = i.ambientNightColor
+    -- o.ambientPlaying = i.ambientPlaying
+    o.ambientSunriseColor = i.ambientSunriseColor
+    o.ambientSunsetColor = i.ambientSunsetColor
+    o.cloudsMaxPercent = i.cloudsMaxPercent
+    o.cloudsSpeed = i.cloudsSpeed
+    -- o.cloudTexture = i.cloudTexture
+    -- o.controller = i.controller -- TODO avoid circular reference
+    -- o.fogDayColor = i.fogDayColor
+    -- o.fogNightColor = i.fogNightColor
+    -- o.fogSunriseColor = i.fogSunriseColor
+    -- o.fogSunsetColor = i.fogSunsetColor
+    o.glareView = i.glareView
+    o.index = enumname.weather(i.index)
+    o.landFogDayDepth = i.landFogDayDepth
+    o.landFogNightDepth = i.landFogNightDepth
+    o.name = i.name
+    -- o.skyDayColor = i.skyDayColor
+    -- o.skyNightColor = i.skyNightColor
+    -- o.skySunriseColor = i.skySunriseColor
+    -- o.skySunsetColor = i.skySunsetColor
+    o.sunDayColor = i.sunDayColor
+    o.sundiscSunsetColor = i.sundiscSunsetColor
+    o.sunNightColor = i.sunNightColor
+    o.sunSunriseColor = i.sunSunriseColor
+    o.sunSunsetColor = i.sunSunsetColor
+    -- o.transitionDelta = i.transitionDelta
+    -- o.underwaterSoundState = i.underwaterSoundState
+    o.windSpeed = i.windSpeed
+    return o
+end
+
+---@param o MCP.AnyMap?
+---@param i tes3weatherController
+---@return MCP.AnyMap?
+local function _tes3weatherController(o, i)
+    if not i then
+        return nil
+    end
+    -- TODO need to calculate current ambient color?
+    -- TODO need to calculate current sun direction and color?
+
+    o.ambientPostSunriseTime = i.ambientPostSunriseTime
+    o.ambientPostSunsetTime = i.ambientPostSunsetTime
+    o.ambientPreSunriseTime = i.ambientPreSunriseTime
+    o.ambientPreSunsetTime = i.ambientPreSunsetTime
+    o.currentFogColor = i.currentFogColor
+    o.currentSkyColor = i.currentSkyColor
+    o.currentWeather = _tes3weather(jsonrpc.object(), i.currentWeather)
+    o.daysRemaining = i.daysRemaining
+    -- o.fogDepthChangeSpeed = i.fogDepthChangeSpeed
+    -- o.fogPostSunriseTime = i.fogPostSunriseTime
+    -- o.fogPostSunsetTime = i.fogPostSunsetTime
+    -- o.fogPreSunriseTime = i.fogPreSunriseTime
+    -- o.fogPreSunsetTime = i.fogPreSunsetTime
+    o.hoursBetweenWeatherChanges = i.hoursBetweenWeatherChanges
+    o.hoursRemaining = i.hoursRemaining
+    -- o.lastActiveRegion = i.lastActiveRegion -- TODO
+    -- o.masser = i.masser -- TODO
+    o.nextWeather = _tes3weather(jsonrpc.object(), i.nextWeather)
+    -- o.particlesActive = i.particlesActive
+    -- o.particlesInactive = i.particlesInactive
+    o.precipitationFallSpeed = i.precipitationFallSpeed
+    -- o.sceneAtmosphere = i.sceneAtmosphere
+    -- o.sceneClouds = i.sceneClouds
+    -- o.sceneNightSky = i.sceneNightSky
+    -- o.sceneRainRoot = i.sceneRainRoot
+    -- o.sceneSkyLight = i.sceneSkyLight
+    -- o.sceneSkyRoot = i.sceneSkyRoot
+    -- o.sceneSnowRoot = i.sceneSnowRoot
+    -- o.sceneStormRoot = i.sceneStormRoot
+    -- o.sceneSunBase = i.sceneSunBase
+    -- o.sceneSunGlare = i.sceneSunGlare
+    -- o.sceneSunVis = i.sceneSunVis
+    -- o.secunda = i.secunda -- TODO
+    -- o.skyPostSunriseTime = i.skyPostSunriseTime
+    -- o.skyPostSunsetTime = i.skyPostSunsetTime
+    -- o.skyPreSunriseTime = i.skyPreSunriseTime
+    -- o.skyPreSunsetTime = i.skyPreSunsetTime
+    o.snowFallSpeedScale = i.snowFallSpeedScale
+    o.starsFadingDuration = i.starsFadingDuration
+    o.starsPostSunsetStart = i.starsPostSunsetStart
+    o.starsPreSunriseFinish = i.starsPreSunriseFinish
+    o.sunglareFaderAngleMax = i.sunglareFaderAngleMax
+    o.sunglareFaderColor = i.sunglareFaderColor
+    o.sunglareFaderMax = i.sunglareFaderMax
+    o.sunPostSunriseTime = i.sunPostSunriseTime
+    o.sunPostSunsetTime = i.sunPostSunsetTime
+    o.sunPreSunriseTime = i.sunPreSunriseTime
+    o.sunPreSunsetTime = i.sunPreSunsetTime
+    o.sunriseDuration = i.sunriseDuration
+    o.sunriseHour = i.sunriseHour
+    o.sunsetDuration = i.sunsetDuration
+    o.sunsetHour = i.sunsetHour
+    o.timescaleClouds = i.timescaleClouds
+    o.transitionScalar = i.transitionScalar
+    o.underwaterColor = i.underwaterColor
+    o.underwaterColorWeight = i.underwaterColorWeight
+    o.underwaterDayFog = i.underwaterDayFog
+    o.underwaterIndoorFog = i.underwaterIndoorFog
+    o.underwaterNightFog = i.underwaterNightFog
+    o.underwaterSunriseFog = i.underwaterSunriseFog
+    o.underwaterSunsetFog = i.underwaterSunsetFog
+    -- o.weathers = i.weathers -- all weathers
+    o.windVelocityCurrWeather = i.windVelocityCurrWeather
+    o.windVelocityNextWeather = i.windVelocityNextWeather
+    return o
+end
+
 ---@param o MCP.AnyMap?
 ---@param i tes3worldController
 ---@return MCP.AnyMap?
@@ -631,7 +751,7 @@ local function _tes3worldController(o, i)
     -- o.viewHeight = i.viewHeight
     -- o.viewWidth = i.viewWidth
     -- o.weaponSwishSound = i.weaponSwishSound
-    -- o.weatherController = i.weatherController -- TODO needs to know current weather.
+    o.weatherController =  _tes3weatherController(jsonrpc.object(), i.weatherController)
     o.werewolfFader = _tes3fader(jsonrpc.object(), i.werewolfFader)
     -- o.werewolfFOV = i.werewolfFOV
     -- o.worldCamera = i.worldCamera

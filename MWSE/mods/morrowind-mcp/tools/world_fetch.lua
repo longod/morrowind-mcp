@@ -46,6 +46,8 @@ function this:Execute(params, context)
     -- static state, dynamic state?
     -- and cellls
 
+    -- fetch sound state? AI cant listen sounds directly
+
     local structuredContent = jsonrpc.object({ world = serializer.tes3worldController(world) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
