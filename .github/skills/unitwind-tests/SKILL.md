@@ -41,3 +41,9 @@ applyTo:
 - テストファイルは `dofile` で呼び出されてテストされるため、`function this.Test()` 関数内に追加・更新します。
 - 新しいテストフレームワークは導入しません。
 - リポジトリ固有の規約は `.github/instructions/mwse.instructions.md` に従います。
+
+## Mock 方針（UnitWind）
+- 依存の差し替えは、可能なら対象テーブルのメンバーを直接 `unitwind:mock()` します。
+- 例: `unitwind:mock(tes3, "findGMST", function(id) ... end)` のように、必要な関数だけ差し替えます。
+- グローバルテーブル全体（例: `tes3` そのもの）を差し替える必要があるときだけ、`unitwind:mock(_G, "tes3", mockTable)` を使います。
+- テスト内で手動代入と手動復元（`tes3 = ...` / `tes3 = originalTes3`）を行うより、`unitwind:mock()` と `unitwind:unmock()` を優先します。

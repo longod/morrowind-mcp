@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.serializer")
+local serializer = require("morrowind-mcp.tes3.object")
 
 
 ---@class MCP.TargetFetch: MCP.ITool

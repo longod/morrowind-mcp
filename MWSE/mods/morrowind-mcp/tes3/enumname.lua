@@ -267,14 +267,14 @@ end
 ---@param value number
 ---@return string|nil
 function this.attribute(value)
-    -- TODO simply wrapping tes3.attributeName?
-    return EnumName(tes3.attribute, value)
+    -- tes3.attributeName is a pre-built number->string table; direct lookup avoids inversion.
+    return tes3.attributeName[value]
 end
 
 ---@param value number
 ---@return string|nil
 function this.attributeName(value)
-    return EnumName(tes3.attributeName, value)
+    return this.attribute(value)
 end
 
 ---@param value number
@@ -307,6 +307,7 @@ function this.compilerSource(value)
     return EnumName(tes3.compilerSource, value)
 end
 
+---@deprecated broken function; use tes3.contentType directly
 ---@param value number
 ---@return string|nil
 function this.contentType(value)
@@ -526,14 +527,15 @@ end
 ---@param value number
 ---@return string|nil
 function this.skill(value)
-    -- TODO simply wrapping tes3.skillName?
-    return EnumName(tes3.skill, value)
+    -- tes3.skillName is a pre-built number->string table with display names (e.g. "Medium Armor").
+    -- Direct lookup avoids inversion and returns human-readable names.
+    return tes3.skillName[value]
 end
 
 ---@param value number
 ---@return string|nil
 function this.skillName(value)
-    return EnumName(tes3.skillName, value)
+    return this.skill(value)
 end
 
 ---@param value number
@@ -563,14 +565,14 @@ end
 ---@param value number
 ---@return string|nil
 function this.specialization(value)
-    -- TODO simply wrapping tes3.attributeSpecializationName?
-    return EnumName(tes3.specialization, value)
+    -- tes3.specializationName is a pre-built number->string table; direct lookup avoids inversion.
+    return tes3.specializationName[value]
 end
 
 ---@param value number
 ---@return string|nil
 function this.specializationName(value)
-    return EnumName(tes3.specializationName, value)
+    return this.specialization(value)
 end
 
 ---@param value number
@@ -591,6 +593,7 @@ function this.spellType(value)
     return EnumName(tes3.spellType, value)
 end
 
+---@deprecated broken function; use tes3.uiElementType directly
 ---@param value number
 ---@return string|nil
 function this.uiElementType(value)

@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.serializer")
+local ui = require("morrowind-mcp.tes3.ui")
 
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
@@ -102,7 +102,7 @@ function this:Execute(params, context)
 
     -- TODO only tes3.getTopMenu() or tes3ui.getMenuOnTop()
 
-    local structuredContent = jsonrpc.object({ menu = serializer.tes3uiElement(menu), help = serializer.tes3uiElement(help) })
+    local structuredContent = jsonrpc.object({ menu = ui.tes3uiElement(menu), help = ui.tes3uiElement(help) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

@@ -1,7 +1,8 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local config = require("morrowind-mcp.config")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "serializer" })
-local enumname = require("morrowind-mcp.enumname")
+local enumname = require("morrowind-mcp.tes3.enumname")
+local ui = require("morrowind-mcp.tes3.ui")
 
 local this = {}
 
@@ -81,96 +82,6 @@ local npcSexName = {
     [0] = "male",
     [1] = "female",
 }
-
----@param i tes3uiElement?
----@return MCP.AnyMap?
-local function _tes3uiElement(i)
-    if not i then
-        return nil
-    end
-    if not i:isValid() then
-        return nil
-    end
-
-    -- same as human visibility
-    if not i.visible then
-        return nil
-    end
-
-    local o = jsonrpc.object({
-        -- absolutePosAlignX = i.absolutePosAlignX,
-        -- absolutePosAlignY = i.absolutePosAlignY,
-        -- alpha = i.alpha,
-        -- autoHeight = i.autoHeight,
-        -- autoWidth = i.autoWidth,
-        -- borderAllSides = i.borderAllSides,
-        -- borderBottom = i.borderBottom,
-        -- borderLeft = i.borderLeft,
-        -- borderRight = i.borderRight,
-        -- borderTop = i.borderTop,
-        -- childAlignX = i.childAlignX,
-        -- childAlignY = i.childAlignY,
-        -- childOffsetX = i.childOffsetX,
-        -- childOffsetY = i.childOffsetY,
-        -- children = jsonrpc.array(table.size(i.children)), -- later
-        -- color = i.color,
-        consumeMouseEvents = i.consumeMouseEvents,
-        contentPath = i.contentPath,
-        contentType = enumname.contentType(i.contentType),
-        disabled = i.disabled,
-        -- flowDirection = enumname.flowDirection(i.flowDirection),
-        font = fontName[i.font],
-        -- height = i.height,
-        -- heightProportional = i.heightProportional,
-        id = i.id,
-        -- ignoreLayoutX = i.ignoreLayoutX,
-        -- ignoreLayoutY = i.ignoreLayoutY,
-        -- imageFilter = i.imageFilter,
-        -- imageScaleX = i.imageScaleX,
-        -- imageScaleY = i.imageScaleY,
-        -- justifyText = i.justifyText,
-        -- maxHeight = i.maxHeight,
-        -- maxWidth = i.maxWidth,
-        -- minHeight = i.minHeight,
-        -- minWidth = i.minWidth,
-        name = i.name,
-        -- paddingAllSides = i.paddingAllSides,
-        -- paddingBottom = i.paddingBottom,
-        -- paddingLeft = i.paddingLeft,
-        -- paddingRight = i.paddingRight,
-        -- paddingTop = i.paddingTop,
-        -- parent = i.parent,
-        -- positionX = i.positionX,
-        -- positionY = i.positionY,
-        rawText = i.rawText,
-        repeatKeys = i.repeatKeys,
-        -- scaleMode = i.scaleMode,
-        -- sceneNode = i.sceneNode, -- need?
-        text = i.text,
-        -- texture = i.texture, -- need?
-        type = enumname.uiElementType(i.type),
-        -- visible = i.visible, -- if element is not terminated, it is needed to contain
-        -- widget = ToJsonWidget(i.widget, i.type), -- need?
-        -- width = i.width,
-        -- widthProportional = i.widthProportional,
-    })
-
-    local children = jsonrpc.array(table.size(i.children))
-    for _, child in ipairs(i.children) do
-        local c = _tes3uiElement(child)
-        if c then
-            table.insert(children, c)
-        end
-    end
-    if table.size(children) > 0 then
-        o.children = children
-    end
-
-    if table.size(o) > 0 then
-        return o
-    end
-    return nil
-end
 
 ---@param i tes3fader
 ---@param o MCP.AnyMap
@@ -459,7 +370,7 @@ local function _tes3inventoryTile(i, o)
         return nil
     end
     o.count = i.count
-    o.element = _tes3uiElement(i.element)
+    o.element = ui.tes3uiElement(i.element)
     -- o.flags = i.flags
     o.isBartered = i.isBartered
     o.isBoundItem = i.isBoundItem
@@ -470,14 +381,6 @@ local function _tes3inventoryTile(i, o)
     return o
 end
 
-
----@param i tes3uiElement
----@return MCP.AnyMap?
-function this.tes3uiElement(i)
-    local o = _tes3uiElement(i)
-    local _ = ValidateType(o)
-    return o
-end
 
 ---@param i tes3inventoryTile
 ---@return MCP.AnyMap?

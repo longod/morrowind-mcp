@@ -6,9 +6,9 @@ function this.Test()
         highlight = false,
     })
 
-    local enumname = require("morrowind-mcp.enumname")
+    local enumname = require("morrowind-mcp.tes3.enumname")
 
-    unitwind:start("morrowind-mcp.enumname")
+    unitwind:start("morrowind-mcp.tes3.enumname")
 
     unitwind:test("EnumName returns canonical name for non-bitflag enums", function()
         unitwind:expect(enumname.objectType(tes3.objectType.activator)).toBe("activator")
@@ -74,6 +74,36 @@ function this.Test()
     unitwind:test("BitFlagNames returns matched names when some bits remain unmatched", function()
         local names = enumname.actionFlag(tes3.actionFlag.doorClosing + 0x4)
         unitwind:expect(table.concat(names, "|")).toBe("doorClosing")
+    end)
+
+    -- skill uses tes3.skillName (pre-built number->string) and returns display names.
+    unitwind:test("skill returns display name from tes3.skillName", function()
+        unitwind:expect(enumname.skill(tes3.skill.block)).toBe("Block")
+        unitwind:expect(enumname.skill(tes3.skill.mediumArmor)).toBe("Medium Armor")
+    end)
+
+    unitwind:test("skillName is an alias for skill", function()
+        unitwind:expect(enumname.skillName(tes3.skill.block)).toBe(enumname.skill(tes3.skill.block))
+    end)
+
+    -- attribute uses tes3.attributeName (pre-built number->string).
+    unitwind:test("attribute returns name from tes3.attributeName", function()
+        unitwind:expect(enumname.attribute(tes3.attribute.strength)).toBe("strength")
+        unitwind:expect(enumname.attribute(tes3.attribute.luck)).toBe("luck")
+    end)
+
+    unitwind:test("attributeName is an alias for attribute", function()
+        unitwind:expect(enumname.attributeName(tes3.attribute.strength)).toBe(enumname.attribute(tes3.attribute.strength))
+    end)
+
+    -- specialization uses tes3.specializationName (pre-built number->string).
+    unitwind:test("specialization returns name from tes3.specializationName", function()
+        unitwind:expect(enumname.specialization(tes3.specialization.combat)).toBe("combat")
+        unitwind:expect(enumname.specialization(tes3.specialization.stealth)).toBe("stealth")
+    end)
+
+    unitwind:test("specializationName is an alias for specialization", function()
+        unitwind:expect(enumname.specializationName(tes3.specialization.combat)).toBe(enumname.specialization(tes3.specialization.combat))
     end)
 
     unitwind:finish()
