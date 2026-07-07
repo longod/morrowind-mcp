@@ -83,8 +83,14 @@ local function ValidateType(i)
 
     if t == "table" then
         for k, v in pairs(i) do
-            if not ValidateType(v) then
-                logger:error("Invalid value in table: %s=%s", k, type(v))
+            local vt = type(v)
+            if vt == "userdata" then
+                if not HasToJsonMethod(v) then
+                    logger:error("Invalid value in table: %s=%s", k, vt)
+                    return false
+                end
+            elseif vt == "function" or vt == "thread" then
+                logger:error("Invalid value in table: %s=%s", k, vt)
                 return false
             end
         end
@@ -454,6 +460,7 @@ local function tes3statistic(i, o)
     -- o.currentRaw = i.currentRaw
     o.normalized = i.normalized
 
+    local _ = ValidateType(o)
     return o
 end
 
@@ -473,6 +480,8 @@ local function tes3statisticSkill(i, o)
     if i.type then
         o.type = enumname.skillType(i.type)
     end
+
+    local _ = ValidateType(o)
     return o
 end
 
@@ -499,6 +508,8 @@ local function tes3baseObject(i, o)
     o.sourceless = i.sourceless
     o.sourceMod = i.sourceMod
     o.supportsActivate = i.supportsActivate
+
+    local _ = ValidateType(o)
     return o
 end
 
@@ -520,6 +531,8 @@ local function tes3object(i, o)
     o.scale = i.scale
     -- o.sceneCollisionRoot = i.sceneCollisionRoot
     -- o.sceneNode = i.sceneNode
+
+    local _ = ValidateType(o)
     return o
 end
 
@@ -538,6 +551,8 @@ local function tes3physicalObject(i, o)
 
     o.boundingBox = i.boundingBox
     -- o.referenceList = i.referenceList
+
+    local _ = ValidateType(o)
     return o
 end
 
@@ -560,6 +575,7 @@ local function tes3item(i, o)
     o.promptsEquipmentReevaluation = i.promptsEquipmentReevaluation
     -- o.stolenList = i.stolenList -- TODO
 
+    local _ = ValidateType(o)
     return o
 end
 
@@ -582,6 +598,7 @@ local function tes3actor(i, o)
     -- o.equipment = i.equipment -- TODO
     -- o.inventory = i.inventory -- TODO
 
+    local _ = ValidateType(o)
     return o
 end
 
@@ -618,6 +635,7 @@ local function tes3mobileObject(i, o)
     -- o.reference = this.tes3reference(i.reference, nil, i) -- TODO avoid circular reference
     o.velocity = i.velocity
 
+    local _ = ValidateType(o)
     return o
 end
 
@@ -2192,6 +2210,110 @@ function this.tes3weapon(i, o)
 
     local _ = ValidateType(o)
     return o
+end
+
+-- Tracks objects currently being serialized in the active call stack.
+-- Weak keys avoid retaining MWSE userdata/tables after serialization ends.
+-- The table is created at top-level entry and discarded when unwinding back
+-- to depth 0, so each serialization request has isolated cycle state.
+local serializationVisited = nil
+local serializationDepth = 0
+
+---@param i any
+---@return MCP.AnyMap
+local function CircularReferencePlaceholder(i)
+    -- When a cycle is detected, return a minimal object instead of recursing.
+    -- This keeps JSON valid and prevents stack overflow.
+    local o = jsonrpc.object()
+    o.circularReference = true
+
+    -- id/objectType are optional diagnostics so callers can still identify
+    -- what object was collapsed by cycle protection.
+    -- Access is wrapped in pcall because some userdata fields may throw.
+    local okId, id = pcall(function()
+        return i.id
+    end)
+    if okId and id ~= nil then
+        o.id = id
+    end
+
+    local okObjectType, objectType = pcall(function()
+        return i.objectType
+    end)
+    if okObjectType and objectType ~= nil then
+        o.objectType = enumname.objectType(objectType) or objectType
+    end
+
+    return o
+end
+
+---@param functionName string
+---@param serializer fun(i:any, o:any):any
+---@return fun(i:any, o:any):any
+local function WrapSerializerWithVisited(functionName, serializer)
+    return function(i, o)
+        local isTopLevel = (serializationDepth == 0)
+        if isTopLevel then
+            serializationVisited = setmetatable({}, { __mode = "k" })
+        end
+        serializationDepth = serializationDepth + 1
+
+        local ok, result = pcall(function()
+        -- Preserve existing nil behavior of each serializer.
+        if not i then
+            return serializer(i, o)
+        end
+
+        local inputType = type(i)
+        -- Cycle tracking is only needed for reference-like values.
+        if inputType ~= "table" and inputType ~= "userdata" then
+            return serializer(i, o)
+        end
+
+        -- Re-entrance on the same object means we hit a reference cycle.
+        if serializationVisited and serializationVisited[i] then
+            logger:trace("Detected circular reference in %s", functionName)
+            return CircularReferencePlaceholder(i)
+        end
+
+        -- Mark before descending into child serializers.
+        if serializationVisited then
+            serializationVisited[i] = true
+        end
+
+        -- Protect the visited map cleanup even if serializer throws.
+        local ok, result = pcall(serializer, i, o)
+
+        -- Unmark on both success and failure paths.
+        if serializationVisited then
+            serializationVisited[i] = nil
+        end
+
+        if not ok then
+            -- Re-throw original serializer error for normal upstream handling.
+            error(result)
+        end
+        return result
+        end)
+
+        serializationDepth = serializationDepth - 1
+        if serializationDepth == 0 then
+            serializationVisited = nil
+        end
+
+        if not ok then
+            error(result)
+        end
+        return result
+    end
+end
+
+for name, fn in pairs(this) do
+    if type(fn) == "function" and string.sub(name, 1, 4) == "tes3" then
+        -- Wrap all public tes3 serializers so cycle protection is applied
+        -- consistently across nested serializer calls.
+        this[name] = WrapSerializerWithVisited(name, fn)
+    end
 end
 
 local objectHandler = {
