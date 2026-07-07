@@ -185,7 +185,7 @@ end
 
 function this:Execute(params, context)
 
-    -- load <Morrowind>/Journal.htm ?
+    -- load <Morrowind>/Journal.htm
     -- perphaps, we can not access to journal entries in a save data.
     -- "JOUR"  recourds in ess stores just html same as journal.htm.
     -- https://en.uesp.net/morrow/tech/mw_esm.txt

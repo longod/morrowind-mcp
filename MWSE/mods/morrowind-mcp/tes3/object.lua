@@ -8,6 +8,8 @@ local this = {}
 
 -- serialzie tes3 various objects for json serialization.
 
+-- focus on based on object or mobile object.
+
 -- default __tojson(self) just put id such as "tes3baseObject:DoorMarker".
 -- so we need to implement our own serialization function for tes3object and tes3reference... and more.
 -- but I consider if __tojson(self) overrides, other mods possible unexpected behavior, so I implement a new functions.
@@ -43,7 +45,22 @@ end
 --]]
 
 
----@param i MCP.AnyMap?
+---@param i any
+---@return boolean
+local function HasToJsonMethod(i)
+    if type(i) ~= "userdata" then
+        return false
+    end
+
+    local ok, mt = pcall(getmetatable, i)
+    if not ok or type(mt) ~= "table" then
+        return false
+    end
+
+    return type(mt.__tojson) == "function"
+end
+
+---@param i any
 ---@return boolean
 local function ValidateType(i)
     if not config.development.debug then
@@ -53,9 +70,14 @@ local function ValidateType(i)
     if i == nil then
         return true
     end
+    -- Allow userdata only when it provides __tojson for stable JSON serialization.
 
     local t = type(i)
-    if t == "userdata" or t == "function" or t == "thread" then
+    if t == "userdata" then
+        return HasToJsonMethod(i)
+    end
+
+    if t == "function" or t == "thread" then
         return false
     end
 
@@ -71,12 +93,6 @@ local function ValidateType(i)
     return true
 end
 
-
-local fontName = {
-    "magic_cards_regular",         -- Magic Cards, default
-    "century_gothic_font_regular", -- Century Sans
-    "daedric_font",
-}
 
 local npcSexName = {
     [0] = "male",
@@ -95,13 +111,17 @@ end
 --- just returns value is better?
 ---@param i tes3globalVariable
 ---@param o MCP.AnyMap
----@return MCP.AnyMap?
+---@return number?
 local function _tes3globalVariable(i, o)
-    if not this.tes3baseObject(i, o) then
+    if i == nil then
         return nil
     end
-    o.value = i.value
-    return o
+    return i.value
+    -- if not this.tes3baseObject(i, o) then
+    --     return nil
+    -- end
+    -- o.value = i.value
+    -- return o
 end
 
 ---@param i tes3bountyData
@@ -804,7 +824,7 @@ function this.tes3cell(i, o)
     o.isOrBehavesAsExterior = i.isOrBehavesAsExterior
     o.landscape =  this.tes3land(i.landscape)
     o.name = i.name
-    o.pathGrid = this.tes3pathGrid(i.pathGrid)
+    -- o.pathGrid = this.tes3pathGrid(i.pathGrid) -- TODO avoid circular reference
     -- o.pickObjectsRoot = i.pickObjectsRoot
     o.region = this.tes3region(i.region)
     o.restingIsIllegal = i.restingIsIllegal
@@ -857,7 +877,7 @@ function this.tes3class(i, o)
     o.playable = i.playable
     o.services = i.services
     -- o.skills = i.skills -- TODO
-    o.specialization = enumname(i.specialization)
+    o.specialization = enumname.specialization(i.specialization)
 
     local _ = ValidateType(o)
     return o
@@ -897,7 +917,7 @@ function this.tes3container(i, o)
     if not i then
         return nil
     end
-    o = this.tes3actor(i, o)
+    o = tes3actor(i, o)
     if not o then
         return nil
     end
@@ -930,7 +950,7 @@ function this.tes3creature(i, o)
     if not i then
         return nil
     end
-    o = this.tes3actor(i, o)
+    o = tes3actor(i, o)
     if not o then
         return nil
     end
@@ -1477,7 +1497,7 @@ function this.tes3mobileActor(i, o)
     o.levitate = i.levitate
     o.luck = tes3statisticSkill(i.luck)
     o.magicka = tes3statisticSkill(i.magicka)
-    o.magickaMultiplier = i.magickaMultiplier
+    o.magickaMultiplier = tes3statisticSkill(i.magickaMultiplier)
     o.nextActionWeight = i.nextActionWeight
     o.paralyze = i.paralyze
     o.personality = tes3statisticSkill(i.personality)
@@ -1527,7 +1547,7 @@ function this.tes3mobileCreature(i, o)
     if not i then
         return nil
     end
-    o = tes3mobileActor(i, o)
+    o = this.tes3mobileActor(i, o)
     if not o then
         return nil
     end
@@ -1555,7 +1575,7 @@ function this.tes3mobileNPC(i, o)
     if not i then
         return nil
     end
-    o = tes3mobileActor(i, o)
+    o = this.tes3mobileActor(i, o)
     if not o then
         return nil
     end
@@ -1644,7 +1664,7 @@ function this.tes3mobilePlayer(i, o)
     o.levelUpProgress = i.levelUpProgress
     o.levelupsPerAttribute = jsonrpc.array(i.levelupsPerAttribute)
     o.magicDisabled = i.magicDisabled
-    o.markLocation = this.tes3location(i.markLocation)
+    -- o.markLocation = i.markLocation --TODO
     o.mouseLookDisabled = i.mouseLookDisabled
     o.restHoursRemaining = i.restHoursRemaining
     o.skillProgress = jsonrpc.array(i.skillProgress)
@@ -1779,7 +1799,7 @@ function this.tes3pathGrid(i, o)
     o.isLoaded = i.isLoaded
     o.nodeCount = i.nodeCount
     -- o.nodes = i.nodes -- TODO
-    o.parentCell = this.tes3cell(i.parentCell)
+    -- o.parentCell = this.tes3cell(i.parentCell) -- TODO avoid circular reference
 
     local _ = ValidateType(o)
     return o
@@ -1873,7 +1893,7 @@ function this.tes3reference(i, o)
     o.activationReference = this.tes3reference(i.activationReference)
     -- o.animationData = i.animationData -- TODO
     -- o.attachments = i.attachments --TODO
-    o.baseObject = this.tes3object(i.baseObject)
+    o.baseObject = tes3object(i.baseObject)
     -- o.bodyPartManager = i.bodyPartManager -- TODO
     o.cell = this.tes3cell(i.cell)
     -- o.context = i.context
