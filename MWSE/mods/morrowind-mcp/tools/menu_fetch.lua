@@ -100,6 +100,8 @@ function this:Execute(params, context)
         self.logger:debug("No menu_id or menu_name specified. Returning all menus.")
     end
 
+    -- TODO only tes3.getTopMenu() or tes3ui.getMenuOnTop()
+
     local structuredContent = jsonrpc.object({ menu = serializer.tes3uiElement(menu), help = serializer.tes3uiElement(help) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end

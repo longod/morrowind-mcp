@@ -47,6 +47,8 @@ function this:Execute(params, context)
     -- and cellls
 
     -- fetch sound state? AI cant listen sounds directly
+    -- sound state should be handled sound events. and  evens accumulated sounds, then flush them periodically.
+    -- therefore state present to listen sounds during some interval.
 
     local structuredContent = jsonrpc.object({ world = serializer.tes3worldController(world) })
     return jsonrpc.CallToolResult(nil, structuredContent)

@@ -267,6 +267,7 @@ end
 ---@param value number
 ---@return string|nil
 function this.attribute(value)
+    -- TODO simply wrapping tes3.attributeName?
     return EnumName(tes3.attribute, value)
 end
 
@@ -525,6 +526,7 @@ end
 ---@param value number
 ---@return string|nil
 function this.skill(value)
+    -- TODO simply wrapping tes3.skillName?
     return EnumName(tes3.skill, value)
 end
 
@@ -561,6 +563,7 @@ end
 ---@param value number
 ---@return string|nil
 function this.specialization(value)
+    -- TODO simply wrapping tes3.attributeSpecializationName?
     return EnumName(tes3.specialization, value)
 end
 
