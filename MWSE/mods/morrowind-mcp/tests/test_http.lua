@@ -125,7 +125,50 @@ function this.Test()
         unitwind:expect(result.response:match("HTTP/1%.1 200 OK")).toBe("HTTP/1.1 200 OK")
         unitwind:expect(result.response:match("content%-type: text/event%-stream")).toBe("content-type: text/event-stream")
         unitwind:expect(result.response:match("cache%-control: no%-cache")).toBe("cache-control: no-cache")
-        unitwind:expect(result.response:match("MCP%-Session%-Id: session%-1")).toBe("MCP-Session-Id: session-1")
+        unitwind:expect(result.response:match("mcp%-session%-id: session%-1")).toBe("mcp-session-id: session-1")
+    end)
+
+    unitwind:test("SendServerSentEvent writes one SSE message", function()
+        local sentData = ""
+        local client = {
+            send = function(self, data, i, j)
+                sentData = data
+                return #data, nil, #data
+            end,
+        }
+
+        local result = http.SendServerSentEvent(client, "hello", "message", "42", 500)
+        unitwind:expect(result.error).toBe(nil)
+        unitwind:expect(result.index).toBe(#sentData)
+        unitwind:expect(result.lastIndex).toBe(#sentData)
+        unitwind:expect(result.response).toBe("id: 42\nevent: message\nretry: 500\ndata: hello\n\n")
+    end)
+
+    unitwind:test("PrepareResponseHeaders copies headers and sets close when needed", function()
+        local copied = http.PrepareResponseHeaders({ [http.header.content_type] = http.content_type.json }, false)
+        if copied then
+            unitwind:expect(copied[http.header.content_type]).toBe(http.content_type.json)
+            unitwind:expect(copied[http.header.connection]).toBe(http.connection_type.close)
+        end
+
+        local keepHeaders = { [http.header.connection] = http.connection_type.keep }
+        local same = http.PrepareResponseHeaders(keepHeaders, true)
+        unitwind:expect(same).toBe(keepHeaders)
+    end)
+
+    unitwind:test("IsFailureHttpStatus detects 4xx and 5xx", function()
+        unitwind:expect(http.IsFailureHttpStatus(http.response_code.ok)).toBe(false)
+        unitwind:expect(http.IsFailureHttpStatus(http.response_code.bad_request)).toBe(true)
+        unitwind:expect(http.IsFailureHttpStatus(http.response_code.internal_server_error)).toBe(true)
+        unitwind:expect(http.IsFailureHttpStatus(nil)).toBe(false)
+    end)
+
+    unitwind:test("IsClosedBeforeRequest matches closed with empty partial", function()
+        unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", nil)).toBe(true)
+        unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", "")).toBe(true)
+        unitwind:expect(http.IsClosedBeforeRequest(nil, "timeout", nil)).toBe(false)
+        unitwind:expect(http.IsClosedBeforeRequest({ method = "GET", endpoint = "/", protocol = "HTTP/1.1", headers = {} }, "closed", nil)).toBe(false)
+        unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", "partial")).toBe(false)
     end)
 
     unitwind:finish()

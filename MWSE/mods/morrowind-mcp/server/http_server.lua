@@ -36,16 +36,6 @@ local function FormatResponseForLog(response)
     return r .. "[...too long]"
 end
 
----@param headers table<string, string>?
----@param name string
----@return string?
-local function GetHeader(headers, name)
-    if not headers then
-        return nil
-    end
-    return headers[name] or headers[name:lower()]
-end
-
 ---@param error MCP.Error?
 ---@return string
 local function FormatJsonRpcError(error)
@@ -55,45 +45,6 @@ local function FormatJsonRpcError(error)
     return string.format("%s:%s", tostring(error.code), tostring(error.message))
 end
 
----@param responseCode Http.ResponseStatusCodes?
----@return boolean
-local function IsFailureHttpStatus(responseCode)
-    return responseCode ~= nil and responseCode.code >= 400
-end
-
----@param partial string?
----@return boolean
-local function IsEmptyPartial(partial)
-    return not partial or partial == ""
-end
-
----@param request Http.Request?
----@param err string?
----@param partial string?
----@return boolean
-local function IsClosedBeforeRequest(request, err, partial)
-    return not request and err == "closed" and IsEmptyPartial(partial)
-end
-
----@param headers table<string, string>?
----@param keepOpen boolean
----@return table<string, string>?
-local function PrepareResponseHeaders(headers, keepOpen)
-    if keepOpen then
-        return headers
-    end
-
-    local responseHeaders = {}
-    if headers then
-        for name, value in pairs(headers) do
-            responseHeaders[name] = value
-        end
-    end
-    if not GetHeader(responseHeaders, http.header.connection) then
-        responseHeaders[http.header.connection] = "close"
-    end
-    return responseHeaders
-end
 
 ---@class MCP.HttpSession
 ---@field id string
@@ -125,7 +76,7 @@ end
 ---@field tools table<string, MCP.ITool>
 ---@field promptsStatus table<string, boolean>
 ---@field toolsStatus table<string, boolean>
----@field resources MCP.ResourceManager
+---@field resource MCP.ResourceManager
 ---@field sessions table<string, MCP.HttpSession>
 ---@field nextSessionIndex integer
 ---@field lastPollingPromptsInterval number
@@ -144,7 +95,7 @@ function this.new(params)
     instance.hostname = instance.hostname or settings.defaultConfig.server.address
     instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}
-    instance.resources = resourceManager.new()
+    instance.resource = resourceManager.new()
     instance.sessions = {}
     instance.nextSessionIndex = 0
     instance.lastPollingPromptsInterval = 0
@@ -263,7 +214,7 @@ end
 ---@param request Http.Request
 ---@return string?
 function this:GetSessionId(request)
-    return GetHeader(request.headers, http.mcp_header.mcp_session_id)
+    return request.headers[http.mcp_header.mcp_session_id]
 end
 
 ---@param request Http.Request
@@ -284,7 +235,7 @@ end
 ---@return boolean
 function this:IsAllowedOrigin(request)
     -- Origin validation is a Streamable HTTP DNS-rebinding mitigation for local servers.
-    local origin = GetHeader(request.headers, http.header.origin)
+    local origin = request.headers[http.header.origin]
     if not origin or origin == "" then
         return true
     end
@@ -301,14 +252,14 @@ end
 ---@return boolean
 function this:IsSupportedProtocolVersion(request)
     -- Missing protocol version is tolerated for compatibility, but invalid explicit versions are rejected.
-    local version = GetHeader(request.headers, http.mcp_header.mcp_protocol_version)
+    local version = request.headers[http.mcp_header.mcp_protocol_version]
     return not version or version == protocolVersion
 end
 
 ---@param request Http.Request
 ---@return boolean
 function this:IsSupportedPostContentType(request)
-    local contentType = GetHeader(request.headers, http.header.content_type)
+    local contentType = request.headers[http.header.content_type]
     return http.AcceptsContentType(contentType, http.content_type.json)
 end
 
@@ -341,7 +292,7 @@ end
 ---@return boolean
 function this:IsAcceptedPostResponseContentType(request)
     -- MCP POST requests can receive a JSON response, or an SSE stream in richer implementations.
-    local accept = GetHeader(request.headers, http.header.accept)
+    local accept = request.headers[http.header.accept]
     return not accept
         or http.AcceptsContentType(accept, http.content_type.json)
         or http.AcceptsContentType(accept, http.content_type.event_stream)
@@ -648,12 +599,15 @@ end
 function this:LoadTools()
     self.tools = {}
     local dir = settings.modDir .. "tools\\"
+    local params = {
+        resource = self.resource,
+    }
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
             self.logger:trace("Load tool from file: %s", file)
             local tool = dofile(dir .. file) ---@type MCP.ITool
             if tool and type(tool) == "table" then
-                local instance = tool.new()
+                local instance = tool.new(params)
                 self.tools[instance.definition.name] = instance
             else
                 self.logger:error("Failed to load tool from file: %s", file)
@@ -792,19 +746,19 @@ end
 ---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnResourcesList(params)
-    return self.resources:OnResourcesList(params)
+    return self.resource:OnResourcesList(params)
 end
 
 ---@param params MCP.PaginatedRequestParams
 ---@return MethodResult
 function this:OnResourcesTemplatesList(params)
-    return self.resources:OnResourcesTemplatesList(params)
+    return self.resource:OnResourcesTemplatesList(params)
 end
 
 ---@param params MCP.ReadResourceRequestParams
 ---@return MethodResult
 function this:OnResourcesRead(params)
-    return self.resources:OnResourcesRead(params)
+    return self.resource:OnResourcesRead(params)
 end
 
 ---@param params MCP.SubscribeRequestParams
@@ -1087,7 +1041,7 @@ function this:OnPOST(request)
         }
     end
 
-    if result.error or IsFailureHttpStatus(result.http_response) then
+    if result.error or http.IsFailureHttpStatus(result.http_response) then
         self.logger:warn("Method returned failure: %s (httpStatus=%s, jsonError=%s, requestId=%s, notification=%s, session=%s)",
             tostring(request.json_request.method), tostring(result.http_response and result.http_response.code),
             FormatJsonRpcError(result.error), tostring(request.json_request.id), tostring(isNotification),
@@ -1146,7 +1100,7 @@ end
 function this:OnGET(request)
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
     -- GET is only used to listen for server-to-client messages over SSE.
-    local accept = GetHeader(request.http_request.headers, http.header.accept)
+    local accept = request.http_request.headers[http.header.accept]
     local sessionId = self:GetSessionId(request.http_request)
     if not http.AcceptsContentType(accept, http.content_type.event_stream) then
         self.logger:warn("Rejected GET without SSE accept header (accept=%s, session=%s)", tostring(accept),
@@ -1238,9 +1192,9 @@ function this:OnOPTIONS(request)
     -- Handle OPTIONS requests for CORS preflight
     -- https://github.com/modelcontextprotocol/python-sdk/issues/1079
     self.logger:debug("Handling OPTIONS preflight (origin=%s, requestMethod=%s, requestHeaders=%s)",
-        tostring(GetHeader(request.http_request.headers, http.header.origin)),
-        tostring(GetHeader(request.http_request.headers, http.header.access_control_request_method)),
-        tostring(GetHeader(request.http_request.headers, http.header.access_control_request_headers)))
+        tostring(request.http_request.headers[http.header.origin]),
+        tostring(request.http_request.headers[http.header.access_control_request_method]),
+        tostring(request.http_request.headers[http.header.access_control_request_headers]))
 
     local cros = {
         [http.header.access_control_allow_origin] = "*", -- TODO return Origin if exist.
@@ -1251,9 +1205,9 @@ function this:OnOPTIONS(request)
                 -- Browser clients need these custom MCP headers to survive preflight checks.
                 http.header.accept,
                 http.header.content_type,
+                http.header.last_event_id,
                 http.mcp_header.mcp_protocol_version,
                 http.mcp_header.mcp_session_id,
-                "Last-Event-ID",
                 --http.header.x_requested_with,
             },
             ", "),
@@ -1288,7 +1242,7 @@ end
 function this:ValidateTransportRequest(request)
     if not self:IsAllowedOrigin(request) then
         self.logger:warn("Rejected request from forbidden origin: %s",
-            GetHeader(request.headers, http.header.origin) or "nil")
+            request.headers[http.header.origin] or "nil")
         return {
             http_response = http.response_code.forbidden,
             json_error = jsonrpc.error_code.invalid_request,
@@ -1297,7 +1251,7 @@ function this:ValidateTransportRequest(request)
 
     if not self:IsSupportedProtocolVersion(request) then
         self.logger:warn("Rejected request with unsupported protocol version: %s",
-            GetHeader(request.headers, http.mcp_header.mcp_protocol_version) or "nil")
+            request.headers[http.mcp_header.mcp_protocol_version] or "nil")
         return {
             http_response = http.response_code.bad_request,
             json_error = jsonrpc.error_code.invalid_request,
@@ -1307,7 +1261,7 @@ function this:ValidateTransportRequest(request)
     if request.method == http.method.POST then
         if not self:IsSupportedPostContentType(request) then
             self.logger:warn("Rejected POST with unsupported content type: %s",
-                GetHeader(request.headers, http.header.content_type) or "nil")
+                request.headers[http.header.content_type] or "nil")
             return {
                 http_response = http.response_code.unsupported_media_type,
                 json_error = jsonrpc.error_code.invalid_request,
@@ -1315,7 +1269,7 @@ function this:ValidateTransportRequest(request)
         end
         if not self:IsAcceptedPostResponseContentType(request) then
             self.logger:warn("Rejected POST with unacceptable response content type: %s",
-                GetHeader(request.headers, http.header.accept) or "nil")
+                request.headers[http.header.accept] or "nil")
             return {
                 http_response = http.response_code.not_acceptable,
                 json_error = jsonrpc.error_code.invalid_request,
@@ -1370,7 +1324,7 @@ end
 function this:SendServerResponse(client, response, requestId)
     if not response then
         local result = http.SendResponse(client, http.response_code.internal_server_error,
-            PrepareResponseHeaders(nil, false),
+            http.PrepareResponseHeaders(nil, false),
             jsonrpc.error(requestId, jsonrpc.error_code.internal_error))
         self.logger:error("internal error: %d\n%s", http.response_code.internal_server_error.code,
             FormatResponseForLog(result.response))
@@ -1384,7 +1338,7 @@ function this:SendServerResponse(client, response, requestId)
 
     if response.json_error then
         local result = http.SendResponse(client, response.http_response,
-            PrepareResponseHeaders(response.http_headers, response.keep_open == true),
+            http.PrepareResponseHeaders(response.http_headers, response.keep_open == true),
             jsonrpc.error(requestId, response.json_error))
         self.logger:error("json error: %d\n%s", response.http_response.code,
             FormatResponseForLog(result.response))
@@ -1393,14 +1347,14 @@ function this:SendServerResponse(client, response, requestId)
 
     if response.no_body then
         local result = http.SendResponse(client, response.http_response,
-            PrepareResponseHeaders(response.http_headers, response.keep_open == true))
+            http.PrepareResponseHeaders(response.http_headers, response.keep_open == true))
         self.logger:debug("success: %d\n%s", response.http_response.code,
             FormatResponseForLog(result.response))
         return response.keep_open == true
     end
 
     local result = http.SendResponse(client, response.http_response,
-        PrepareResponseHeaders(response.http_headers, response.keep_open == true),
+        http.PrepareResponseHeaders(response.http_headers, response.keep_open == true),
         jsonrpc.result(requestId, response.json_result))
     self.logger:debug("success: %d\n%s", response.http_response.code,
         FormatResponseForLog(result.response))
@@ -1445,7 +1399,7 @@ function this:Listen(e)
         client:settimeout(5)
         local request, err, partial = http.ReceiveRequest(client)
         if (not request) or err then
-            if IsClosedBeforeRequest(request, err, partial) then
+            if http.IsClosedBeforeRequest(request, err, partial) then
                 self.logger:debug("HTTP client closed connection before sending a request")
                 pcall(function() client:close() end)
             else
@@ -1455,7 +1409,7 @@ function this:Listen(e)
                 end
 
                 local result = http.SendResponse(client, http.response_code.bad_request,
-                    PrepareResponseHeaders(nil, false)) -- TODO add json?
+                    http.PrepareResponseHeaders(nil, false)) -- TODO add json?
                 self.logger:error("bad request: %d%s", http.response_code.bad_request.code,
                     FormatResponseForLog(result.response))
 

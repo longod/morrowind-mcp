@@ -73,6 +73,8 @@ this.protocol = {
     HTTP1_1 = "HTTP/1.1"
 }
 
+-- TODO https://http.dev/headers
+
 ---@enum Http.Header
 this.header = {
     accept = "accept",
@@ -144,6 +146,7 @@ this.header = {
     integrity_policy = "integrity-policy",
     integrity_policy_report_only = "integrity-policy-report-only",
     keep_alive = "keep-alive",
+    last_event_id = "Last-Event-ID",
     last_modified = "last-modified",
     link = "link",
     location = "location",
@@ -242,15 +245,16 @@ this.header = {
 
 ---@enum Http.MCPHeader
 this.mcp_header = {
-    mcp_protocol_version = "MCP-Protocol-Version",
-    mcp_session_id = "MCP-Session-Id",
-    mcp_method = "Mcp-Method",
-    mcp_name = "Mcp-Name"
+    mcp_protocol_version = "mcp-protocol-version",
+    mcp_session_id = "mcp-session-id",
+    mcp_method = "mcp-method",
+    mcp_name = "mcp-name"
 }
 
 ---@enum Http.ConnectionType
 this.connection_type = {
     keep = "keep-alive",
+    close = "close",
 }
 
 ---@enum Http.ContentType
@@ -493,6 +497,26 @@ function this.ReceiveRequest(client)
     return request, nil, nil
 end
 
+---@param headers table<string, string>?
+---@param keepOpen boolean
+---@return table<string, string>?
+function this.PrepareResponseHeaders(headers, keepOpen)
+    if keepOpen then
+        return headers
+    end
+
+    local responseHeaders = {}
+    if headers then
+        for name, value in pairs(headers) do
+            responseHeaders[name] = value
+        end
+    end
+    if not responseHeaders[this.header.connection] then
+        responseHeaders[this.header.connection] = this.connection_type.close
+    end
+    return responseHeaders
+end
+
 ---@param client Socket.TcpClient
 ---@param response_code Http.ResponseStatusCodes
 ---@param headers table<Http.Header|Http.MCPHeader, string>?
@@ -522,6 +546,27 @@ function this.SendResponse(client, response_code, headers, body)
         lastIndex = lastIndex,
         response = response,
     }
+end
+
+
+---@param responseCode Http.ResponseStatusCodes?
+---@return boolean
+function this.IsFailureHttpStatus(responseCode)
+    return responseCode ~= nil and responseCode.code >= this.response_code.bad_request.code
+end
+
+---@param partial string?
+---@return boolean
+local function IsEmptyPartial(partial)
+    return not partial or partial == ""
+end
+
+---@param request Http.Request?
+---@param err string?
+---@param partial string?
+---@return boolean
+function this.IsClosedBeforeRequest(request, err, partial)
+    return not request and err == "closed" and IsEmptyPartial(partial)
 end
 
 return this

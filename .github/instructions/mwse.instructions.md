@@ -15,6 +15,7 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - [core/](../../MWSE/mods/morrowind-mcp/core/) は MWSE に依存しないコアライブラリにする
 
 ### Comment
+
 - コメントは、実装の意図や非自明な判断が読み手に伝わるように書く
 - 関数全体の目的、契約、前提条件は関数コメントで説明する
 - 分岐、例外処理、エッジケース、ログ出力など局所的な理由は、その処理の直前にコメントを書く
@@ -23,7 +24,8 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - コメントは必ず英語で書く
 - 英語以外のコメントを検出した場合は、英語に置き換えて報告する
 
-## Lua/MWSE Notes
+## Lua/MWSE
+
 - LuaJIT を使用している
 - Morrowind Script Extender (MWSE) を使用している
 - MWSEに関する情報は `MWSE Documentation` or `MWSE GitHub` を参照する
@@ -32,8 +34,14 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - `MWSE.log` を確認することで、サーバー側の挙動を検査できるようにする
 - luaSocket を使用したTCP通信
 
-## MCP Notes
+## HTTP
+
+- 送受信に使用するヘッダやメソッド、コードは、`http.lua` の定義を使用して即値はしようしないようにする。定義が存在しない場合は、`http.lua` に定義を追加する。
+
+## MCP
+
 ### MCP Resource URI
+
 - MCP resource URI は物理パスではなく論理 URI として扱う: `morrowind://`
 - `settings.uriScheme` のルートは `settings.resourceRootDir` を表す
 - `resources/read` は URI prefix 以降を `settings.resourceRootDir` 相対パスとして解決する
@@ -43,12 +51,14 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - 生成ファイルを VFS 対象にしたい場合は `settings.dataFiles` 配下に保存する
 
 ### MCP feature definitions
+
 - `prompts/list`, `resources/list`, `tools/list` で公開される `name`, `title`, `description` は `jsonrpc` の generator 関数経由の最終値を正とする
 - Tool は `jsonrpc.Tool(...)` で定義し、公開名は generator が `settings.name_prefix` を付与する。定義ファイル側で `mw-` を直書きしない
 - Tool の `title` と `description` も generator が `settings.title_prefix`, `settings.description_prefix` を付与する。定義ファイル側で `[Morrowind] ` を直書きしない
 - `tools/call` は公開後の prefixed name を受け取るため、テストやドキュメントでは `mw-` 付きの名前を使う
 
 ### MCP schema generators
+
 - `mcp.lua` の `---@class MCP.*Schema` は型注釈であり、実際の schema table 生成は [jsonrpc.lua](../../MWSE/mods/morrowind-mcp/server/jsonrpc.lua) の generator 関数で行う
 - MCP schema class を追加・変更した場合は、対応する generator と UnitWind テストを合わせて更新する
 - enum や default などの配列フィールドは `jsonrpc.array()` 経由で JSON array として扱える形にする
