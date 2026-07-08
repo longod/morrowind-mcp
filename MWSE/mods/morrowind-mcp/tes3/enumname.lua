@@ -1,7 +1,7 @@
 local this = {}
 local bit = require("bit")
 
-local logger = require("morrowind-mcp.logger").Get({ moduleName = "enumname" })
+local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3enum" })
 
 
 -- This module intentionally exposes enum-specific functions while sharing internals.

@@ -1,7 +1,8 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.tes3.object")
+local obj = require("morrowind-mcp.tes3.object")
 
+-- rename player stats?
 
 ---@class MCP.PlayerFetch: MCP.ITool
 ---@field logger mwseLogger
@@ -44,7 +45,7 @@ function this:Execute(params, context)
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
-    local structuredContent = jsonrpc.object({ player = serializer.tes3mobilePlayer(player) })
+    local structuredContent = jsonrpc.object({ player = obj.tes3mobilePlayer(player) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

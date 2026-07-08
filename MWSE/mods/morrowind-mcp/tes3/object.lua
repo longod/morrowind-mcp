@@ -1,6 +1,6 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local config = require("morrowind-mcp.config")
-local logger = require("morrowind-mcp.logger").Get({ moduleName = "serializer" })
+local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3object" })
 local enumname = require("morrowind-mcp.tes3.enumname")
 local ui = require("morrowind-mcp.tes3.ui")
 
@@ -105,101 +105,320 @@ local npcSexName = {
     [1] = "female",
 }
 
----@param i tes3fader
----@param o MCP.AnyMap
----@return MCP.AnyMap?
-local function _tes3fader(i, o)
-    o.active = i.active
-    return o
-end
 
 
---- just returns value is better?
----@param i tes3globalVariable
----@param o MCP.AnyMap
----@return number?
-local function _tes3globalVariable(i, o)
-    if i == nil then
-        return nil
+--- TODO move to other helper
+---@param list tes3referenceList
+---@return fun(): tes3reference
+function this.ForEachReferenceList(list)
+    local function iterator()
+        local ref = list.head
+
+        if list.size ~= 0 then
+            coroutine.yield(ref)
+        end
+
+        while ref.nextNode do
+            ref = ref.nextNode
+            coroutine.yield(ref)
+        end
     end
-    return i.value
-    -- if not this.tes3baseObject(i, o) then
-    --     return nil
-    -- end
-    -- o.value = i.value
-    -- return o
+    return coroutine.wrap(iterator)
 end
+
+
+
 
 ---@param i tes3bountyData
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
-local function _tes3bountyData(i, o)
+function this.tes3bountyData(i, o)
     if not i then
         return nil
     end
-    if table.size(i) == 0 then
+    if not i.keys or table.size(i.keys) == 0 then
         return nil
     end
+    o = o or jsonrpc.object
+    local amount = 0
     for _, key in ipairs(i.keys) do
         if key then
             local value = i:getValue(key)
             o[key] = value
+            amount = amount + value
         end
     end
+
+    local _ = ValidateType(o)
     return o
 end
 
---- TODO inheritance types: tes3weatherAsh|tes3weatherBlight|tes3weatherBlizzard|tes3weatherClear|tes3weatherCloudy|tes3weatherFoggy|tes3weatherOvercast|tes3weatherRain|tes3weatherSnow|tes3weatherThunder
---- but not important, because  thet contain some filed for less needed for AI.
----@param i tes3weather
+---@param i tes3fader
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
-local function _tes3weather(i, o)
+function this.tes3fader(i, o)
     if not i then
         return nil
     end
+    o = o or jsonrpc.object()
+    o.active = i.active
+    -- cant get current value of fader
+
+    local _ = ValidateType(o)
+    return o
+end
+
+---@param i tes3itemData
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3itemData(i, o)
+    if not i then
+        return nil
+    end
+    o = o or jsonrpc.object()
+
+    o.charge = i.charge
+    o.condition = i.condition
+    -- o.context = i.context
+    o.count = i.count
+    -- o.data = i.data -- for modding data
+    -- o.owner = i.owner -- TODO
+    -- o.requirement = i.requirement -- TODO
+    o.script = this.tes3script(i.script)
+    -- o.scriptVariables = i.scriptVariables
+    o.soul = this.tes3anyObject(i.soul)
+    -- o.tempData = i.tempData -- for modding temp data
+    o.timeLeft = i.timeLeft
+
+    local _ = ValidateType(o)
+    return o
+end
+
+
+---@param i tes3inventoryTile
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3inventoryTile(i, o)
+    if not i then
+        return nil
+    end
+    o = o or jsonrpc.object()
+
+    o.count = i.count
+    o.element = ui.tes3uiElement(i.element)
+    -- o.flags = i.flags
+    o.isBartered = i.isBartered
+    o.isBoundItem = i.isBoundItem
+    o.isEquipped = i.isEquipped
+    o.item = this.tes3anyObject(i.item)
+    o.itemData = this.tes3itemData(i.itemData)
+    o.type = enumname.inventoryTileType(i.type)
+
+    local _ = ValidateType(o)
+    return o
+end
+
+---@param i tes3statisticSkill|tes3statistic|nil
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3statistic(i, o)
+    if not i then
+        return nil
+    end
+    o = o or jsonrpc.object()
+
+    o.base = i.base
+    -- o.baseRaw = i.baseRaw
+    o.current = i.current
+    -- o.currentRaw = i.currentRaw
+    o.normalized = i.normalized
+
+    -- almost skills are tes3statisticSkill or tes3statistic.
+    -- it needs to care about incoming base type.
+    if i.type then
+        o.type = enumname.skillType(i.type)
+    end
+
+    local _ = ValidateType(o)
+    return o
+end
+
+
+---@param i tes3weatherClear
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherClear(i, o)
+    -- no fields
+end
+---@param i tes3weatherCloudy
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherCloudy(i, o)
+    -- no fields
+end
+---@param i tes3weatherFoggy
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherFoggy(i, o)
+    -- no fields
+end
+---@param i tes3weatherOvercast
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherOvercast(i, o)
+    -- no fields
+end
+---@param i tes3weatherRain
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherRain(i, o)
+    o.maxParticles = i.maxParticles
+    o.particleEntranceSpeed = i.particleEntranceSpeed
+    o.particleHeightMax = i.particleHeightMax
+    o.particleHeightMin = i.particleHeightMin
+    o.particleRadius = i.particleRadius
+    o.rainActive = i.rainActive
+    o.rainLoopSound = this.tes3sound(i.rainLoopSound)
+    o.rainLoopSoundId = i.rainLoopSoundId
+    o.threshold = i.threshold
+end
+---@param i tes3weatherThunder
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherThunder(i, o)
+    o.flashDecrement = i.flashDecrement
+    o.maxParticles = i.maxParticles
+    o.particleEntranceSpeed = i.particleEntranceSpeed
+    o.particleHeightMax = i.particleHeightMax
+    o.particleHeightMin = i.particleHeightMin
+    o.particleRadius = i.particleRadius
+    o.rainActive = i.rainActive
+    o.rainLoopSound = this.tes3sound(i.rainLoopSound)
+    o.rainLoopSoundId = i.rainLoopSoundId
+    o.threshold = i.threshold
+    o.thunderFrequency = i.thunderFrequency
+    o.thunderSound1 = this.tes3sound(i.thunderSound1)
+    o.thunderSound1Id = i.thunderSound1Id
+    o.thunderSound2 = this.tes3sound(i.thunderSound2)
+    o.thunderSound2Id = i.thunderSound2Id
+    o.thunderSound3 = this.tes3sound(i.thunderSound3)
+    o.thunderSound3Id = i.thunderSound3Id
+    o.thunderSound4 = this.tes3sound(i.thunderSound4)
+    o.thunderSound4Id = i.thunderSound4Id
+    o.thunderSoundCount = i.thunderSoundCount
+    o.thunderThreshold = i.thunderThreshold
+end
+---@param i tes3weatherAsh
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherAsh(i, o)
+    o.stormOrigin = i.stormOrigin
+    o.threshold = i.threshold
+end
+---@param i tes3weatherBlight
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherBlight(i, o)
+    o.blightDiseaseChance = i.blightDiseaseChance
+    -- o.blightDiseases = i.blightDiseases -- TODO
+    o.stormOrigin = i.stormOrigin
+    o.threshold = i.threshold
+end
+---@param i tes3weatherSnow
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherSnow(i, o)
+    o.maxParticles = i.maxParticles
+    o.particleEntranceSpeed = i.particleEntranceSpeed
+    o.particleHeightMax = i.particleHeightMax
+    o.particleHeightMin = i.particleHeightMin
+    o.particleRadius = i.particleRadius
+    o.threshold = i.threshold
+end
+---@param i tes3weatherBlizzard
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3weatherBlizzard(i, o)
+    o.threshold = i.threshold
+end
+
+local weatherHandler = {
+	[tes3.weather.clear] = tes3weatherClear,
+	[tes3.weather.cloudy] = tes3weatherCloudy,
+	[tes3.weather.foggy] = tes3weatherFoggy,
+	[tes3.weather.overcast] = tes3weatherOvercast,
+	[tes3.weather.rain] = tes3weatherRain,
+	[tes3.weather.thunder] = tes3weatherThunder,
+	[tes3.weather.ash] = tes3weatherAsh,
+	[tes3.weather.blight] = tes3weatherBlight,
+	[tes3.weather.snow] = tes3weatherSnow,
+	[tes3.weather.blizzard] = tes3weatherBlizzard,
+}
+
+---@param i tes3weather|tes3weatherAsh|tes3weatherBlight|tes3weatherBlizzard|tes3weatherClear|tes3weatherCloudy|tes3weatherFoggy|tes3weatherOvercast|tes3weatherRain|tes3weatherSnow|tes3weatherThunder
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3weather(i, o)
+    if not i then
+        return nil
+    end
+    if not i:isValid() then
+        return nil
+    end
+    o = o or jsonrpc.object()
+
     o.ambientDayColor = i.ambientDayColor
-    -- o.ambientLoopSound = i.ambientLoopSound
-    -- o.ambientLoopSoundId = i.ambientLoopSoundId
+    o.ambientLoopSound = this.tes3sound(i.ambientLoopSound)
+    o.ambientLoopSoundId = i.ambientLoopSoundId
     o.ambientNightColor = i.ambientNightColor
-    -- o.ambientPlaying = i.ambientPlaying
+    o.ambientPlaying = i.ambientPlaying
     o.ambientSunriseColor = i.ambientSunriseColor
     o.ambientSunsetColor = i.ambientSunsetColor
     o.cloudsMaxPercent = i.cloudsMaxPercent
     o.cloudsSpeed = i.cloudsSpeed
-    -- o.cloudTexture = i.cloudTexture
+    o.cloudTexture = i.cloudTexture
     -- o.controller = i.controller -- TODO avoid circular reference
-    -- o.fogDayColor = i.fogDayColor
-    -- o.fogNightColor = i.fogNightColor
-    -- o.fogSunriseColor = i.fogSunriseColor
-    -- o.fogSunsetColor = i.fogSunsetColor
+    o.fogDayColor = i.fogDayColor
+    o.fogNightColor = i.fogNightColor
+    o.fogSunriseColor = i.fogSunriseColor
+    o.fogSunsetColor = i.fogSunsetColor
     o.glareView = i.glareView
-    o.index = enumname.weather(i.index)
+    o.index = enumname.weather(i.index) -- equals name?
     o.landFogDayDepth = i.landFogDayDepth
     o.landFogNightDepth = i.landFogNightDepth
     o.name = i.name
-    -- o.skyDayColor = i.skyDayColor
-    -- o.skyNightColor = i.skyNightColor
-    -- o.skySunriseColor = i.skySunriseColor
-    -- o.skySunsetColor = i.skySunsetColor
+    o.skyDayColor = i.skyDayColor
+    o.skyNightColor = i.skyNightColor
+    o.skySunriseColor = i.skySunriseColor
+    o.skySunsetColor = i.skySunsetColor
     o.sunDayColor = i.sunDayColor
     o.sundiscSunsetColor = i.sundiscSunsetColor
     o.sunNightColor = i.sunNightColor
     o.sunSunriseColor = i.sunSunriseColor
     o.sunSunsetColor = i.sunSunsetColor
-    -- o.transitionDelta = i.transitionDelta
-    -- o.underwaterSoundState = i.underwaterSoundState
+    o.transitionDelta = i.transitionDelta
+    o.underwaterSoundState = i.underwaterSoundState
     o.windSpeed = i.windSpeed
+
+    local handler = weatherHandler[i.index]
+    if handler then
+        handler(i, o)
+    end
+
+    local _ = ValidateType(o)
     return o
 end
+
 
 ---@param i tes3weatherController
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
-local function _tes3weatherController(i, o)
+function this.tes3weatherController(i, o)
     if not i then
         return nil
     end
+    o = o or jsonrpc.object()
+
     -- TODO need to calculate current ambient color?
     -- TODO need to calculate current sun direction and color?
 
@@ -209,7 +428,7 @@ local function _tes3weatherController(i, o)
     o.ambientPreSunsetTime = i.ambientPreSunsetTime
     o.currentFogColor = i.currentFogColor
     o.currentSkyColor = i.currentSkyColor
-    o.currentWeather = _tes3weather(i.currentWeather, jsonrpc.object())
+    o.currentWeather = this.tes3weather(i.currentWeather)
     o.daysRemaining = i.daysRemaining
     -- o.fogDepthChangeSpeed = i.fogDepthChangeSpeed
     -- o.fogPostSunriseTime = i.fogPostSunriseTime
@@ -220,7 +439,7 @@ local function _tes3weatherController(i, o)
     o.hoursRemaining = i.hoursRemaining
     -- o.lastActiveRegion = i.lastActiveRegion -- TODO
     -- o.masser = i.masser -- TODO
-    o.nextWeather = _tes3weather(i.nextWeather, jsonrpc.object())
+    o.nextWeather = this.tes3weather(i.nextWeather)
     -- o.particlesActive = i.particlesActive
     -- o.particlesInactive = i.particlesInactive
     o.precipitationFallSpeed = i.precipitationFallSpeed
@@ -267,29 +486,34 @@ local function _tes3weatherController(i, o)
     -- o.weathers = i.weathers -- all weathers
     o.windVelocityCurrWeather = i.windVelocityCurrWeather
     o.windVelocityNextWeather = i.windVelocityNextWeather
+
+    local _ = ValidateType(o)
     return o
 end
+
 
 ---@param i tes3worldController
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
-local function _tes3worldController(i, o)
+function this.tes3worldController(i, o)
     if not i then
         return nil
     end
+    o = o or jsonrpc.object()
+
     -- o.aiDistanceScale = i.aiDistanceScale
     -- o.allMobileActors = i.allMobileActors
     -- o.armCamera = i.armCamera
     -- o.audioController = i.audioController
-    o.blindnessFader = _tes3fader(i.blindnessFader, jsonrpc.object())
+    o.blindnessFader = this.tes3fader(i.blindnessFader)
     -- o.characterRenderTarget = i.characterRenderTarget
     -- o.charGenState = i.charGenState -- TODO
     -- o.countMusicTracksBattle = i.countMusicTracksBattle
     -- o.countMusicTracksExplore = i.countMusicTracksExplore
     -- o.criticalDamageSound = i.criticalDamageSound
     -- o.cursorOff = i.cursorOff
-    o.day = _tes3globalVariable(i.day, jsonrpc.object())
-    o.daysPassed = _tes3globalVariable(i.daysPassed, jsonrpc.object())
+    o.day = this.tes3globalVariable(i.day)
+    o.daysPassed = this.tes3globalVariable(i.daysPassed)
     -- o.deadFloatScale = i.deadFloatScale
     -- o.defaultLandSound = i.defaultLandSound
     -- o.defaultLandWaterSound = i.defaultLandWaterSound
@@ -308,8 +532,8 @@ local function _tes3worldController(i, o)
     -- o.healthDamageSound = i.healthDamageSound
     -- o.heavyArmorHitSound = i.heavyArmorHitSound
     -- o.helpDelay = i.helpDelay
-    o.hitFader = _tes3fader(i.hitFader, jsonrpc.object())
-    o.hour = _tes3globalVariable(i.hour, jsonrpc.object())
+    o.hitFader = this.tes3fader(i.hitFader)
+    o.hour = this.tes3globalVariable(i.hour)
     -- o.hudStyle = i.hudStyle -- TODO
     -- o.inputController = i.inputController
     -- o.instance = i.instance
@@ -326,8 +550,8 @@ local function _tes3worldController(i, o)
     -- o.menuSizeSound = i.menuSizeSound
     -- o.missSound = i.missSound
     -- o.mobManager = i.mobManager
-    o.month = _tes3globalVariable(i.month, jsonrpc.object())
-    o.monthsToRespawn = _tes3globalVariable(i.monthsToRespawn, jsonrpc.object())
+    o.month = this.tes3globalVariable(i.month)
+    o.monthsToRespawn = this.tes3globalVariable(i.monthsToRespawn)
     -- o.mouseSensitivityX = i.mouseSensitivityX
     -- o.mouseSensitivityY = i.mouseSensitivityY
     o.musicSituation = enumname.musicSituation(i.musicSituation)
@@ -346,144 +570,30 @@ local function _tes3worldController(i, o)
     -- o.splashController = i.splashController
     -- o.splashscreenCamera = i.splashscreenCamera
     o.stopGameLoop = i.stopGameLoop
-    o.sunglareFader = _tes3fader(i.sunglareFader, jsonrpc.object())
+    o.sunglareFader = this.tes3fader(i.sunglareFader)
     o.systemTime = i.systemTime
-    o.timescale = _tes3globalVariable(i.timescale, jsonrpc.object())
-    o.transitionFader = _tes3fader(i.transitionFader, jsonrpc.object())
+    o.timescale = this.tes3globalVariable(i.timescale)
+    o.transitionFader = this.tes3fader(i.transitionFader)
     o.useBestAttack = i.useBestAttack
     -- o.vfxManager = i.vfxManager
     -- o.viewHeight = i.viewHeight
     -- o.viewWidth = i.viewWidth
     -- o.weaponSwishSound = i.weaponSwishSound
-    o.weatherController = _tes3weatherController(i.weatherController, jsonrpc.object())
-    o.werewolfFader = _tes3fader(i.werewolfFader, jsonrpc.object())
+    o.weatherController = this.tes3weatherController(i.weatherController)
+    o.werewolfFader = this.tes3fader(i.werewolfFader)
     -- o.werewolfFOV = i.werewolfFOV
     -- o.worldCamera = i.worldCamera
-    o.year = _tes3globalVariable(i.year, jsonrpc.object())
+    o.year = this.tes3globalVariable(i.year)
 
     return o
 end
 
 
----@param i tes3itemData
----@param o MCP.AnyMap?
----@return MCP.AnyMap?
-local function _tes3itemData(i, o)
-    if not i then
-        return nil
-    end
-    o.charge = i.charge
-    o.condition = i.condition
-    -- o.context = i.context
-    o.count = i.count
-    -- o.data = i.data -- for modding data
-    -- o.owner = i.owner -- TODO
-    -- o.requirement = i.requirement -- TODO
-    -- o.script = i.script
-    -- o.scriptVariables = i.scriptVariables
-    -- o.soul = i.soul -- TODO
-    -- o.tempData = i.tempData -- for modding temp data
-    o.timeLeft = i.timeLeft
-    return o
-end
 
 
----@param i tes3inventoryTile
----@param o MCP.AnyMap?
----@return MCP.AnyMap?
-local function _tes3inventoryTile(i, o)
-    if not i then
-        return nil
-    end
-    o.count = i.count
-    o.element = ui.tes3uiElement(i.element)
-    -- o.flags = i.flags
-    o.isBartered = i.isBartered
-    o.isBoundItem = i.isBoundItem
-    o.isEquipped = i.isEquipped
-    -- o.item = _tes3itemAny(jsonrpc.object(), i.item)
-    o.itemData = _tes3itemData(i.itemData, jsonrpc.object())
-    o.type = enumname.inventoryTileType(i.type)
-    return o
-end
 
 
----@param i tes3inventoryTile
----@return MCP.AnyMap?
-function this.tes3inventoryTile(i)
-    local o = jsonrpc.object()
-    local _ = ValidateType(_tes3inventoryTile(i, o))
-    return o
-end
 
-
----@param i tes3worldController
----@return MCP.AnyMap?
-function this.tes3worldController(i)
-    local o = jsonrpc.object()
-    local _ = ValidateType(_tes3worldController(i, o))
-    return o
-end
-
---- TODO move to other helper
----@param list tes3referenceList
----@return fun(): tes3reference
-function this.ForEachReferenceList(list)
-    local function iterator()
-        local ref = list.head
-
-        if list.size ~= 0 then
-            coroutine.yield(ref)
-        end
-
-        while ref.nextNode do
-            ref = ref.nextNode
-            coroutine.yield(ref)
-        end
-    end
-    return coroutine.wrap(iterator)
-end
-
-
----@param i tes3statistic?
----@param o MCP.AnyMap?
----@return MCP.AnyMap?
-local function tes3statistic(i, o)
-    if not i then
-        return nil
-    end
-    o = o or jsonrpc.object()
-
-    o.base = i.base
-    -- o.baseRaw = i.baseRaw
-    o.current = i.current
-    -- o.currentRaw = i.currentRaw
-    o.normalized = i.normalized
-
-    local _ = ValidateType(o)
-    return o
-end
-
----@param i tes3statisticSkill|tes3statistic|nil
----@param o MCP.AnyMap?
----@return MCP.AnyMap?
-local function tes3statisticSkill(i, o)
-    if not i then
-        return nil
-    end
-    o = tes3statistic(i, o)
-    if not o then
-        return nil
-    end
-    -- almost skills are tes3statisticSkill or tes3statistic.
-    -- it needs to care about incoming base type.
-    if i.type then
-        o.type = enumname.skillType(i.type)
-    end
-
-    local _ = ValidateType(o)
-    return o
-end
 
 ---@param i tes3baseObject?
 ---@param o MCP.AnyMap?
@@ -638,6 +748,23 @@ local function tes3mobileObject(i, o)
     local _ = ValidateType(o)
     return o
 end
+
+--- tes3globalVariable inherits tes3baseObject, but it seems just to return value is better.
+---@param i tes3globalVariable
+---@param o MCP.AnyMap?
+---@return number?
+function this.tes3globalVariable(i, o)
+    if i == nil then
+        return nil
+    end
+    return i.value
+    -- if not this.tes3baseObject(i, o) then
+    --     return nil
+    -- end
+    -- o.value = i.value
+    -- return o
+end
+
 
 -- https://mwse.github.io/MWSE/references/object-types/
 
@@ -1438,7 +1565,7 @@ function this.tes3mobileActor(i, o)
     o.activeAI = i.activeAI
     -- o.activeMagicEffectList = i.activeMagicEffectList -- TODO
     o.actorType = enumname.actorType(i.actorType)
-    o.agility = tes3statisticSkill(i.agility)
+    o.agility = this.tes3statistic(i.agility)
     -- o.aiPlanner = i.aiPlanner -- TODO
     o.alarm = i.alarm
     -- o.animationController = i.animationController -- TODO
@@ -1460,10 +1587,10 @@ function this.tes3mobileActor(i, o)
     -- o.currentEnchantedItem = i.currentEnchantedItem -- TODO
     -- o.currentSpell = i.currentSpell -- TODO
     -- o.effectAttributes = jsonrpc.array(i.effectAttributes)
-    o.encumbrance = tes3statisticSkill(i.encumbrance)
-    o.endurance = tes3statisticSkill(i.endurance)
+    o.encumbrance = this.tes3statistic(i.encumbrance)
+    o.endurance = this.tes3statistic(i.endurance)
     o.facing = i.facing
-    o.fatigue = tes3statisticSkill(i.fatigue)
+    o.fatigue = this.tes3statistic(i.fatigue)
     o.fight = i.fight
     o.flee = i.flee
     -- o.friendlyActors = i.friendlyActors -- TODO
@@ -1475,14 +1602,14 @@ function this.tes3mobileActor(i, o)
     o.hasCorprusDisease = i.hasCorprusDisease
     o.hasFreeAction = i.hasFreeAction
     o.hasVampirism = i.hasVampirism
-    o.health = tes3statisticSkill(i.health)
+    o.health = this.tes3statistic(i.health)
     o.height = i.height
     o.hello = i.hello
     o.holdBreathTime = i.holdBreathTime
     -- o.hostileActors = i.hostileActors -- TODO
     o.idleAnim = i.idleAnim
     o.inCombat = i.inCombat
-    o.intelligence = tes3statisticSkill(i.intelligence)
+    o.intelligence = this.tes3statistic(i.intelligence)
     o.invisibility = i.invisibility
     o.isAttackingOrCasting = i.isAttackingOrCasting
     o.isCrittable = i.isCrittable
@@ -1513,12 +1640,12 @@ function this.tes3mobileActor(i, o)
     o.jump = i.jump
     o.lastGroundZ = i.lastGroundZ
     o.levitate = i.levitate
-    o.luck = tes3statisticSkill(i.luck)
-    o.magicka = tes3statisticSkill(i.magicka)
-    o.magickaMultiplier = tes3statisticSkill(i.magickaMultiplier)
+    o.luck = this.tes3statistic(i.luck)
+    o.magicka = this.tes3statistic(i.magicka)
+    o.magickaMultiplier = this.tes3statistic(i.magickaMultiplier)
     o.nextActionWeight = i.nextActionWeight
     o.paralyze = i.paralyze
-    o.personality = tes3statisticSkill(i.personality)
+    o.personality = this.tes3statistic(i.personality)
     -- o.readiedAmmo = i.readiedAmmo -- TODO
     o.readiedAmmoCount = i.readiedAmmoCount
     -- o.readiedShield = i.readiedShield -- TODO
@@ -1539,9 +1666,9 @@ function this.tes3mobileActor(i, o)
     o.shield = i.shield
     o.silence = i.silence
     o.sound = i.sound -- magic effect sound
-    o.speed = tes3statisticSkill(i.speed)
+    o.speed = this.tes3statistic(i.speed)
     o.spellReadied = i.spellReadied
-    o.strength = tes3statisticSkill(i.strength)
+    o.strength = this.tes3statistic(i.strength)
     o.swiftSwim = i.swiftSwim
     o.talkedTo = i.talkedTo
     -- o.torchSlot = i.torchSlot -- TODO
@@ -1552,7 +1679,7 @@ function this.tes3mobileActor(i, o)
     o.weaponReady = i.weaponReady
     o.werewolf = i.werewolf
     o.width = i.width
-    o.willpower = tes3statisticSkill(i.willpower)
+    o.willpower = this.tes3statistic(i.willpower)
 
     local _ = ValidateType(o)
     return o
@@ -1570,14 +1697,14 @@ function this.tes3mobileCreature(i, o)
         return nil
     end
 
-    o.combat = tes3statisticSkill(i.combat)
+    o.combat = this.tes3statistic(i.combat)
     o.flySpeed = i.flySpeed
-    o.magic = tes3statisticSkill(i.magic)
+    o.magic = this.tes3statistic(i.magic)
     o.moveSpeed = i.moveSpeed
     -- o.object = this.tes3creature(i.object) -- TODO avoid circular reference
     o.runSpeed = i.runSpeed
     -- o.skills = i.skills
-    o.stealth = tes3statisticSkill(i.stealth)
+    o.stealth = this.tes3statistic(i.stealth)
     o.swimRunSpeed = i.swimRunSpeed
     o.swimSpeed = i.swimSpeed
     o.walkSpeed = i.walkSpeed
@@ -1598,44 +1725,44 @@ function this.tes3mobileNPC(i, o)
         return nil
     end
 
-    o.acrobatics = tes3statisticSkill(i.acrobatics)
-    o.alchemy = tes3statisticSkill(i.alchemy)
-    o.alteration = tes3statisticSkill(i.alteration)
-    o.armorer = tes3statisticSkill(i.armorer)
-    o.athletics = tes3statisticSkill(i.athletics)
-    o.axe = tes3statisticSkill(i.axe)
-    o.block = tes3statisticSkill(i.block)
-    o.bluntWeapon = tes3statisticSkill(i.bluntWeapon)
-    o.conjuration = tes3statisticSkill(i.conjuration)
-    o.destruction = tes3statisticSkill(i.destruction)
-    o.enchant = tes3statisticSkill(i.enchant)
+    o.acrobatics = this.tes3statistic(i.acrobatics)
+    o.alchemy = this.tes3statistic(i.alchemy)
+    o.alteration = this.tes3statistic(i.alteration)
+    o.armorer = this.tes3statistic(i.armorer)
+    o.athletics = this.tes3statistic(i.athletics)
+    o.axe = this.tes3statistic(i.axe)
+    o.block = this.tes3statistic(i.block)
+    o.bluntWeapon = this.tes3statistic(i.bluntWeapon)
+    o.conjuration = this.tes3statistic(i.conjuration)
+    o.destruction = this.tes3statistic(i.destruction)
+    o.enchant = this.tes3statistic(i.enchant)
     o.flySpeed = i.flySpeed
     o.forceJump = i.forceJump
     o.forceMoveJump = i.forceMoveJump
     o.forceRun = i.forceRun
     o.forceSneak = i.forceSneak
-    o.handToHand = tes3statisticSkill(i.handToHand)
-    o.heavyArmor = tes3statisticSkill(i.heavyArmor)
-    o.illusion = tes3statisticSkill(i.illusion)
-    o.lightArmor = tes3statisticSkill(i.lightArmor)
-    o.longBlade = tes3statisticSkill(i.longBlade)
-    o.marksman = tes3statisticSkill(i.marksman)
-    o.mediumArmor = tes3statisticSkill(i.mediumArmor)
-    o.mercantile = tes3statisticSkill(i.mercantile)
+    o.handToHand = this.tes3statistic(i.handToHand)
+    o.heavyArmor = this.tes3statistic(i.heavyArmor)
+    o.illusion = this.tes3statistic(i.illusion)
+    o.lightArmor = this.tes3statistic(i.lightArmor)
+    o.longBlade = this.tes3statistic(i.longBlade)
+    o.marksman = this.tes3statistic(i.marksman)
+    o.mediumArmor = this.tes3statistic(i.mediumArmor)
+    o.mercantile = this.tes3statistic(i.mercantile)
     o.moveSpeed = i.moveSpeed
-    o.mysticism = tes3statisticSkill(i.mysticism)
+    o.mysticism = this.tes3statistic(i.mysticism)
     o.object = i.object
-    o.restoration = tes3statisticSkill(i.restoration)
+    o.restoration = this.tes3statistic(i.restoration)
     o.runSpeed = i.runSpeed
-    o.security = tes3statisticSkill(i.security)
-    o.shortBlade = tes3statisticSkill(i.shortBlade)
+    o.security = this.tes3statistic(i.security)
+    o.shortBlade = this.tes3statistic(i.shortBlade)
     -- o.skills = i.skills
-    o.sneak = tes3statisticSkill(i.sneak)
-    o.spear = tes3statisticSkill(i.spear)
-    o.speechcraft = tes3statisticSkill(i.speechcraft)
+    o.sneak = this.tes3statistic(i.sneak)
+    o.spear = this.tes3statistic(i.spear)
+    o.speechcraft = this.tes3statistic(i.speechcraft)
     o.swimRunSpeed = i.swimRunSpeed
     o.swimSpeed = i.swimSpeed
-    o.unarmored = tes3statisticSkill(i.unarmored)
+    o.unarmored = this.tes3statistic(i.unarmored)
     o.walkSpeed = i.walkSpeed
 
     local _ = ValidateType(o)

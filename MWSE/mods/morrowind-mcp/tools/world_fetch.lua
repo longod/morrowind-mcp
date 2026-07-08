@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.tes3.object")
+local obj = require("morrowind-mcp.tes3.object")
 
 
 ---@class MCP.WorldFetch: MCP.ITool
@@ -50,7 +50,7 @@ function this:Execute(params, context)
     -- sound state should be handled sound events. and  evens accumulated sounds, then flush them periodically.
     -- therefore state present to listen sounds during some interval.
 
-    local structuredContent = jsonrpc.object({ world = serializer.tes3worldController(world) })
+    local structuredContent = jsonrpc.object({ world = obj.tes3worldController(world) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

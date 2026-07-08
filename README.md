@@ -62,13 +62,6 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 }
 ```
 
-### Transport behavior
-
-- Client-to-server JSON-RPC requests and notifications are sent with HTTP `POST`.
-- Server-to-client notifications are delivered over a session-scoped SSE stream opened with HTTP `GET` and `Accept: text/event-stream`.
-- The server returns `MCP-Session-Id` on `initialize`; clients must send it on subsequent `POST` and `GET` requests for that session.
-- If the same session opens another SSE `GET`, the server replaces the previous SSE stream with the newest one.
-
 ## Development
 
 ### Naming Convention
@@ -122,6 +115,13 @@ Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Ins
 ```
 
 This automatically resolves the server configuration and opens the Inspector at the configured connection URL.
+
+### Transport behavior
+
+- Client-to-server JSON-RPC requests and notifications are sent with HTTP `POST`.
+- Server-to-client notifications are delivered over a session-scoped SSE stream opened with HTTP `GET` and `Accept: text/event-stream`.
+- The server returns `MCP-Session-Id` on `initialize`; clients must send it on subsequent `POST` and `GET` requests for that session.
+- If the same session opens another SSE `GET`, the server replaces the previous SSE stream with the newest one.
 
 ## SDK
 

@@ -632,6 +632,7 @@ function this:LoadPrompts()
     local dir = settings.modDir .. "prompts\\"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
+            self.logger:trace("Load prompt from file: %s", file)
             local prompt = dofile(dir .. file) ---@type MCP.IPrompt
             if prompt and type(prompt) == "table" then
                 local instance = prompt.new()
@@ -649,6 +650,7 @@ function this:LoadTools()
     local dir = settings.modDir .. "tools\\"
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
+            self.logger:trace("Load tool from file: %s", file)
             local tool = dofile(dir .. file) ---@type MCP.ITool
             if tool and type(tool) == "table" then
                 local instance = tool.new()

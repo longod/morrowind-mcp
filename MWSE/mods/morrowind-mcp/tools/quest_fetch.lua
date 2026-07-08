@@ -41,14 +41,16 @@ end
 
 function this:Execute(params, context)
 
-    -- contain all quests.
+    -- contain all quests. Is there a way to get the minimum number of quests from the start?
     local quests = tes3.worldController.quests
     local array = jsonrpc.array(table.size(quests))
     for _, quest in ipairs(quests) do
         if quest:isValid() then
-            local o = serializer.tes3quest(quest)
-            if o then
-                table.insert(array, o)
+            if quest.isStarted then
+                local o = serializer.tes3quest(quest)
+                if o then
+                    table.insert(array, o)
+                end
             end
         end
     end

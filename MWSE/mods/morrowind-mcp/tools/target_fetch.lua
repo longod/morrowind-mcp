@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.tes3.object")
+local obj = require("morrowind-mcp.tes3.object")
 
 
 ---@class MCP.TargetFetch: MCP.ITool
@@ -49,7 +49,7 @@ function this:Execute(params, context)
     -- TODO pointing 3d object in menu?
 
     local structuredContent = jsonrpc.object({
-        playerTarget = serializer.tes3reference(playerTarget),
+        playerTarget = obj.tes3reference(playerTarget),
         -- helpLayerMenu = serializer.tes3uiElement(helpLayerMenu),
         -- inventryTile = serializer.tes3inventoryTile(inventryTile), -- TODO
         -- serviceActor = serializer.tes3mobileActor(serviceActor), -- TODO fetch from base type to inherited types.

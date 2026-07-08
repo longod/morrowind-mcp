@@ -1,7 +1,6 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local config = require("morrowind-mcp.config")
-local logger = require("morrowind-mcp.logger").Get({ moduleName = "serializer" })
-local enumname = require("morrowind-mcp.tes3.enumname")
+local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 
 local this = {}
 

@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.tes3.object")
+local obj = require("morrowind-mcp.tes3.object")
 
 
 ---@class MCP.ActivatorFetch: MCP.ITool
@@ -50,9 +50,9 @@ function this:Execute(params, context)
     end
     local activators = jsonrpc.array(size)
     for _, cell in ipairs(cells) do
-        for ref in serializer.ForEachReferenceList(cell.activators) do
+        for ref in obj.ForEachReferenceList(cell.activators) do
             if ref:isValid() then
-                local o = serializer.tes3reference(ref)
+                local o = obj.tes3reference(ref)
                 if o then
                     table.insert(activators, o)
                 end
