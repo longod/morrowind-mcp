@@ -43,7 +43,13 @@ applyTo:
 - リポジトリ固有の規約は `.github/instructions/mwse.instructions.md` に従います。
 
 ## Mock 方針（UnitWind）
-- 依存の差し替えは、可能なら対象テーブルのメンバーを直接 `unitwind:mock()` します。
-- 例: `unitwind:mock(tes3, "findGMST", function(id) ... end)` のように、必要な関数だけ差し替えます。
-- グローバルテーブル全体（例: `tes3` そのもの）を差し替える必要があるときだけ、`unitwind:mock(_G, "tes3", mockTable)` を使います。
-- テスト内で手動代入と手動復元（`tes3 = ...` / `tes3 = originalTes3`）を行うより、`unitwind:mock()` と `unitwind:unmock()` を優先します。
+- MUST: 依存の差し替えは対象テーブルのメンバーに対して `unitwind:mock(table, member, value_or_fn)` を使う。
+- MUST: すべての mock は同一テスト内で `unitwind:unmock(table, member)` まで行う。
+- NEVER: 初手で `_G` 全体差し替えを選ばない。
+- `_G` 差し替えは最終手段。メンバー単位 mock が不可能な場合のみ許可する。
+- 手動代入・手動復元（`tes3 = ...` / `tes3 = originalTes3`）は使わない。
+
+### 実装前チェック（必須）
+- メンバー単位 mock で実現できるか確認した。
+- 追加するすべての mock に対応する unmock を書いた。
+- `_G` 差し替えが必要な場合は理由をテストコメントに1行で残した。

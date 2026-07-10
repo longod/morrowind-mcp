@@ -157,4 +157,7 @@ function this:OnResourcesRead(params)
     }
 end
 
+-- register path for tools
+-- hook tools response then manage tools's resource. save and cache
+
 return this

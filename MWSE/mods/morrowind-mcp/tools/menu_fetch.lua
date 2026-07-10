@@ -16,6 +16,10 @@ function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.MenuFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "menu_fetch" })
+
+    -- TODO annotate widget containing element is actionable, or consumeMouseEvents = true (main men options image buttons)
+    -- need to list up only widget argument?
+
     instance.definition = jsonrpc.Tool({
         name = "menu-fetch",
         description =

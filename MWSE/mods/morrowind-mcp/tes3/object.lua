@@ -403,6 +403,8 @@ function this.tes3weather(i, o)
     local handler = weatherHandler[i.index]
     if handler then
         handler(i, o)
+    else
+        logger:warn("No serializer for weather type: %s", enumname.weather(i.index))
     end
 
     local _ = ValidateType(o)
@@ -2509,7 +2511,7 @@ function this.tes3anyObject(i, o)
     end
     local handler = objectHandler[objectType]
     if not handler then
-        logger:warn("No handler for object type: %s", objectType)
+        logger:warn("No serializer for object type: %s", objectType)
         return nil
     end
     --duck typing

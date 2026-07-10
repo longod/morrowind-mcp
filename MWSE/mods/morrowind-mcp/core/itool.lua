@@ -20,6 +20,10 @@ function this.new(params)
 end
 
 ---@public
+function this:Release()
+end
+
+---@public
 ---@param params table
 ---@return boolean
 function this:CanExecute(params)

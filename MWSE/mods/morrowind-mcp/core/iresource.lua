@@ -13,4 +13,8 @@ function this.new(params)
     return instance
 end
 
+---@public
+function this:Release()
+end
+
 return this

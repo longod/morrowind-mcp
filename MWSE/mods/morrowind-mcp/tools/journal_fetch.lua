@@ -1,28 +1,36 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+local datetime = require("morrowind-mcp.datetime")
+
+-- improving resource management then maybe no nessessary to fetch some data.
+-- possibly too many tools cause dump AI decision.
+-- but manual fetch is useful for debugging and testing.
 
 ---@return number[]
-local function GetMonthGmstIds()
-    return {
-        tes3.gmst.sMonthMorningstar,
-        tes3.gmst.sMonthSunsdawn,
-        tes3.gmst.sMonthFirstseed,
-        tes3.gmst.sMonthRainshand,
-        tes3.gmst.sMonthSecondseed,
-        tes3.gmst.sMonthMidyear,
-        tes3.gmst.sMonthSunsheight,
-        tes3.gmst.sMonthLastseed,
-        tes3.gmst.sMonthHeartfire,
-        tes3.gmst.sMonthFrostfall,
-        tes3.gmst.sMonthSunsdusk,
-        tes3.gmst.sMonthEveningstar,
-    }
-end
+local month_gmst = {
+    tes3.gmst.sMonthMorningstar,
+    tes3.gmst.sMonthSunsdawn,
+    tes3.gmst.sMonthFirstseed,
+    tes3.gmst.sMonthRainshand,
+    tes3.gmst.sMonthSecondseed,
+    tes3.gmst.sMonthMidyear,
+    tes3.gmst.sMonthSunsheight,
+    tes3.gmst.sMonthLastseed,
+    tes3.gmst.sMonthHeartfire,
+    tes3.gmst.sMonthFrostfall,
+    tes3.gmst.sMonthSunsdusk,
+    tes3.gmst.sMonthEveningstar,
+}
+local journal_path = tes3.installDirectory .. "\\Journal.htm"
 
 ---@class MCP.JournalFetch: MCP.ITool
 ---@field logger mwseLogger
+---@field resource MCP.ResourceManager TODO use MCP.IResourceManager
+---@field journalCallback fun(e : journalEventData)
+---@field loadedCallback fun(e : loadedEventData)
 local this = {}
 setmetatable(this, { __index = base })
+
 
 ---@param params table?
 ---@return MCP.JournalFetch
@@ -35,8 +43,8 @@ function this.new(params)
         description =
         "Fetch active journal entries.",
         inputSchema = jsonrpc.InputSchema(
-            -- active,
-            -- finished, unfinished
+        -- active,
+        -- finished, unfinished
         ),
         outputSchema = jsonrpc.OutputSchema(
             {
@@ -46,7 +54,27 @@ function this.new(params)
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
     })
+
+    instance.journalCallback = function(e)
+        instance:OnJournalUpdated(e)
+    end
+    event.register(tes3.event.journal, instance.journalCallback)
+    instance.loadedCallback = function(e)
+        instance:OnLoaded(e)
+    end
+    event.register(tes3.event.loaded, instance.loadedCallback)
     return instance
+end
+
+function this:Release()
+    if self.journalCallback then
+        event.unregister(tes3.event.journal, self.journalCallback)
+        self.journalCallback = nil
+    end
+    if self.loadedCallback then
+        event.unregister(tes3.event.loaded, self.loadedCallback)
+        self.loadedCallback = nil
+    end
 end
 
 ---@param value string?
@@ -63,9 +91,8 @@ end
 ---@return table<string, number>?
 ---@return string?
 function this.BuildMonthIndexByName()
-    local monthGmstIds = GetMonthGmstIds()
     local monthIndexByName = {}
-    for index, gmstId in ipairs(monthGmstIds) do
+    for index, gmstId in ipairs(month_gmst) do
         local gameSetting = tes3.findGMST(gmstId)
         if not gameSetting or type(gameSetting.value) ~= "string" or gameSetting.value == "" then
             return nil, "failed to resolve month GMST: " .. tostring(gmstId)
@@ -79,10 +106,15 @@ function this.BuildMonthIndexByName()
     return monthIndexByName, nil
 end
 
+---@class MCP.JournalParsedDate
+---@field day_of_month integer
+---@field month_number integer 1 to 12
+---@field day_count integer
+
 --- Parse the journal date label into numeric fields suitable for chronological sorting.
 ---@param dateLabel string?
 ---@param monthIndexByName table<string, number>
----@return MCP.AnyMap?
+---@return MCP.JournalParsedDate?
 function this.ParseDateLabel(dateLabel, monthIndexByName)
     if not dateLabel then
         return nil
@@ -103,7 +135,7 @@ function this.ParseDateLabel(dateLabel, monthIndexByName)
     return jsonrpc.object({
         day_of_month = dayOfMonth,
         month_number = monthNumber,
-        day_count  = dayCount,
+        day_count    = dayCount,
     })
 end
 
@@ -137,12 +169,19 @@ function this.NormalizeJournalText(value)
     return normalized, keywords
 end
 
+---@class MCP.JournalEntry
+---@field date_label string?
+---@field sequence integer
+---@field text string
+---@field keywords string[]
+---@field parsed_date MCP.JournalParsedDate
+
 --- Parse Journal.htm into lightweight structured entries without game-data cross references.
----@param content string?
+---@param content string
 ---@param monthIndexByName table<string, number>
----@return table
+---@return MCP.JournalEntry[]
 function this.ParseJournalEntries(content, monthIndexByName)
-    local entries = jsonrpc.array()
+    local entries = jsonrpc.array(256)
     if not content or content == "" then
         return entries
     end
@@ -175,6 +214,47 @@ function this.ParseJournalEntries(content, monthIndexByName)
     return entries
 end
 
+---@return MCP.JournalEntry[]?
+function this:ReadJournal()
+    if tes3.onMainMenu() then
+        self.logger:error("Cannot read journal while on main menu.")
+        return nil
+    end
+
+    -- TODO when on loading or on new game tutorial possible old or other journal.
+
+    local path = journal_path
+    if lfs.attributes(path) then
+        local file = io.open(path, "r")
+        if file then
+            local content = file:read("*a")
+            file:close()
+            if not content or content == "" then
+                self.logger:warn("Journal.htm is empty yet.")
+                return nil
+            end
+
+            local monthIndexByName, monthError = this.BuildMonthIndexByName()
+            if monthIndexByName then
+                local entries = this.ParseJournalEntries(content, monthIndexByName)
+                if  entries then
+                    self.logger:debug("Journal entries count: %d", #entries)
+                else
+                    self.logger:warn("Journal has no entries yet.")
+                end
+                return entries
+            else
+                self.logger:error("Failed to build month lookup: %s", monthError)
+            end
+        else
+            self.logger:error("Failed to open Journal.htm.")
+        end
+    else
+        self.logger:error("Journal.htm not found.")
+    end
+    return nil
+end
+
 function this:CanExecute(params)
     if tes3.onMainMenu() then
         return false
@@ -184,7 +264,6 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params, context)
-
     -- load <Morrowind>/Journal.htm
     -- perphaps, we can not access to journal entries in a save data.
     -- "JOUR"  recourds in ess stores just html same as journal.htm.
@@ -194,43 +273,70 @@ function this:Execute(params, context)
     -- https://wiki.openmw.org/index.php?title=Research:Dialogue_and_Messages
     -- hyperlink (@*#): https://github.com/OpenMW/openmw/blob/master/apps/openmw/mwdialogue/keywordsearch.cpp#L140
 
-    local path = tes3.installDirectory .. "\\Journal.htm"
-    if lfs.attributes(path) then
-        local file = io.open(path, "r")
-        if file then
-            local content = file:read("*a")
-            file:close()
-
-            local monthIndexByName, monthError = this.BuildMonthIndexByName()
-            if not monthIndexByName then
-                local errorContent = jsonrpc.TextContent(monthError or "failed to build month lookup.")
-                return jsonrpc.CallToolResult(errorContent, nil, true)
-            end
-
-            local wc = tes3.worldController
-            local currentTime = {
-                year = wc.year.value,
-                month = wc.month.value + 1, -- convert from 0-based to 1-based
-                day = wc.day.value,
-                hour = wc.hour.value, -- minutes and seconds are contained in the decimal part
-                day_count = wc.daysPassed.value,
-            }
-
-            local entries = this.ParseJournalEntries(content, monthIndexByName)
-            local structuredContent = jsonrpc.object({
-                entries = entries,
-                current_time = currentTime
-             })
-            return jsonrpc.CallToolResult(nil, structuredContent)
-        else
-            local errorContent = jsonrpc.TextContent("failed to open Journal.htm.")
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
-    else
-        local errorContent = jsonrpc.TextContent("Journal.htm not found.")
+    local entries = self:ReadJournal()
+    if not entries then
+        local errorContent = jsonrpc.TextContent("Failed to read journal entries.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
+    local currentTime = datetime.InGameNow()
+    local structuredContent = jsonrpc.object({
+        entries = entries,
+        current_time = currentTime,
+    })
+    return jsonrpc.CallToolResult(nil, structuredContent)
+
+end
+
+---@param e journalEventData
+function this:OnJournalUpdated(e)
+    -- can execute?
+
+    self.logger:debug("Journal updated")
+    local entries = self:ReadJournal()
+    if entries then
+        -- I considered journal.htm is not written yet. because event data has claim to be updated, be able to block.
+        -- but journal.htm is already written. So I can read journal.htm now.
+        self.logger:debug("Journal entries count: %d", #entries)
+    end
+
+    --[[
+    --- resource descriptor
+    ---@type MCP.Resource
+    local r = {
+        name = relativePath,
+        uri = resourceUri,
+        mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
+    }
+
+    self.resource:UpdateResource({
+        resource = r,
+        content = jsonrpc.object({
+            entries = entries,
+            current_time = datetime.InGameNow(), -- TODO update to response on fetching or reading
+        }),
+        -- any state, hints.
+        -- per palyer? in-game? write to file?
+    })
+    --]]
+end
+
+---@param e loadedEventData
+function this:OnLoaded(e)
+    -- can execute?
+
+    -- new game is not write journal.htm yet.
+    if e.newGame then
+        return
+    end
+
+    self.logger:debug("Game loaded")
+    -- local entries = self:ReadJournal()
+    -- if entries then
+    --     -- same as on journal updated behavior.
+    --     self.logger:debug("Journal entries count: %d", #entries)
+    -- end
+    -- self.resource: changed
 end
 
 return this

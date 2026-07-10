@@ -579,15 +579,23 @@ function this:BroadcastNotifications()
 end
 
 function this:LoadPrompts()
-    self.prompts = {}
+    self.prompts = table.new(0, 64)
     local dir = settings.modDir .. "prompts\\"
+    local params = {
+        resource = self.resource,
+    }
+
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
             self.logger:trace("Load prompt from file: %s", file)
             local prompt = dofile(dir .. file) ---@type MCP.IPrompt
             if prompt and type(prompt) == "table" then
-                local instance = prompt.new()
-                self.prompts[instance.definition.name] = instance
+                local success, instance = pcall(prompt.new, params)
+                if success and instance and instance.definition then
+                    self.prompts[instance.definition.name] = instance
+                else
+                    self.logger:error("Failed to initialize prompt from file: %s", file)
+                end
             else
                 self.logger:error("Failed to load prompt from file: %s", file)
             end
@@ -597,24 +605,51 @@ function this:LoadPrompts()
 end
 
 function this:LoadTools()
-    self.tools = {}
+    self.tools = table.new(0, 64)
     local dir = settings.modDir .. "tools\\"
     local params = {
         resource = self.resource,
     }
+
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
             self.logger:trace("Load tool from file: %s", file)
             local tool = dofile(dir .. file) ---@type MCP.ITool
             if tool and type(tool) == "table" then
-                local instance = tool.new(params)
-                self.tools[instance.definition.name] = instance
+                local success, instance = pcall(tool.new, params)
+                if success and instance and instance.definition then
+                    self.tools[instance.definition.name] = instance
+                else
+                    self.logger:error("Failed to initialize tool from file: %s", file)
+                end
             else
                 self.logger:error("Failed to load tool from file: %s", file)
             end
         end
     end
     self.toolsStatus = table.new(0, table.size(self.tools))
+end
+
+function this:ReleasePrompts()
+    if self.prompts then
+        for _, prompt in pairs(self.prompts) do
+            if prompt.Release then
+                pcall(prompt.Release, prompt)
+            end
+        end
+        self.prompts = nil
+    end
+end
+
+function this:ReleaseTools()
+    if self.tools then
+        for _, tool in pairs(self.tools) do
+            if tool.Release then
+                pcall(tool.Release, tool)
+            end
+        end
+        self.tools = nil
+    end
 end
 
 ---@param request Http.Request
@@ -1539,6 +1574,12 @@ function this:Shutdown()
     for _, session in pairs(self.sessions) do
         self:RemoveSSEClient(session)
     end
+
+    self:ReleasePrompts()
+    self:ReleaseTools()
+    self.resource:Release()
+    self.resource = nil
+
     self.server:close()
     self.server = nil
     self.logger:info("server stopped")
