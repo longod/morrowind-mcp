@@ -159,6 +159,61 @@ function this.Test()
         unitwind:expect(resourceLink.size).toBe(123)
     end)
 
+    unitwind:test("Common generators build annotations, icon and implementation", function()
+        local annotations = jsonrpc.Annotations({ "user", "assistant" }, 0.75, "2026-07-11T00:00:00Z")
+        unitwind:expect(getmetatable(annotations.audience).__jsontype).toBe("array")
+        unitwind:expect(annotations.audience[1]).toBe("user")
+        unitwind:expect(annotations.audience[2]).toBe("assistant")
+        unitwind:expect(annotations.priority).toBe(0.75)
+        unitwind:expect(annotations.lastModified).toBe("2026-07-11T00:00:00Z")
+
+        local icon = jsonrpc.Icon("mcp://icon.png", "image/png", { "16x16", "32x32" }, "light")
+        unitwind:expect(icon.src).toBe("mcp://icon.png")
+        unitwind:expect(icon.mimeType).toBe("image/png")
+        unitwind:expect(getmetatable(icon.sizes).__jsontype).toBe("array")
+        unitwind:expect(icon.sizes[1]).toBe("16x16")
+        unitwind:expect(icon.sizes[2]).toBe("32x32")
+        unitwind:expect(icon.theme).toBe("light")
+
+        local implementation = jsonrpc.Implementation(
+            "morrowind-mcp",
+            "1.0.0",
+            { icon },
+            "Morrowind MCP",
+            "Bridge Morrowind state via MCP",
+            "https://example.invalid"
+        )
+        unitwind:expect(getmetatable(implementation.icons).__jsontype).toBe("array")
+        unitwind:expect(implementation.icons[1].src).toBe("mcp://icon.png")
+        unitwind:expect(implementation.name).toBe("morrowind-mcp")
+        unitwind:expect(implementation.version).toBe("1.0.0")
+        unitwind:expect(implementation.title).toBe("Morrowind MCP")
+        unitwind:expect(implementation.description).toBe("Bridge Morrowind state via MCP")
+        unitwind:expect(implementation.websiteUrl).toBe("https://example.invalid")
+    end)
+
+    unitwind:test("Annotations converts MCP.DateTime to ISO8601", function()
+        local annotations = jsonrpc.Annotations(nil, nil, {
+            year = 2026,
+            month = 7,
+            day = 11,
+            hour = 8,
+            minute = 9,
+            second = 10,
+            time_zone = "UTC",
+        })
+
+        unitwind:expect(annotations.lastModified).toBe("2026-07-11T08:09:10Z")
+    end)
+
+    unitwind:test("Annotations ignores invalid lastModified input types", function()
+        local fromNumber = jsonrpc.Annotations(nil, nil, 123)
+        unitwind:expect(fromNumber.lastModified).toBe(nil)
+
+        local fromBoolean = jsonrpc.Annotations(nil, nil, true)
+        unitwind:expect(fromBoolean.lastModified).toBe(nil)
+    end)
+
     unitwind:test("Tool generators build schema, execution and annotations", function()
         local schema = jsonrpc.InputSchema(
             { name = { type = "string" } },

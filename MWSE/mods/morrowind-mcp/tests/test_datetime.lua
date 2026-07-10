@@ -28,7 +28,7 @@ function this.Test()
         end
     end)
 
-    unitwind:test("Now uses zone-name fallback first", function()
+    unitwind:test("Now uses numeric offset first", function()
         unitwind:mock(os, "time", function()
             return 1700000000
         end)
@@ -44,11 +44,11 @@ function this.Test()
                     sec = 56,
                 }
             end
-            if format == "%Z" then
-                return "JST"
-            end
             if format == "%z" then
                 return "+0900"
+            end
+            if format == "%Z" then
+                return "JST"
             end
             return nil
         end)
@@ -58,13 +58,13 @@ function this.Test()
         unitwind:unmock(os, "date")
         unitwind:unmock(os, "time")
 
-        unitwind:expect(now.time_zone).toBe("JST")
+        unitwind:expect(now.time_zone).toBe("+0900")
         unitwind:expect(now.minute).toBe(34)
         unitwind:expect(now.second).toBe(56)
         unitwind:expect(now.epoch_time).toBe(1700000000)
     end)
 
-    unitwind:test("Now falls back to numeric offset when zone-name is empty", function()
+    unitwind:test("Now falls back to zone-name when offset is empty", function()
         unitwind:mock(os, "time", function()
             return 1700000001
         end)
@@ -80,11 +80,11 @@ function this.Test()
                     sec = 57,
                 }
             end
-            if format == "%Z" then
+            if format == "%z" then
                 return ""
             end
-            if format == "%z" then
-                return "+0900"
+            if format == "%Z" then
+                return "JST"
             end
             return nil
         end)
@@ -94,7 +94,7 @@ function this.Test()
         unitwind:unmock(os, "date")
         unitwind:unmock(os, "time")
 
-        unitwind:expect(now.time_zone).toBe("+0900")
+        unitwind:expect(now.time_zone).toBe("JST")
     end)
 
     unitwind:test("Now falls back to local when both timezone formats are empty", function()
@@ -141,6 +141,70 @@ function this.Test()
             unitwind:expect(utcNow.second ~= nil).toBe(true)
             unitwind:expect(utcNow.time_zone).toBe("UTC")
         end
+    end)
+
+    unitwind:test("ToISO8601 formats UTC with Z suffix", function()
+        local isoText = datetime.ToISO8601({
+            type = "real time",
+            year = 2026,
+            month = 7,
+            day = 11,
+            hour = 9,
+            minute = 8,
+            second = 7,
+            epoch_time = 0,
+            time_zone = "UTC",
+        })
+
+        unitwind:expect(isoText).toBe("2026-07-11T09:08:07Z")
+    end)
+
+    unitwind:test("ToISO8601 formats numeric timezone offset", function()
+        local isoText = datetime.ToISO8601({
+            type = "real time",
+            year = 2026,
+            month = 7,
+            day = 11,
+            hour = 9,
+            minute = 8,
+            second = 7,
+            epoch_time = 0,
+            time_zone = "+0900",
+        })
+
+        unitwind:expect(isoText).toBe("2026-07-11T09:08:07+09:00")
+    end)
+
+    unitwind:test("ToISO8601 omits non-offset timezone names", function()
+        local isoText = datetime.ToISO8601({
+            type = "real time",
+            year = 2026,
+            month = 7,
+            day = 11,
+            hour = 9,
+            minute = 8,
+            second = 7,
+            epoch_time = 0,
+            time_zone = "JST",
+        })
+
+        unitwind:expect(isoText).toBe("2026-07-11T09:08:07")
+    end)
+
+    unitwind:test("ToISO8601 returns nil for invalid input", function()
+        local isoText = datetime.ToISO8601({
+            type = "real time",
+            year = 2026,
+            month = 7,
+            day = 11,
+            hour = 9,
+            minute = nil,
+            second = 7,
+            epoch_time = 0,
+            time_zone = "UTC",
+        })
+
+        unitwind:expect(isoText).toBe(nil)
     end)
 
     unitwind:test("InGameNow returns nil on main menu", function()

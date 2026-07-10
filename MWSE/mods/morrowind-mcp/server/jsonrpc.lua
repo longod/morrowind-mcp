@@ -1,4 +1,5 @@
 local this = {}
+local datetime = require("morrowind-mcp.datetime")
 
 --- -32000 to -32099	Server error -- Reserved for implementation-defined server-errors.
 ---@enum MCP.JSONRPCErrorCode
@@ -280,6 +281,57 @@ function this.ResourceLink(name, uri, title, description, mimeType, annotations,
         mimeType = mimeType,
         annotations = annotations,
         size = size,
+    }
+end
+
+---@param audience MCP.Role[]?
+---@param priority number?
+---@param lastModified string|MCP.DateTime|nil
+---@return MCP.Annotations
+function this.Annotations(audience, priority, lastModified)
+    local normalizedLastModified = nil
+    if type(lastModified) == "string" then
+        normalizedLastModified = lastModified
+    elseif type(lastModified) == "table" then
+        normalizedLastModified = datetime.ToISO8601(lastModified)
+    end
+
+    return {
+        audience = audience and this.array(audience) or nil,
+        priority = priority,
+        lastModified = normalizedLastModified,
+    }
+end
+
+---@param src string
+---@param mimeType MCP.MimeType?
+---@param sizes string[]?
+---@param theme "light"|"dark"?
+---@return MCP.Icon
+function this.Icon(src, mimeType, sizes, theme)
+    return {
+        src = src,
+        mimeType = mimeType,
+        sizes = sizes and this.array(sizes) or nil,
+        theme = theme,
+    }
+end
+
+---@param name string
+---@param version string
+---@param icons MCP.Icon[]?
+---@param title string?
+---@param description string?
+---@param websiteUrl string?
+---@return MCP.Implementation
+function this.Implementation(name, version, icons, title, description, websiteUrl)
+    return {
+        icons = icons and this.array(icons) or nil,
+        name = name,
+        title = title,
+        version = version,
+        description = description,
+        websiteUrl = websiteUrl,
     }
 end
 

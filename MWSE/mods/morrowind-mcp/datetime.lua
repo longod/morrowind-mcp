@@ -1,5 +1,25 @@
 local this = {}
 
+---@param value string?
+---@return string?
+local function NormalizeIsoOffset(value)
+    if type(value) ~= "string" then
+        return nil
+    end
+
+    local sign, hour, minute = string.match(value, "^([%+%-])(%d%d)(%d%d)$")
+    if sign and hour and minute then
+        return string.format("%s%s:%s", sign, hour, minute)
+    end
+
+    sign, hour, minute = string.match(value, "^([%+%-])(%d%d):(%d%d)$")
+    if sign and hour and minute then
+        return string.format("%s%s:%s", sign, hour, minute)
+    end
+
+    return nil
+end
+
 ---@class MCP.DateTime
 ---@field type "real time" -- annotation for agent
 ---@field year integer
@@ -28,10 +48,10 @@ function this.Now()
     local epochTime = os.time()
     local dateTime = os.date("*t", epochTime)
 
-    -- Prefer a human-readable zone name; fall back to numeric offset, then a stable literal.
-    local timeZone = os.date("%Z", epochTime)
+    -- Prefer numeric UTC offset for machine-safe formatting; fall back to zone name, then a stable literal.
+    local timeZone = os.date("%z", epochTime)
     if timeZone == nil or timeZone == "" then
-        timeZone = os.date("%z", epochTime)
+        timeZone = os.date("%Z", epochTime)
     end
     if timeZone == nil or timeZone == "" then
         timeZone = "local"
@@ -71,6 +91,48 @@ function this.UTCNow()
         time_zone = "UTC",
     }
     return t
+end
+
+--- Format MCP.DateTime into ISO 8601 basic date-time text.
+--- UTC returns a trailing "Z". Numeric offsets return "+HH:MM" or "-HH:MM".
+--- Named zones (for example, "JST") are not standardized offsets and are omitted.
+---@param dateTime MCP.DateTime?
+---@return string?
+function this.ToISO8601(dateTime)
+    if not dateTime then
+        return nil
+    end
+
+    local year = tonumber(dateTime.year)
+    local month = tonumber(dateTime.month)
+    local day = tonumber(dateTime.day)
+    local hour = tonumber(dateTime.hour)
+    local minute = tonumber(dateTime.minute)
+    local second = tonumber(dateTime.second)
+    if not year or not month or not day or not hour or not minute or not second then
+        return nil
+    end
+
+    local isoText = string.format(
+        "%04d-%02d-%02dT%02d:%02d:%02d",
+        year,
+        month,
+        day,
+        math.floor(hour),
+        math.floor(minute),
+        math.floor(second)
+    )
+
+    if dateTime.time_zone == "UTC" then
+        return isoText .. "Z"
+    end
+
+    local offset = NormalizeIsoOffset(dateTime.time_zone)
+    if offset then
+        return isoText .. offset
+    end
+
+    return isoText
 end
 
 ---@return MCP.DateTimeInGame?
