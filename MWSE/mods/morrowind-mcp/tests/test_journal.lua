@@ -6,9 +6,9 @@ function this.Test()
         highlight = false,
     })
 
-    local journalFetch = require("morrowind-mcp.tools.journal_fetch")
+    local journal = require("morrowind-mcp.resources.journal")
 
-    unitwind:start("morrowind-mcp.tools.journal_fetch")
+    unitwind:start("morrowind-mcp.tools.resources.journal")
 
     unitwind:test("BuildMonthIndexByName resolves month order from GMST", function()
         local values = {
@@ -30,7 +30,7 @@ function this.Test()
             return values[id]
         end)
 
-        local monthIndexByName, err = journalFetch.BuildMonthIndexByName()
+        local monthIndexByName, err = journal.BuildMonthIndexByName()
         unitwind:unmock(tes3, "findGMST")
 
         unitwind:expect(err).toBe(nil)
@@ -44,7 +44,7 @@ function this.Test()
     end)
 
     unitwind:test("ParseDateLabel returns numeric parsed_date fields", function()
-        local parsedDate = journalFetch.ParseDateLabel("16 Theta Harvest (Day 1)", {
+        local parsedDate = journal.ParseDateLabel("16 Theta Harvest (Day 1)", {
             thetaharvest = 8,
         })
 
@@ -57,7 +57,7 @@ function this.Test()
     end)
 
     unitwind:test("NormalizeJournalText strips markup and deduplicates keywords", function()
-        local text, keywords = journalFetch.NormalizeJournalText(
+        local text, keywords = journal.NormalizeJournalText(
             "My @orders# are to go to @Balmora# and @report# to @Caius Cosades# in @Balmora# for further @orders#."
         )
 
@@ -73,7 +73,7 @@ function this.Test()
     end)
 
     unitwind:test("NormalizeJournalText deduplicates keywords case-insensitively", function()
-        local _, keywords = journalFetch.NormalizeJournalText(
+        local _, keywords = journal.NormalizeJournalText(
             "Speak to @Caius Cosades# after you @report# to @caius cosades# and @Report#."
         )
 
@@ -86,7 +86,7 @@ function this.Test()
     unitwind:test("ParseJournalEntries excludes date labels from keywords", function()
         local content =
             "<FONT COLOR=\"9F0000\">16 Theta Harvest (Day 1)</FONT><BR>I should @report# to @Caius Cosades#.<P>"
-        local entries = journalFetch.ParseJournalEntries(content, {
+        local entries = journal.ParseJournalEntries(content, {
             thetaharvest = 8,
         })
 

@@ -4,27 +4,12 @@ local datetime = require("morrowind-mcp.datetime")
 local mcp = require("morrowind-mcp.core.mcp")
 local pathutil = require("morrowind-mcp.core.pathutil")
 local settings = require("morrowind-mcp.settings")
+local journal = require("morrowind-mcp.resources.journal")
 
 -- improving resource management then maybe no nessessary to fetch some data.
 -- possibly too many tools cause dump AI decision.
 -- but manual fetch is useful for debugging and testing.
 
----@return number[]
-local month_gmst = {
-    tes3.gmst.sMonthMorningstar,
-    tes3.gmst.sMonthSunsdawn,
-    tes3.gmst.sMonthFirstseed,
-    tes3.gmst.sMonthRainshand,
-    tes3.gmst.sMonthSecondseed,
-    tes3.gmst.sMonthMidyear,
-    tes3.gmst.sMonthSunsheight,
-    tes3.gmst.sMonthLastseed,
-    tes3.gmst.sMonthHeartfire,
-    tes3.gmst.sMonthFrostfall,
-    tes3.gmst.sMonthSunsdusk,
-    tes3.gmst.sMonthEveningstar,
-}
-local journal_path = tes3.installDirectory .. "\\Journal.htm"
 
 ---@class MCP.JournalFetch: MCP.ITool
 ---@field logger mwseLogger
@@ -33,7 +18,6 @@ local journal_path = tes3.installDirectory .. "\\Journal.htm"
 ---@field loadedCallback fun(e : loadedEventData)
 local this = {}
 setmetatable(this, { __index = base })
-
 
 ---@param params table?
 ---@return MCP.JournalFetch
@@ -80,183 +64,6 @@ function this:Release()
     end
 end
 
----@param value string?
----@return string?
-function this.NormalizeMonthKey(value)
-    if not value then
-        return nil
-    end
-    local normalized = value:lower():gsub("[^%a]", "")
-    return normalized
-end
-
---- Build a lookup from normalized in-game month names to a 1-based month index.
----@return table<string, number>?
----@return string?
-function this.BuildMonthIndexByName()
-    local monthIndexByName = {}
-    for index, gmstId in ipairs(month_gmst) do
-        local gameSetting = tes3.findGMST(gmstId)
-        if not gameSetting or type(gameSetting.value) ~= "string" or gameSetting.value == "" then
-            return nil, "failed to resolve month GMST: " .. tostring(gmstId)
-        end
-
-        local monthNameKey = this.NormalizeMonthKey(gameSetting.value)
-        if monthNameKey then
-            monthIndexByName[monthNameKey] = index
-        end
-    end
-    return monthIndexByName, nil
-end
-
----@class MCP.JournalParsedDate
----@field day_of_month integer
----@field month_number integer 1 to 12
----@field day_count integer
-
---- Parse the journal date label into numeric fields suitable for chronological sorting.
----@param dateLabel string?
----@param monthIndexByName table<string, number>
----@return MCP.JournalParsedDate?
-function this.ParseDateLabel(dateLabel, monthIndexByName)
-    if not dateLabel then
-        return nil
-    end
-
-    local dayOfMonthText, monthName, dayInfo = dateLabel:match("^(%d+)%s+(.+)%s+%((.-)%)$")
-    if not dayOfMonthText or not monthName or not dayInfo then
-        return nil
-    end
-
-    local dayOfMonth = tonumber(dayOfMonthText)
-    local dayCount = tonumber(dayInfo:match("[Dd]ay%s+(%d+)"))
-    local monthNumber = monthIndexByName[this.NormalizeMonthKey(monthName)]
-    if not dayOfMonth or not dayCount or not monthNumber then
-        return nil
-    end
-
-    return jsonrpc.object({
-        day_of_month = dayOfMonth,
-        month_number = monthNumber,
-        day_count    = dayCount,
-    })
-end
-
---- Convert a journal paragraph into plain text and collect its explicit keyword markup.
----@param value string?
----@return string
----@return table
-function this.NormalizeJournalText(value)
-    if not value then
-        return "", jsonrpc.array()
-    end
-
-    local keywords = jsonrpc.array()
-    local keywordSeen = {}
-    local normalized = value
-    normalized = normalized:gsub("@([^#]+)#", function(keyword)
-        local keywordKey = keyword ~= "" and keyword:lower() or ""
-        if keywordKey ~= "" and not keywordSeen[keywordKey] then
-            keywordSeen[keywordKey] = true
-            table.insert(keywords, keyword)
-        end
-        return keyword
-    end)
-    normalized = normalized:gsub("<[^>]+>", " ")
-    normalized = normalized:gsub("\r\n", " ")
-    normalized = normalized:gsub("\n", " ")
-    normalized = normalized:gsub("\r", " ")
-    normalized = normalized:gsub("%s+", " ")
-    normalized = string.trim(normalized)
-
-    return normalized, keywords
-end
-
----@class MCP.JournalEntry
----@field date_label string?
----@field sequence integer
----@field text string
----@field keywords string[]
----@field parsed_date MCP.JournalParsedDate
-
---- Parse Journal.htm into lightweight structured entries without game-data cross references.
----@param content string
----@param monthIndexByName table<string, number>
----@return MCP.JournalEntry[]
-function this.ParseJournalEntries(content, monthIndexByName)
-    local entries = jsonrpc.array(256)
-    if not content or content == "" then
-        return entries
-    end
-
-    local sequence = 0
-    for paragraph in content:gmatch("(.-)<P>") do
-        local trimmedParagraph = string.trim(paragraph)
-        if trimmedParagraph and trimmedParagraph ~= "" then
-            local dateLabel = trimmedParagraph:match("<FONT.-%>(.-)</FONT><BR>")
-            local body = trimmedParagraph:match("</FONT><BR>(.*)") or trimmedParagraph
-            local normalizedText, keywords = this.NormalizeJournalText(body)
-
-            if normalizedText ~= "" then
-                sequence = sequence + 1
-                local entry = jsonrpc.object({
-                    date_label = dateLabel,
-                    sequence = sequence,
-                    text = normalizedText,
-                    keywords = keywords,
-                })
-                local parsedDate = this.ParseDateLabel(dateLabel, monthIndexByName)
-                if parsedDate then
-                    entry.parsed_date = parsedDate
-                end
-                table.insert(entries, entry)
-            end
-        end
-    end
-
-    return entries
-end
-
----@return MCP.JournalEntry[]?
-function this:ReadJournal()
-    if tes3.onMainMenu() then
-        self.logger:error("Cannot read journal while on main menu.")
-        return nil
-    end
-
-    -- TODO when on loading or on new game tutorial possible old or other journal.
-
-    local path = journal_path
-    if lfs.attributes(path) then
-        local file = io.open(path, "r")
-        if file then
-            local content = file:read("*a")
-            file:close()
-            if not content or content == "" then
-                self.logger:warn("Journal.htm is empty yet.")
-                return nil
-            end
-
-            local monthIndexByName, monthError = this.BuildMonthIndexByName()
-            if monthIndexByName then
-                local entries = this.ParseJournalEntries(content, monthIndexByName)
-                if  entries then
-                    self.logger:debug("Journal entries count: %d", #entries)
-                else
-                    self.logger:warn("Journal has no entries yet.")
-                end
-                return entries
-            else
-                self.logger:error("Failed to build month lookup: %s", monthError)
-            end
-        else
-            self.logger:error("Failed to open Journal.htm.")
-        end
-    else
-        self.logger:error("Journal.htm not found.")
-    end
-    return nil
-end
 
 function this:CanExecute(params)
     if tes3.onMainMenu() then
@@ -276,7 +83,7 @@ function this:Execute(params, context)
     -- https://wiki.openmw.org/index.php?title=Research:Dialogue_and_Messages
     -- hyperlink (@*#): https://github.com/OpenMW/openmw/blob/master/apps/openmw/mwdialogue/keywordsearch.cpp#L140
 
-    local entries = self:ReadJournal()
+    local entries = journal.ReadJournal()
     if not entries then
         local errorContent = jsonrpc.TextContent("Failed to read journal entries.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
@@ -291,25 +98,14 @@ function this:Execute(params, context)
 
 end
 
----@param desc MCP.Resource
----@return MCP.ResourceContent[]
-function this:ContentHandler(desc)
-    local entries = self:ReadJournal()
-    local contents = {jsonrpc.TextResourceContents(desc.uri, json.encode(entries, { indent = false }), desc.mimeType)}
-    return contents
-end
 
 ---@param e journalEventData
 function this:OnJournalUpdated(e)
     -- can execute?
 
     self.logger:debug("Journal updated")
-    local entries = self:ReadJournal()
-    if entries then
-        -- I considered journal.htm is not written yet. because event data has claim to be updated, be able to block.
-        -- but journal.htm is already written. So I can read journal.htm now.
-        self.logger:debug("Journal entries count: %d", #entries)
-    end
+    -- I considered journal.htm is not written yet. because event data has claim to be updated, be able to block.
+    -- but journal.htm is already written. So I can read journal.htm now.
 
     --- resource descriptor
     ---@type MCP.Resource
@@ -318,15 +114,14 @@ function this:OnJournalUpdated(e)
         title = "Journal",
         uri = pathutil.ToUri("game/journal.json", settings.uriScheme),
         description = "Current player's journal entries.",
-        mimeType = mcp.mime_type.application_json,
+        mimeType = mcp.mimeType.application_json,
         annotations = jsonrpc.Annotations(nil, nil, datetime.UTCNow()),
         -- size = nil,
     }
     self.resource:PublishResource(
     r,
-    function (desc)
-        return self:ContentHandler(desc)
-    end)
+    journal.ContentHandler
+    )
     --]]
 end
 
@@ -346,25 +141,16 @@ function this:OnLoaded(e)
     local r = {
         name = "journal.json",
         title = "Journal",
-        uri = pathutil.ToUri("game/journal.json", settings.uriScheme),
+        uri = pathutil.ToUri("game/journal.json", settings.uriScheme), -- TODO wrapper?, injected scheme
         description = "Current player's journal entries.",
-        mimeType = mcp.mime_type.application_json,
+        mimeType = mcp.mimeType.application_json,
         annotations = jsonrpc.Annotations(nil, nil, datetime.UTCNow()),
         -- size = nil,
     }
     self.resource:PublishResource(
     r,
-    function (desc)
-        return self:ContentHandler(desc)
-    end)
-
-
-    -- local entries = self:ReadJournal()
-    -- if entries then
-    --     -- same as on journal updated behavior.
-    --     self.logger:debug("Journal entries count: %d", #entries)
-    -- end
-    -- self.resource: changed
+    journal.ContentHandler
+    )
 end
 
 return this

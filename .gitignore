@@ -45,3 +45,4 @@ meta.ini
 .exit-after-tests
 *.log
 mwmcp.local.json
+.agents/mcp_config.json

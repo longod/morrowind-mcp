@@ -92,10 +92,15 @@ local method = {
 
 ---@alias MCP.Cursor string
 ---@alias MCP.EmptyResult MCP.Result
----@alias MCP.Role "user"|"assistant"
+
+---@enum MCP.Role
+local role = {
+    user = "user",
+    assistant = "assistant",
+}
 
 ---@enum MCP.MimeType
-local mime_type = {
+local mimeType = {
     image_apng = "image/apng",
     image_avif = "image/avif",
     image_bmp = "image/bmp",
@@ -117,7 +122,7 @@ local mime_type = {
 }
 
 ---@enum MCP.LoggingLevel
-local logging_level = {
+local loggingLevel = {
     debug = "debug",
     info = "info",
     notice = "notice",
@@ -939,7 +944,8 @@ local logging_level = {
 ---@field isError boolean?
 
 return {
-    logging_level = logging_level,
+    loggingLevel = loggingLevel,
     method = method,
-    mime_type = mime_type,
+    mimeType = mimeType,
+    role = role,
 }
