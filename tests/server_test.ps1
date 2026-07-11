@@ -226,7 +226,7 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-actor-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-journal-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-quest-fetch"),
+        @("--method", "tools/call", "--tool-name", "mw-quest-fetch", "--tool-arg", "is_active=true"),
         @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),

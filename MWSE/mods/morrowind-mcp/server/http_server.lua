@@ -667,9 +667,9 @@ function this:DumpRequest(request)
             end
         end
         if request.body then
-            str = str .. "\n" .. request.body
+            str = str .. "\n" .. string.gsub(request.body, "\r", "")
         end
-        self.logger:trace("%s", str)
+        self.logger:trace("Request: %s", str)
     end
 end
 

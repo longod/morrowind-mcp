@@ -295,7 +295,7 @@ end
 ---@return MCP.ResourceContent[]
 function this:ContentHandler(desc)
     local entries = self:ReadJournal()
-    local contents = {jsonrpc.TextResourceContents(desc.uri, json.encode(entries), desc.mimeType)}
+    local contents = {jsonrpc.TextResourceContents(desc.uri, json.encode(entries, { indent = false }), desc.mimeType)}
     return contents
 end
 
@@ -316,7 +316,7 @@ function this:OnJournalUpdated(e)
     local r = {
         name = "journal.json",
         title = "Journal",
-        uri = pathutil.ToUri("journal.json", settings.uriScheme),
+        uri = pathutil.ToUri("game/journal.json", settings.uriScheme),
         description = "Current player's journal entries.",
         mimeType = mcp.mime_type.application_json,
         annotations = jsonrpc.Annotations(nil, nil, datetime.UTCNow()),
@@ -336,7 +336,7 @@ function this:OnLoaded(e)
 
     -- new game is not write journal.htm yet.
     if e.newGame then
-        self.resource:UnpublishResource(pathutil.ToUri("journal.json", settings.uriScheme))
+        self.resource:UnpublishResource(pathutil.ToUri("game/journal.json", settings.uriScheme))
         return
     end
 
@@ -346,7 +346,7 @@ function this:OnLoaded(e)
     local r = {
         name = "journal.json",
         title = "Journal",
-        uri = pathutil.ToUri("journal.json", settings.uriScheme),
+        uri = pathutil.ToUri("game/journal.json", settings.uriScheme),
         description = "Current player's journal entries.",
         mimeType = mcp.mime_type.application_json,
         annotations = jsonrpc.Annotations(nil, nil, datetime.UTCNow()),

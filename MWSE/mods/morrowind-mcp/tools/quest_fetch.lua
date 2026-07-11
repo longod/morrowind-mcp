@@ -1,7 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.tes3.object")
-
+local quest = require("morrowind-mcp.resources.quest")
 
 ---@class MCP.QuestFetch: MCP.ITool
 ---@field logger mwseLogger
@@ -19,8 +18,20 @@ function this.new(params)
         description =
         "Fetch active quests.",
         inputSchema = jsonrpc.InputSchema(
-            -- active,
-            -- finished, unfinished
+            {
+                is_started = jsonrpc.BooleanSchema(
+                    "Is Started",
+                    "Filter quests by started state. If not specified, quests will not be filtered by started state."
+                ),
+                is_active = jsonrpc.BooleanSchema(
+                    "Is Active",
+                    "Filter quests by active state. If not specified, quests will not be filtered by active state."
+                ),
+                is_finished = jsonrpc.BooleanSchema(
+                    "Is Finished",
+                    "Filter quests by finished state. If not specified, quests will not be filtered by finished state."
+                ),
+            }
         ),
         outputSchema = jsonrpc.OutputSchema(
             {
@@ -40,22 +51,14 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params, context)
+    local isStarted = params.arguments["is_started"]
+    local isActive = params.arguments["is_active"]
+    local isFinished = params.arguments["is_finished"]
+    -- TODO validation
 
-    -- contain all quests. Is there a way to get the minimum number of quests from the start?
-    local quests = tes3.worldController.quests
-    local array = jsonrpc.array(table.size(quests))
-    for _, quest in ipairs(quests) do
-        if quest:isValid() then
-            if quest.isStarted then
-                local o = serializer.tes3quest(quest)
-                if o then
-                    table.insert(array, o)
-                end
-            end
-        end
-    end
+    local entries = quest.FindQuests(isStarted, isActive, isFinished)
 
-    local structuredContent = jsonrpc.object({ quests = array })
+    local structuredContent = jsonrpc.object({ quests = entries })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

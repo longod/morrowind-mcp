@@ -1,5 +1,10 @@
 # AGENTS instructions
 
+## 回答言語ルール
+- ユーザーの入力言語に関係なく、常にシステム言語で回答する。
+- ユーザーが回答言語を明示指定した場合のみ、その言語で回答してよい。
+- コード・ログ・エラーメッセージ・固有名詞は原文維持を許可する。
+
 ## プロジェクト概要
 
 - **Morrowind MCP** は Morrowind 向けの Model Context Protocol Server mod
@@ -65,7 +70,6 @@ Windows上での開発のため、以下の運用ルールを必須とする。
 - 検索は VS Code の検索ツールを優先する（`grep_search`, `file_search`, `semantic_search`）
 - ターミナルで検索が必要な場合は PowerShell cmdlet を使う（例: `Get-ChildItem`, `Select-String`）
 - 代替手段が無い場合は、実行前にユーザー確認を取る
-
 - [tests/server_test.ps1](tests/server_test.ps1): Morrowindを起動してMCP サーバーの実行・停止・通信をテストする
 - [tests/unit_test.ps1](tests/unit_test.ps1): Lua モジュールの単体テストを実行する
 - [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Mod Organizer 2 経由で Morrowind を起動してサーバーを実行する

@@ -29,9 +29,9 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 
 ## MCP Configuration
 
-### VS Code
+### Copilot with VS Code
 
-- `.vscode/mcp.json`
+**.vscode/mcp.json**
 
 ```json
 {
@@ -45,6 +45,54 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 ```
 
 https://code.visualstudio.com/docs/agents/reference/mcp-configuration
+
+### ChatGPT Codex
+
+**./config.toml** (global)
+
+```toml
+[mcp_servers.morrowind-mcp]
+enabled = true
+url = "http://localhost:33427"
+```
+
+
+### Claude Desktop
+
+**./claude_desktop_config.json** (global)
+
+```json
+{
+  "mcpServers": {
+    "morrowind-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:33427"
+      ]
+    }
+  }
+}
+```
+
+https://modelcontextprotocol.io/docs/develop/connect-local-servers
+
+### Antigravity CLI and Antigravity IDE
+
+**.agents/mcp_config.json** (local)
+**~/.gemini/config/mcp_config.json** (global)
+
+```json
+{
+  "mcpServers": {
+    "morrowind-mcp": {
+      "serverUrl": "http://localhost:33427"
+    }
+  }
+}
+```
+
+https://antigravity.google/docs/mcp
 
 ### Others
 
@@ -62,21 +110,8 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 }
 ```
 
-- Claude Desktop: `claude_desktop_config.json`
+https://code.claude.com/docs/en/mcp-quickstart
 
-```json
-{
-  "mcpServers": {
-    "morrowind-mcp": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "http://localhost:33427"
-      ]
-    }
-  }
-}
-```
 
 
 ## Development
