@@ -1,6 +1,9 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local datetime = require("morrowind-mcp.datetime")
+local mcp = require("morrowind-mcp.core.mcp")
+local pathutil = require("morrowind-mcp.core.pathutil")
+local settings = require("morrowind-mcp.settings")
 
 -- improving resource management then maybe no nessessary to fetch some data.
 -- possibly too many tools cause dump AI decision.
@@ -288,6 +291,14 @@ function this:Execute(params, context)
 
 end
 
+---@param desc MCP.Resource
+---@return MCP.ResourceContent[]
+function this:ContentHandler(desc)
+    local entries = self:ReadJournal()
+    local contents = {jsonrpc.TextResourceContents(desc.uri, json.encode(entries), desc.mimeType)}
+    return contents
+end
+
 ---@param e journalEventData
 function this:OnJournalUpdated(e)
     -- can execute?
@@ -300,24 +311,22 @@ function this:OnJournalUpdated(e)
         self.logger:debug("Journal entries count: %d", #entries)
     end
 
-    --[[
     --- resource descriptor
     ---@type MCP.Resource
     local r = {
-        name = relativePath,
-        uri = resourceUri,
-        mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
+        name = "journal.json",
+        title = "Journal",
+        uri = pathutil.ToUri("journal.json", settings.uriScheme),
+        description = "Current player's journal entries.",
+        mimeType = mcp.mime_type.application_json,
+        annotations = jsonrpc.Annotations(nil, nil, datetime.UTCNow()),
+        -- size = nil,
     }
-
-    self.resource:UpdateResource({
-        resource = r,
-        content = jsonrpc.object({
-            entries = entries,
-            current_time = datetime.InGameNow(), -- TODO update to response on fetching or reading
-        }),
-        -- any state, hints.
-        -- per palyer? in-game? write to file?
-    })
+    self.resource:PublishResource(
+    r,
+    function (desc)
+        return self:ContentHandler(desc)
+    end)
     --]]
 end
 
@@ -327,10 +336,29 @@ function this:OnLoaded(e)
 
     -- new game is not write journal.htm yet.
     if e.newGame then
+        self.resource:UnpublishResource(pathutil.ToUri("journal.json", settings.uriScheme))
         return
     end
 
     self.logger:debug("Game loaded")
+    --- resource descriptor
+    ---@type MCP.Resource
+    local r = {
+        name = "journal.json",
+        title = "Journal",
+        uri = pathutil.ToUri("journal.json", settings.uriScheme),
+        description = "Current player's journal entries.",
+        mimeType = mcp.mime_type.application_json,
+        annotations = jsonrpc.Annotations(nil, nil, datetime.UTCNow()),
+        -- size = nil,
+    }
+    self.resource:PublishResource(
+    r,
+    function (desc)
+        return self:ContentHandler(desc)
+    end)
+
+
     -- local entries = self:ReadJournal()
     -- if entries then
     --     -- same as on journal updated behavior.

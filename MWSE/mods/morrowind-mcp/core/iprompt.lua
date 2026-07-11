@@ -7,7 +7,8 @@ local this = {}
 function this.new(params)
     local instance = {}
     if params then
-        table.copymissing(instance, table.deepcopy(params))
+        -- Keep injected dependencies by reference so shared managers remain shared.
+        table.copymissing(instance, params)
     end
     ---@type MCP.IPrompt
     setmetatable(instance, { __index = this })

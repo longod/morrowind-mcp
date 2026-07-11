@@ -114,14 +114,14 @@ function this.new(params)
         [mcp.method.ping] = instance.OnPing,
         [mcp.method.logging_setlevel] = instance.OnLoggingSetLevel,
         [mcp.method.prompts_list] = instance.OnPromptsList,
+        [mcp.method.prompts_get] = instance.OnPromptsGet,
         [mcp.method.resources_list] = instance.OnResourcesList,
         [mcp.method.resources_templates_list] = instance.OnResourcesTemplatesList,
+        [mcp.method.resources_read] = instance.OnResourcesRead,
         [mcp.method.resources_subscribe] = instance.OnResourcesSubscribe,
         [mcp.method.resources_unsubscribe] = instance.OnResourcesUnsubscribe,
         [mcp.method.tools_list] = instance.OnToolsList,
         [mcp.method.tools_call] = instance.OnToolsCall,
-        [mcp.method.resources_read] = instance.OnResourcesRead,
-        [mcp.method.prompts_get] = instance.OnPromptsGet,
     }
     instance:LoadPrompts()
     instance:LoadTools()
@@ -492,7 +492,7 @@ function this:NotifyResourceListChanged()
     self.logger:debug("Queued resource list changed notification (sessions=%d)", notifiedCount)
 end
 
----@param uri string
+---@param uri MCP.ResourceUri
 ---@return integer notifiedCount
 function this:NotifyResourceUpdated(uri)
     if not self:IsValidResourceUri(uri) then
@@ -1473,6 +1473,23 @@ function this:PollPrimitiveCondition(e)
         self.logger:trace("Polling prompts for executable changes (interval=%f seconds)", self.lastPollingPromptsInterval)
         self.lastPollingPromptsInterval = 0
     end
+
+    -- FIXME dont touch private field in this. PoC
+    -- no polling time?
+    if self.resource.changed > 0 then
+        self:NotifyResourceListChanged()
+        self.logger:debug("resource list changed, changed=%d total=%d", self.resource.changed, table.size(self.resource.resources))
+        self.resource.changed = 0
+    end
+    -- publish subscription
+    if table.size(self.resource.updated) > 0 then
+        for uri, _ in pairs(self.resource.updated) do
+            self:NotifyResourceUpdated(uri)
+        end
+        self.logger:debug("resource updated, updated=%d total=%d", table.size(self.resource.updated), table.size(self.resource.resources))
+        table.clear(self.resource.updated)
+    end
+
 end
 
 --- @param e keyDownEventData

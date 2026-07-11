@@ -67,6 +67,8 @@ local function SkipMainMenu(e)
     end
 end
 
+-- TODO perhaps it need to start server agreement dialogue for the first time.
+
 local server = require("morrowind-mcp.server.http_server").new({
     hostname = config.server.address,
     port = config.server.port,

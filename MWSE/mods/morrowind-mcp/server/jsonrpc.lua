@@ -117,8 +117,8 @@ function this.request(str)
     return result
 end
 
----@param id string|number
----@param method MCP.Method|string
+---@param id MCP.RequestId
+---@param method MCP.Method
 ---@param params table?
 ---@return string
 function this.RequestMessage(id, method, params)
@@ -134,7 +134,7 @@ function this.RequestMessage(id, method, params)
     return json.encode(body, { indent = false })
 end
 
----@param id string|number?
+---@param id MCP.RequestId?
 ---@param params table?
 ---@return string
 function this.result(id, params)
@@ -148,7 +148,7 @@ function this.result(id, params)
     return encoded
 end
 
----@param id string|number?
+---@param id MCP.RequestId?
 ---@param err MCP.Error
 ---@param data any?
 ---@return string
@@ -226,7 +226,7 @@ function this.AudioContent(data, mimeType, annotations)
     }
 end
 
----@param uri string
+---@param uri MCP.ResourceUri
 ---@param text string
 ---@param mimeType MCP.MimeType?
 ---@return MCP.TextResourceContents
@@ -238,7 +238,7 @@ function this.TextResourceContents(uri, text, mimeType)
     }
 end
 
----@param uri string
+---@param uri MCP.ResourceUri
 ---@param blob string
 ---@param mimeType MCP.MimeType?
 ---@return MCP.BlobResourceContents
@@ -250,7 +250,7 @@ function this.BlobResourceContents(uri, blob, mimeType)
     }
 end
 
----@param resource MCP.TextResourceContents|MCP.BlobResourceContents
+---@param resource MCP.ResourceContent
 ---@param annotations MCP.Annotations?
 ---@return MCP.EmbeddedResource
 function this.EmbeddedResource(resource, annotations)
@@ -262,7 +262,7 @@ function this.EmbeddedResource(resource, annotations)
 end
 
 ---@param name string
----@param uri string
+---@param uri MCP.ResourceUri
 ---@param title string?
 ---@param description string?
 ---@param mimeType MCP.MimeType?

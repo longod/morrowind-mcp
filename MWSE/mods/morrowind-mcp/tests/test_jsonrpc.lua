@@ -193,6 +193,7 @@ function this.Test()
     end)
 
     unitwind:test("Annotations converts MCP.DateTime to ISO8601", function()
+        ---@diagnostic disable-next-line
         local annotations = jsonrpc.Annotations(nil, nil, {
             year = 2026,
             month = 7,
@@ -207,10 +208,10 @@ function this.Test()
     end)
 
     unitwind:test("Annotations ignores invalid lastModified input types", function()
-        local fromNumber = jsonrpc.Annotations(nil, nil, 123)
+        local fromNumber = jsonrpc.Annotations(nil, nil, 123) ---@diagnostic disable-line: param-type-mismatch
         unitwind:expect(fromNumber.lastModified).toBe(nil)
 
-        local fromBoolean = jsonrpc.Annotations(nil, nil, true)
+        local fromBoolean = jsonrpc.Annotations(nil, nil, true) ---@diagnostic disable-line: param-type-mismatch
         unitwind:expect(fromBoolean.lastModified).toBe(nil)
     end)
 

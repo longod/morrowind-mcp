@@ -124,7 +124,7 @@ end
 
 ---@param resourcePath string
 ---@param uriScheme string
----@return string?
+---@return MCP.ResourceUri?
 function this.ToUri(resourcePath, uriScheme)
     -- Normalize separators so URI paths are consistently slash-separated.
     local normalizedPath = string.gsub(resourcePath, "\\", "/")
@@ -136,7 +136,7 @@ function this.ToUri(resourcePath, uriScheme)
     return uriScheme .. PercentEncodePath(normalizedPath)
 end
 
----@param uri string
+---@param uri MCP.ResourceUri
 ---@param uriScheme string
 ---@return string?
 function this.FromUri(uri, uriScheme)

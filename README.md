@@ -62,6 +62,23 @@ https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 }
 ```
 
+- Claude Desktop: `claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "morrowind-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:33427"
+      ]
+    }
+  }
+}
+```
+
+
 ## Development
 
 ### Naming Convention
@@ -135,7 +152,7 @@ This automatically resolves the server configuration and opens the Inspector at 
 
 ## TODO
 
-- OpenMW supported
+- OpenMW is not supported yet.
 
 ## License
 

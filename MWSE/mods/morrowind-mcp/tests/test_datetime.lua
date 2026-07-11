@@ -198,7 +198,7 @@ function this.Test()
             month = 7,
             day = 11,
             hour = 9,
-            minute = nil,
+            minute = nil, ---@diagnostic disable-line: assign-type-mismatch
             second = 7,
             epoch_time = 0,
             time_zone = "UTC",

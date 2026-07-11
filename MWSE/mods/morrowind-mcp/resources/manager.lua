@@ -22,8 +22,19 @@ local base64 = require("morrowind-mcp.core.base64")
 ---@field lastAccessedInSystemTime number
 ---@field lastAccessedInGameTime number
 
+---@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]
+
+---@class MCP.ResourceEntry
+---@field desc MCP.Resource
+---@field handler MCP.ResourceContentHandler
+---content cache
+
 ---@class MCP.ResourceManager: MCP.IResourceManager
 ---@field logger mwseLogger
+---@field resources table<MCP.ResourceUri, MCP.ResourceEntry>
+---@field changed integer for list changed
+---@field updated table<MCP.ResourceUri, boolean> for subscription
+---@field loadedCallback fun(e : loadedEventData)
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -35,7 +46,28 @@ function this.new(params)
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.ResourceManager
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "resource" })
+    instance.resources = {}
+    instance.updated = {}
+    instance.changed = 0
+
+    instance.loadedCallback = function(e)
+        instance:OnLoaded(e)
+    end
+    -- fastest in this server. because resource manager reset resource cache state. then any resources update on loaded.
+    event.register(tes3.event.loaded, instance.loadedCallback, { priority = 100 })
+
     return instance
+end
+
+function this:Release()
+    if self.loadedCallback then
+        event.unregister(tes3.event.loaded, self.loadedCallback)
+        self.loadedCallback = nil
+    end
+
+    self.resources = nil
+    self.updated = nil
+    self.changed = 0
 end
 
 ---@param params MCP.PaginatedRequestParams
@@ -47,6 +79,13 @@ function this:OnResourcesList(params)
 
     ---@type MCP.ListResourcesResult
     local result = jsonrpc.ListResourcesResult()
+
+    -- add virtual resources
+    for _, r in pairs(self.resources) do
+        table.insert(result.resources, r.desc)
+    end
+
+    self.logger:debug("List resources count=%d, virutal=%d", #result.resources, table.size(self.resources))
 
     ---@param currentDir string
     ---@param relativeDir string
@@ -117,6 +156,25 @@ function this:OnResourcesRead(params)
         }
     end
 
+    -- try read virtual resources
+    local entry = self.resources[params.uri]
+    if entry then
+        -- handler for virtual resource access
+        -- or cache
+        local contents = entry.handler(entry.desc)
+        if not contents or #contents == 0 then
+            ---@type MethodResult
+            return {
+                http_response = http.response_code.not_found, -- ?
+                error = jsonrpc.error_code.invalid_request,
+            }
+        end
+        return {
+            http_response = http.response_code.ok,
+            result = jsonrpc.ReadResourceResult(contents),
+        }
+    end
+
     local resourcePath = pathutil.FromUri(params.uri, settings.uriScheme)
     if not resourcePath then
         ---@type MethodResult
@@ -157,7 +215,55 @@ function this:OnResourcesRead(params)
     }
 end
 
+
+---@param e loadedEventData
+function this:OnLoaded(e)
+    -- reset resource cache state on game load.
+    -- keeping no IGT resources?
+end
+
+
 -- register path for tools
 -- hook tools response then manage tools's resource. save and cache
+
+
+---@param desc MCP.Resource
+---@param handler MCP.ResourceContentHandler
+---@return string MCP.ResourceUri
+function this:PublishResource(desc, handler)
+    -- any state, hints.
+    -- per player? in-game? write to file?
+
+    local entry = self.resources[desc.uri]
+
+    if entry then
+        -- check conflict?
+        entry.desc = desc
+        -- reset cache
+        self.updated[desc.uri] = true
+        self.logger:debug("Updated a resource: %s  total=%d", desc.uri, table.size(self.resources))
+    else
+        self.resources[desc.uri] = {
+            desc = desc,
+            handler = handler,
+        }
+        self.changed = self.changed + 1
+        self.logger:debug("Published a new resource: %s changed=%d total=%d", desc.uri, self.changed, table.size(self.resources))
+        print(type(self.resources[desc.uri]))
+    end
+    return desc.uri
+end
+
+function this:UnpublishResource(uri)
+
+    if not self.resources[uri] then
+        return false
+    end
+    self.resources[uri] = nil
+    self.changed = self.changed + 1
+    -- need updated list for subscription?
+    self.logger:debug("Unpublished a resource: %s changed=%d", uri, self.changed)
+    return true
+end
 
 return this

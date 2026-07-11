@@ -159,6 +159,8 @@ local logging_level = {
 ---@class MCP.PaginatedRequestParams: MCP.RequestParams
 ---@field cursor MCP.Cursor?
 
+---@alias MCP.ResourceUri string
+
 -- ============================================================================
 -- Content
 -- ============================================================================
@@ -181,18 +183,20 @@ local logging_level = {
 ---@field annotations MCP.Annotations?
 
 ---@class MCP.TextResourceContents
----@field uri string
+---@field uri MCP.ResourceUri
 ---@field mimeType MCP.MimeType?
 ---@field text string
 
 ---@class MCP.BlobResourceContents
----@field uri string
+---@field uri MCP.ResourceUri
 ---@field mimeType MCP.MimeType?
 ---@field blob string
 
+---@alias MCP.ResourceContent MCP.TextResourceContents|MCP.BlobResourceContents
+
 ---@class MCP.EmbeddedResource
 ---@field type "resource"
----@field resource MCP.TextResourceContents|MCP.BlobResourceContents
+---@field resource MCP.ResourceContent
 ---@field annotations MCP.Annotations?
 
 ---@class MCP.ResourceLink
@@ -200,7 +204,7 @@ local logging_level = {
 ---@field icons MCP.Icon[]?
 ---@field name string
 ---@field title string?
----@field uri string
+---@field uri MCP.ResourceUri
 ---@field description string?
 ---@field mimeType MCP.MimeType?
 ---@field annotations MCP.Annotations?
@@ -219,7 +223,7 @@ local logging_level = {
 
 ---@class MCP.ResourceTemplateReference
 ---@field type "ref/resource"
----@field uri string
+---@field uri MCP.ResourceUri
 
 ---@alias MCP.CompleteReference MCP.PromptReference|MCP.ResourceTemplateReference
 
@@ -367,7 +371,7 @@ local logging_level = {
 
 ---@class MCP.ElicitResult: MCP.Result
 ---@field action MCP.ElicitAction
----@field content table<string, string|number|boolean|string[]>?
+---@field content MCP.PrimitiveValueMap?
 
 -- ============================================================================
 -- Initialize
@@ -523,7 +527,7 @@ local logging_level = {
 ---@field params MCP.ProgressNotificationParams
 
 ---@class MCP.ResourceUpdatedNotificationParams: MCP.NotificationParams
----@field uri string
+---@field uri MCP.ResourceUri
 
 ---@class MCP.ResourceUpdatedNotification
 ---@field jsonrpc "2.0"
@@ -573,6 +577,7 @@ local logging_level = {
 -- ============================================================================
 
 ---@alias MCP.TaskStatus "working"|"input_required"|"completed"|"failed"|"cancelled"
+---@alias MCP.TimeToLive number|nil
 
 ---@class MCP.Task
 ---@field taskId string
@@ -580,7 +585,7 @@ local logging_level = {
 ---@field statusMessage string?
 ---@field createdAt string
 ---@field lastUpdatedAt string
----@field ttl number|nil
+---@field ttl MCP.TimeToLive
 ---@field pollInterval number?
 
 ---@class MCP.CreateTaskResult: MCP.Result
@@ -604,7 +609,7 @@ local logging_level = {
 ---@field statusMessage string?
 ---@field createdAt string
 ---@field lastUpdatedAt string
----@field ttl number|nil
+---@field ttl MCP.TimeToLive
 ---@field pollInterval number?
 
 ---@class MCP.GetTaskPayloadRequestParams
@@ -643,7 +648,7 @@ local logging_level = {
 ---@field statusMessage string?
 ---@field createdAt string
 ---@field lastUpdatedAt string
----@field ttl number|nil
+---@field ttl MCP.TimeToLive
 ---@field pollInterval number?
 
 ---@class MCP.TaskStatusNotificationParams: MCP.NotificationParams
@@ -652,7 +657,7 @@ local logging_level = {
 ---@field statusMessage string?
 ---@field createdAt string
 ---@field lastUpdatedAt string
----@field ttl number|nil
+---@field ttl MCP.TimeToLive
 ---@field pollInterval number?
 
 ---@class MCP.TaskStatusNotification
@@ -713,7 +718,7 @@ local logging_level = {
 ---@field icons MCP.Icon[]?
 ---@field name string
 ---@field title string?
----@field uri string
+---@field uri MCP.ResourceUri
 ---@field description string?
 ---@field mimeType MCP.MimeType?
 ---@field annotations MCP.Annotations?
@@ -730,7 +735,7 @@ local logging_level = {
 ---@field resources MCP.Resource[]
 
 ---@class MCP.ReadResourceRequestParams: MCP.RequestParams
----@field uri string
+---@field uri MCP.ResourceUri
 
 ---@class MCP.ReadResourceRequest
 ---@field jsonrpc "2.0"
@@ -739,10 +744,10 @@ local logging_level = {
 ---@field params MCP.ReadResourceRequestParams
 
 ---@class MCP.ReadResourceResult: MCP.Result
----@field contents (MCP.TextResourceContents|MCP.BlobResourceContents)[]
+---@field contents MCP.ResourceContent[]
 
 ---@class MCP.SubscribeRequestParams: MCP.RequestParams
----@field uri string
+---@field uri MCP.ResourceUri
 
 ---@class MCP.SubscribeRequest
 ---@field jsonrpc "2.0"
@@ -751,7 +756,7 @@ local logging_level = {
 ---@field params MCP.SubscribeRequestParams
 
 ---@class MCP.UnsubscribeRequestParams: MCP.RequestParams
----@field uri string
+---@field uri MCP.ResourceUri
 
 ---@class MCP.UnsubscribeRequest
 ---@field jsonrpc "2.0"
@@ -783,7 +788,7 @@ local logging_level = {
 -- ============================================================================
 
 ---@class MCP.Root
----@field uri string
+---@field uri MCP.ResourceUri
 ---@field name string?
 
 ---@class MCP.ListRootsRequest
@@ -824,10 +829,11 @@ local logging_level = {
 ---@field isError boolean?
 
 ---@alias MCP.SamplingMessageContentBlock MCP.TextContent|MCP.ImageContent|MCP.AudioContent|MCP.ToolUseContent|MCP.ToolResultContent
+---@alias MCP.SamplingMessageContent MCP.SamplingMessageContentBlock|MCP.SamplingMessageContentBlock[]
 
 ---@class MCP.SamplingMessage
 ---@field role MCP.Role
----@field content MCP.SamplingMessageContentBlock|MCP.SamplingMessageContentBlock[]
+---@field content MCP.SamplingMessageContent
 
 ---@alias MCP.ToolChoiceMode "none"|"required"|"auto"
 
@@ -857,7 +863,7 @@ local logging_level = {
 ---@field model string
 ---@field stopReason string?
 ---@field role MCP.Role
----@field content MCP.SamplingMessageContentBlock|MCP.SamplingMessageContentBlock[]
+---@field content MCP.SamplingMessageContent
 
 -- ============================================================================
 -- Tools
