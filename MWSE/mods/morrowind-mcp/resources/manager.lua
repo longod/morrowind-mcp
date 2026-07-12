@@ -71,7 +71,7 @@ function this:Release()
 end
 
 ---@param params MCP.PaginatedRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnResourcesList(params)
     -- crawl files from resource directory, or maybe only registered resources
     -- TODO implementation to resources/
@@ -122,7 +122,7 @@ function this:OnResourcesList(params)
         return a.uri < b.uri
     end)
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
@@ -130,7 +130,7 @@ function this:OnResourcesList(params)
 end
 
 ---@param params MCP.PaginatedRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnResourcesTemplatesList(params)
     ---@type MCP.ListResourceTemplatesResult
     local result = jsonrpc.ListResourceTemplatesResult()
@@ -138,7 +138,7 @@ function this:OnResourcesTemplatesList(params)
     -- TODO present templete path for resource finding.
     -- TODO implementation to resources/
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
@@ -146,10 +146,10 @@ function this:OnResourcesTemplatesList(params)
 end
 
 ---@param params MCP.ReadResourceRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnResourcesRead(params)
     if not params or type(params.uri) ~= "string" then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -161,12 +161,13 @@ function this:OnResourcesRead(params)
     if entry then
         -- handler for virtual resource access
         -- or cache
+        -- TODO current datetime in game
         local contents = entry.handler(entry.desc)
         if not contents or #contents == 0 then
-            ---@type MethodResult
+            ---@type MCP.MethodResult
             return {
                 http_response = http.response_code.not_found, -- ?
-                error = jsonrpc.error_code.invalid_request,
+                error = jsonrpc.error_code.invalid_params,
             }
         end
         return {
@@ -177,7 +178,7 @@ function this:OnResourcesRead(params)
 
     local resourcePath = pathutil.FromUri(params.uri, settings.uriScheme)
     if not resourcePath then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -186,7 +187,7 @@ function this:OnResourcesRead(params)
 
     local resourceFilePath = pathutil.ToResourceFilePath(resourcePath, settings.resourceRootDir)
     if not resourceFilePath then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -195,7 +196,7 @@ function this:OnResourcesRead(params)
 
     local file = io.open(resourceFilePath, "rb")
     if not file then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -208,7 +209,7 @@ function this:OnResourcesRead(params)
     local mimeType = mimeutil.ResolveMimeTypeFromResourcePath(resourcePath)
     local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), mimeType)
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = jsonrpc.ReadResourceResult({ content }),

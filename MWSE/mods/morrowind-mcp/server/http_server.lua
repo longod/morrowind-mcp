@@ -45,6 +45,26 @@ local function FormatJsonRpcError(error)
     return string.format("%s:%s", tostring(error.code), tostring(error.message))
 end
 
+---@class MCP.ClientRequest
+---@field client Socket.TcpClient?
+---@field http_request Http.Request
+---@field json_request MCP.JSONRPCRequest|MCP.JSONRPCNotification?
+
+---@class MCP.ServerResponse
+---@field http_response Http.ResponseStatusCodes
+---@field http_headers table<string, string>?
+---@field json_result table?
+---@field json_error MCP.Error?
+---@field request_id MCP.RequestId?
+---@field no_body boolean?
+---@field keep_open boolean?
+---@field response_sent boolean?
+
+---@class MCP.MethodResult
+---@field http_response Http.ResponseStatusCodes -- TODO simplify 200, 202, 400 or more?
+---@field http_headers table<string, string>?
+---@field result MCP.Result?
+---@field error MCP.Error?
 
 ---@class MCP.HttpSession
 ---@field id string
@@ -70,8 +90,8 @@ end
 ---@field hostname string
 ---@field port integer
 ---@field httpHeaders table<string, string> must headers
----@field requestHandlers table<string, fun(self: MCP.MwseHttpServer, request: ClientRequest): ServerResponse?>
----@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams, request: ClientRequest?): MethodResult>
+---@field requestHandlers table<string, fun(self: MCP.MwseHttpServer, request: MCP.ClientRequest): MCP.ServerResponse?>
+---@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams, request: MCP.ClientRequest?): MCP.MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field tools table<string, MCP.ITool>
 ---@field promptsStatus table<string, boolean>
@@ -675,7 +695,7 @@ end
 
 --- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
 ---@param params MCP.InitializeRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnInitialize(params)
     -- TODO reset state
 
@@ -720,7 +740,7 @@ function this:OnInitialize(params)
     result.instructions =
     "Provides Morrowind game-state and metadata access plus in-game action tools via MWSE. To reduce failures, inspect current game context and discover available capabilities before invoking state-changing tools, because some operations depend on runtime conditions (target, loaded cell, menu mode, etc.)."
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         http_headers = {
@@ -757,7 +777,7 @@ function this:CanExecuteAllTools()
 end
 
 ---@param params MCP.PaginatedRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnPromptsList(params)
     ---@type MCP.ListPromptsResult
     local result = jsonrpc.ListPromptsResult(table.size(self.prompts))
@@ -771,7 +791,7 @@ function this:OnPromptsList(params)
     end
     self.lastPollingPromptsInterval = 0
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
@@ -779,29 +799,29 @@ function this:OnPromptsList(params)
 end
 
 ---@param params MCP.PaginatedRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnResourcesList(params)
     return self.resource:OnResourcesList(params)
 end
 
 ---@param params MCP.PaginatedRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnResourcesTemplatesList(params)
     return self.resource:OnResourcesTemplatesList(params)
 end
 
 ---@param params MCP.ReadResourceRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnResourcesRead(params)
     return self.resource:OnResourcesRead(params)
 end
 
 ---@param params MCP.SubscribeRequestParams
----@param request ClientRequest?
----@return MethodResult
+---@param request MCP.ClientRequest?
+---@return MCP.MethodResult
 function this:OnResourcesSubscribe(params, request)
     if not params or not self:IsValidResourceUri(params.uri) then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -810,7 +830,7 @@ function this:OnResourcesSubscribe(params, request)
 
     local session = request and self:GetSession(request.http_request) or nil
     if not session then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_request,
@@ -820,18 +840,18 @@ function this:OnResourcesSubscribe(params, request)
     session.resourceSubscriptions[params.uri] = true
     self.logger:debug("Resource subscribed: %s (session=%s, subscriptions=%d)", params.uri, session.id,
         table.size(session.resourceSubscriptions))
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
     }
 end
 
 ---@param params MCP.UnsubscribeRequestParams
----@param request ClientRequest?
----@return MethodResult
+---@param request MCP.ClientRequest?
+---@return MCP.MethodResult
 function this:OnResourcesUnsubscribe(params, request)
     if not params or not self:IsValidResourceUri(params.uri) then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -840,7 +860,7 @@ function this:OnResourcesUnsubscribe(params, request)
 
     local session = request and self:GetSession(request.http_request) or nil
     if not session then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_request,
@@ -850,14 +870,14 @@ function this:OnResourcesUnsubscribe(params, request)
     session.resourceSubscriptions[params.uri] = nil
     self.logger:debug("Resource unsubscribed: %s (session=%s, subscriptions=%d)", params.uri, session.id,
         table.size(session.resourceSubscriptions))
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
     }
 end
 
 ---@param params MCP.PaginatedRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnToolsList(params)
     ---@type MCP.ListToolsResult
     local result = jsonrpc.ListToolsResult(table.size(self.tools))
@@ -871,7 +891,7 @@ function this:OnToolsList(params)
     end
     self.lastPollingToolsInterval = 0
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
@@ -879,11 +899,11 @@ function this:OnToolsList(params)
 end
 
 ---@param params MCP.CallToolRequestParams
----@param request ClientRequest?
----@return MethodResult
+---@param request MCP.ClientRequest?
+---@return MCP.MethodResult
 function this:OnToolsCall(params, request)
     if not params or not params.name then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -892,14 +912,14 @@ function this:OnToolsCall(params, request)
 
     local tool = self.tools[params.name]
     if not tool then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.method_not_found,
         }
     end
     if not tool:CanExecute(params) then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.forbidden,
             error = jsonrpc.error_code.invalid_params,
@@ -919,7 +939,7 @@ function this:OnToolsCall(params, request)
 
     local result = tool:Execute(params, context)
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
@@ -927,10 +947,10 @@ function this:OnToolsCall(params, request)
 end
 
 ---@param params MCP.GetPromptRequestParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnPromptsGet(params)
     if not params or not params.name then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
@@ -939,14 +959,14 @@ function this:OnPromptsGet(params)
 
     local prompt = self.prompts[params.name]
     if not prompt then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.method_not_found,
         }
     end
     if not prompt:CanExecute(params) then
-        ---@type MethodResult
+        ---@type MCP.MethodResult
         return {
             http_response = http.response_code.forbidden,
             error = jsonrpc.error_code.invalid_params,
@@ -956,7 +976,7 @@ function this:OnPromptsGet(params)
     -- TODO maybe need more context table (world, player, etc...)
     local result = prompt:Execute(params)
 
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
@@ -964,8 +984,8 @@ function this:OnPromptsGet(params)
 end
 
 ---@param params MCP.SetLevelRequestParams
----@param request ClientRequest?
----@return MethodResult
+---@param request MCP.ClientRequest?
+---@return MCP.MethodResult
 function this:OnLoggingSetLevel(params, request)
     -- TODO set log level for client logging
     self.logger:info("Set log level for client to: %s", params.level)
@@ -976,15 +996,15 @@ function this:OnLoggingSetLevel(params, request)
         logger = settings.shortModName,
         data = "Logging level changed",
     })
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
     }
 end
 
 ---@param params MCP.NotificationParams
----@param request ClientRequest?
----@return MethodResult
+---@param request MCP.ClientRequest?
+---@return MCP.MethodResult
 function this:OnInitializedNotification(params, request)
     -- The initialized notification marks the session ready for server-initiated messages.
     local session = request and self:GetSession(request.http_request) or nil
@@ -995,8 +1015,8 @@ function this:OnInitializedNotification(params, request)
 end
 
 ---@param params MCP.CancelledNotificationParams
----@param request ClientRequest?
----@return MethodResult
+---@param request MCP.ClientRequest?
+---@return MCP.MethodResult
 function this:OnCancelledNotification(params, request)
     -- TODO: Track in-flight requests by session/request id and expose a cooperative cancellation flag to long-running tools.
     local sessionId = request and self:GetSessionId(request.http_request) or nil
@@ -1011,9 +1031,9 @@ function this:OnCancelledNotification(params, request)
 end
 
 ---@param params MCP.RequestParams?
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnPing(params)
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = jsonrpc.object(),
@@ -1021,23 +1041,23 @@ function this:OnPing(params)
 end
 
 ---@param params MCP.NotificationParams
----@return MethodResult
+---@return MCP.MethodResult
 function this:OnNotification(params)
     --- curretly, this function is fallback for notifications, nothing to do, just return 202 Accepted
     self.logger:info("Received notification")
-    ---@type MethodResult
+    ---@type MCP.MethodResult
     return {
         http_response = http.response_code.accepted,
     }
 end
 
----@param request ClientRequest
----@return ServerResponse?
+---@param request MCP.ClientRequest
+---@return MCP.ServerResponse?
 function this:OnPOST(request)
     if not request.json_request then
         self.logger:warn("Rejected POST without a JSON-RPC request (session=%s)",
             tostring(self:GetSessionId(request.http_request)))
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.bad_request,
             json_error = jsonrpc.error_code.invalid_request,
@@ -1049,7 +1069,7 @@ function this:OnPOST(request)
         self.logger:warn("No handler for method: %s (requestId=%s, session=%s)",
             tostring(request.json_request.method), tostring(request.json_request.id),
             tostring(self:GetSessionId(request.http_request)))
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.not_implemented, -- ?
             json_error = jsonrpc.error_code.method_not_found,
@@ -1069,7 +1089,7 @@ function this:OnPOST(request)
     )
     if not success then
         self.logger:error("Failed to execute method %s\n%s", request.json_request.method, result)
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.internal_server_error,
             json_error = jsonrpc.error_code.internal_error,
@@ -1083,7 +1103,7 @@ function this:OnPOST(request)
             tostring(self:GetSessionId(request.http_request)))
     end
 
-    ---@type ServerResponse
+    ---@type MCP.ServerResponse
     return {
         -- JSON-RPC notifications are acknowledged by HTTP only and must not receive a result body.
         http_response = isNotification and http.response_code.accepted or result.http_response,
@@ -1094,13 +1114,13 @@ function this:OnPOST(request)
     }
 end
 
----@param request ClientRequest
----@return ServerResponse?
+---@param request MCP.ClientRequest
+---@return MCP.ServerResponse?
 function this:OnClientResponse(request)
     local response = request.json_request
     local session = self:GetSession(request.http_request)
     if not response or response.id == nil or not session then
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.bad_request,
             json_error = jsonrpc.error_code.invalid_request,
@@ -1123,15 +1143,15 @@ function this:OnClientResponse(request)
             session.id)
     end
 
-    ---@type ServerResponse
+    ---@type MCP.ServerResponse
     return {
         http_response = http.response_code.accepted,
         no_body = true,
     }
 end
 
----@param request ClientRequest
----@return ServerResponse?
+---@param request MCP.ClientRequest
+---@return MCP.ServerResponse?
 function this:OnGET(request)
     -- https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
     -- GET is only used to listen for server-to-client messages over SSE.
@@ -1140,7 +1160,7 @@ function this:OnGET(request)
     if not http.AcceptsContentType(accept, http.content_type.event_stream) then
         self.logger:warn("Rejected GET without SSE accept header (accept=%s, session=%s)", tostring(accept),
             tostring(sessionId))
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.method_not_allowed,
             no_body = true,
@@ -1151,7 +1171,7 @@ function this:OnGET(request)
     if not session then
         self.logger:warn("Rejected GET for missing or unknown session (session=%s, accept=%s)", tostring(sessionId),
             tostring(accept))
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.not_found,
             no_body = true,
@@ -1160,7 +1180,7 @@ function this:OnGET(request)
 
     if not request.client then
         self.logger:error("Rejected GET without TCP client (session=%s)", tostring(session.id))
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.internal_server_error,
             no_body = true,
@@ -1174,7 +1194,7 @@ function this:OnGET(request)
     if result.error then
         self.logger:error("Failed to open SSE stream: %s", result.error)
         self:RemoveSSEClient(session)
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.internal_server_error,
             response_sent = true,
@@ -1182,7 +1202,7 @@ function this:OnGET(request)
     end
 
     self.logger:debug("SSE stream opened for session: %s", session.id)
-    ---@type ServerResponse
+    ---@type MCP.ServerResponse
     return {
         -- Headers have already been written; keep the socket open for future SSE events.
         http_response = http.response_code.ok,
@@ -1191,14 +1211,14 @@ function this:OnGET(request)
     }
 end
 
----@param request ClientRequest
----@return ServerResponse?
+---@param request MCP.ClientRequest
+---@return MCP.ServerResponse?
 function this:OnDELETE(request)
     -- Clients can explicitly terminate Streamable HTTP sessions with MCP-Session-Id.
     local sessionId = self:GetSessionId(request.http_request)
     if not sessionId then
         self.logger:warn("Rejected DELETE without session id")
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.bad_request,
             no_body = true,
@@ -1207,22 +1227,22 @@ function this:OnDELETE(request)
 
     if not self:DeleteSession(sessionId) then
         self.logger:debug("DELETE requested for unknown session: %s (sessions=%d)", sessionId, table.size(self.sessions))
-        ---@type ServerResponse
+        ---@type MCP.ServerResponse
         return {
             http_response = http.response_code.not_found,
             no_body = true,
         }
     end
 
-    ---@type ServerResponse
+    ---@type MCP.ServerResponse
     return {
         http_response = http.response_code.no_content,
         no_body = true,
     }
 end
 
----@param request ClientRequest
----@return ServerResponse?
+---@param request MCP.ClientRequest
+---@return MCP.ServerResponse?
 function this:OnOPTIONS(request)
     -- Handle OPTIONS requests for CORS preflight
     -- https://github.com/modelcontextprotocol/python-sdk/issues/1079
@@ -1248,7 +1268,7 @@ function this:OnOPTIONS(request)
             ", "),
     }
 
-    ---@type ServerResponse
+    ---@type MCP.ServerResponse
     return {
         http_response = http.response_code.no_content,
         http_headers = cros,
@@ -1256,8 +1276,8 @@ function this:OnOPTIONS(request)
     }
 end
 
----@param request ClientRequest
----@return ServerResponse?
+---@param request MCP.ClientRequest
+---@return MCP.ServerResponse?
 function this:HandleRequest(request)
     local handler = self.requestHandlers[request.http_request.method]
     if not handler then
@@ -1273,7 +1293,7 @@ function this:HandleRequest(request)
 end
 
 ---@param request Http.Request
----@return ServerResponse?
+---@return MCP.ServerResponse?
 function this:ValidateTransportRequest(request)
     if not self:IsAllowedOrigin(request) then
         self.logger:warn("Rejected request from forbidden origin: %s",
@@ -1326,7 +1346,7 @@ end
 
 ---@param client Socket.TcpClient
 ---@param request Http.Request
----@return ServerResponse?
+---@return MCP.ServerResponse?
 function this:DispatchHttpRequest(client, request)
     -- Only POST carries JSON-RPC messages; GET/DELETE/OPTIONS are transport-level requests.
     if request.method ~= http.method.POST then
@@ -1353,7 +1373,7 @@ function this:DispatchHttpRequest(client, request)
 end
 
 ---@param client Socket.TcpClient
----@param response ServerResponse?
+---@param response MCP.ServerResponse?
 ---@param requestId MCP.RequestId?
 ---@return boolean keepOpen
 function this:SendServerResponse(client, response, requestId)

@@ -6,7 +6,7 @@ local this = {}
 function this.new(params)
     local instance = {}
     if params then
-        table.copymissing(instance, table.deepcopy(params))
+        table.copymissing(instance, params)
     end
     ---@type MCP.IResourceManager
     setmetatable(instance, { __index = this })

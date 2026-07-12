@@ -1,8 +1,8 @@
-
 local this = {}
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "journal" })
 
+-- TODO more compatible MCP.DateTimeInGame
 ---@class MCP.JournalParsedDate
 ---@field day_of_month integer
 ---@field month_number integer 1 to 12
@@ -119,7 +119,6 @@ function this.NormalizeJournalText(value)
     return normalized, keywords
 end
 
-
 --- Parse Journal.htm into lightweight structured entries without game-data cross references.
 ---@param content string
 ---@param monthIndexByName table<string, number>
@@ -179,7 +178,7 @@ function this.ReadJournal()
             local monthIndexByName, monthError = this.BuildMonthIndexByName()
             if monthIndexByName then
                 local entries = this.ParseJournalEntries(content, monthIndexByName)
-                if  entries then
+                if entries then
                     logger:debug("Journal entries count: %d", #entries)
                 else
                     logger:warn("Journal has no entries yet.")
@@ -201,8 +200,8 @@ end
 ---@return MCP.ResourceContent[]
 function this.ContentHandler(desc)
     local entries = this.ReadJournal()
-    local contents = {jsonrpc.TextResourceContents(desc.uri, json.encode(entries, { indent = false }), desc.mimeType)}
-    return contents
+    local content = jsonrpc.TextResourceContents(desc.uri, json.encode(entries, { indent = false }), desc.mimeType)
+    return { content }
 end
 
 -- TODO URI define

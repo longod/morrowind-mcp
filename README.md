@@ -158,7 +158,7 @@ Environment variables:
 - [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running Morrowind
 - [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests
 
-### MCP Inspector
+#### MCP Inspector
 
 Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Inspector UI:
 
@@ -170,10 +170,53 @@ This automatically resolves the server configuration and opens the Inspector at 
 
 ### Transport behavior
 
-- Client-to-server JSON-RPC requests and notifications are sent with HTTP `POST`.
-- Server-to-client notifications are delivered over a session-scoped SSE stream opened with HTTP `GET` and `Accept: text/event-stream`.
-- The server returns `MCP-Session-Id` on `initialize`; clients must send it on subsequent `POST` and `GET` requests for that session.
-- If the same session opens another SSE `GET`, the server replaces the previous SSE stream with the newest one.
+| HTTP Method | Behavior | Notes |
+|---|---|---|
+| `POST` | Client-to-server JSON-RPC requests and notifications | Uses JSON payloads |
+| `GET` | Opens the session-scoped SSE stream for server-to-client notifications | Requires `Accept: text/event-stream` |
+| `DELETE` | Ends the Streamable HTTP session | Uses `MCP-Session-Id` |
+| `OPTIONS` | Handles CORS preflight requests | Allows `POST`, `GET`, `DELETE`, and `OPTIONS` |
+
+The server returns `MCP-Session-Id` on `initialize`; clients must send it on subsequent `POST` and `GET` requests for that session.
+If the same session opens another SSE `GET`, the server replaces the previous SSE stream with the newest one.
+
+### MCP Features
+
+| MCP Method | Supported |
+|---|---|
+| `completion/complete` | No (undecided) |
+| `elicitation/create` | No (undecided) |
+| `initialize` | Yes |
+| `logging/setLevel` | Yes |
+| `notifications/cancelled` | Yes |
+| `notifications/initialized` | Yes |
+| `notifications/tasks/status` | No (undecided) |
+| `notifications/message` | Yes |
+| `notifications/progress` | Yes |
+| `notifications/prompts/list_changed` | Yes |
+| `notifications/resources/list_changed` | Yes |
+| `notifications/resources/updated` | Yes |
+| `notifications/roots/list_changed` | No (undecided) |
+| `notifications/tools/list_changed` | Yes |
+| `notifications/elicitation/complete` | No (undecided) |
+| `ping` | Yes |
+| `tasks/get` | No (undecided) |
+| `tasks/result` | No (undecided) |
+| `tasks/list` | No (undecided) |
+| `tasks/cancel` | No (undecided) |
+| `prompts/get` | Yes |
+| `prompts/list` | Yes |
+| `resources/list` | Yes |
+| `resources/read` | Yes |
+| `resources/subscribe` | Yes |
+| `resources/templates/list` | Yes |
+| `resources/unsubscribe` | Yes |
+| `roots/list` | No (undecided) |
+| `sampling/createMessage` | No (undecided) |
+| `tools/call` | Yes |
+| `tools/list` | Yes |
+
+`Pagination` is not supported yet. All lists are returned in a single response.
 
 ## SDK
 
