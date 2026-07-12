@@ -5,6 +5,9 @@ local pathutil = require("morrowind-mcp.core.pathutil")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local base64 = require("morrowind-mcp.core.base64")
+local datetime = require("morrowind-mcp.datetime")
+
+local journal = require("morrowind-mcp.resources.journal")
 
 --- I want to idendify same or difference character.
 ---@class MCP.SaveGameState
@@ -25,7 +28,7 @@ local base64 = require("morrowind-mcp.core.base64")
 ---@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]
 
 ---@class MCP.ResourceEntry
----@field desc MCP.Resource
+---@field descriptor MCP.Resource
 ---@field handler MCP.ResourceContentHandler
 ---content cache
 
@@ -56,10 +59,13 @@ function this.new(params)
     -- fastest in this server. because resource manager reset resource cache state. then any resources update on loaded.
     event.register(tes3.event.loaded, instance.loadedCallback, { priority = 100 })
 
+    journal.RegisterEvent(instance) -- register journal resource
     return instance
 end
 
 function this:Release()
+    journal.UnregisterEvent() -- unregister journal resource
+
     if self.loadedCallback then
         event.unregister(tes3.event.loaded, self.loadedCallback)
         self.loadedCallback = nil
@@ -82,7 +88,7 @@ function this:OnResourcesList(params)
 
     -- add virtual resources
     for _, r in pairs(self.resources) do
-        table.insert(result.resources, r.desc)
+        table.insert(result.resources, r.descriptor)
     end
 
     self.logger:debug("List resources count=%d, virutal=%d", #result.resources, table.size(self.resources))
@@ -100,12 +106,17 @@ function this:OnResourcesList(params)
                     local relativePath = relativeDir .. file
                     local resourceUri = pathutil.ToUri(relativePath, settings.uriScheme)
                     if resourceUri then
+                        -- UTC, ISO 8601
+                        local modification = lfs.attributes(currentPath, "modification")
+                        local utcISO8601 = os.date("!%Y-%m-%dT%H:%M:%SZ", modification)
+
                         ---@type MCP.Resource
                         local resource = {
                             name = relativePath,
                             uri = resourceUri,
                             mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
                             size = lfs.attributes(currentPath, "size"),
+                            annotations = jsonrpc.Annotations(nil, nil, utcISO8601),
                         }
                         table.insert(result.resources, resource)
                     else
@@ -162,7 +173,7 @@ function this:OnResourcesRead(params)
         -- handler for virtual resource access
         -- or cache
         -- TODO current datetime in game
-        local contents = entry.handler(entry.desc)
+        local contents = entry.handler(entry.descriptor)
         if not contents or #contents == 0 then
             ---@type MCP.MethodResult
             return {
@@ -228,31 +239,28 @@ end
 -- hook tools response then manage tools's resource. save and cache
 
 
----@param desc MCP.Resource
----@param handler MCP.ResourceContentHandler
+---@param resource MCP.ResourceEntry
 ---@return string MCP.ResourceUri
-function this:PublishResource(desc, handler)
+function this:PublishResource(resource)
     -- any state, hints.
     -- per player? in-game? write to file?
 
-    local entry = self.resources[desc.uri]
+    local entry = self.resources[resource.descriptor.uri]
 
     if entry then
         -- check conflict?
-        entry.desc = desc
         -- reset cache
-        self.updated[desc.uri] = true
-        self.logger:debug("Updated a resource: %s  total=%d", desc.uri, table.size(self.resources))
+        self.updated[resource.descriptor.uri] = true
+        self.logger:debug("Updated a resource: %s  total=%d", resource.descriptor.uri, table.size(self.resources))
     else
-        self.resources[desc.uri] = {
-            desc = desc,
-            handler = handler,
-        }
         self.changed = self.changed + 1
-        self.logger:debug("Published a new resource: %s changed=%d total=%d", desc.uri, self.changed, table.size(self.resources))
-        print(type(self.resources[desc.uri]))
+        self.logger:debug("Published a new resource: %s changed=%d total=%d", resource.descriptor.uri, self.changed, table.size(self.resources))
     end
-    return desc.uri
+    self.resources[resource.descriptor.uri] = resource -- copy is better?
+    entry = self.resources[resource.descriptor.uri]
+    -- update modified datetime
+    entry.descriptor.annotations = jsonrpc.Annotations(entry.descriptor.annotations.audience, entry.descriptor.annotations.priority,  datetime.UTCNow())
+    return resource.descriptor.uri
 end
 
 function this:UnpublishResource(uri)

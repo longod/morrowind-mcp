@@ -10,10 +10,10 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 
 1. Install Morrowind full expansion, MGE XE, MWSE, MCP, and optionally MO2 and MGE XE UF.
 1. Install this mod into Morrowind's `Data Files` folder or using MO2.
-1. Setup `mcp.json` for an AI agent configuration. See [MCP Configuration](#mcp-configuration) for details.
+1. Setup `mcp.json` or client specific file for an AI agent configuration. See [MCP Configuration](#mcp-configuration) for details.
 1. Start Morrowind with MWSE and this mod.
 1. Connect to this MCP server using `mcp.json`
-1. Use or Chat an AI agent tools and prompts to interact with Morrowind world.
+1. Use or Chat an AI agent tools, prompts and resources to interact with Morrowind world.
 
 ### Requirements
 - Morrowind full expansion
@@ -22,10 +22,6 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 - [Morrowind Script Extender Community Patch](https://www.nexusmods.com/morrowind/mods/19510) (MCP) or [MCP Beta](https://www.nexusmods.com/morrowind/mods/26348) : Run Morrowind Code Patch.exe. it fixes many bugs in Morrowind.
 - (Optional) [Mod Organizer 2](https://www.nexusmods.com/skyrimspecialedition/mods/6194) (MO2): for managing mods. Also useful for development and testing.
 - (Optional) [MGE XE UF](https://www.nexusmods.com/morrowind/mods/57200): It is unofficial update for MGE XE.
-
-## Features
-
-[FEATURES.md](FEATURES.md)
 
 ## MCP Configuration
 
@@ -60,6 +56,8 @@ url = "http://localhost:33427"
 ### Claude Desktop
 
 **./claude_desktop_config.json** (global)
+
+Requires `Node.js`
 
 ```json
 {
@@ -112,7 +110,9 @@ https://antigravity.google/docs/mcp
 
 https://code.claude.com/docs/en/mcp-quickstart
 
+## Features
 
+[FEATURES.md](FEATURES.md)
 
 ## Development
 

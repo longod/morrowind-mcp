@@ -1,5 +1,8 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
+local pathutil = require("morrowind-mcp.core.pathutil")
+local mcp = require("morrowind-mcp.core.mcp")
+local settings = require("morrowind-mcp.settings")
 
 local this = {}
 
@@ -55,10 +58,58 @@ end
 
 ---@param desc MCP.Resource
 ---@return MCP.ResourceContent[]
-function this:ContentHandler(desc)
-    local entries = self.FindQuests(nil, true, nil) -- TODO getting flags
+function this.GetContents(desc, isStarted, isActive, isFinished)
+    local entries = this.FindQuests(isStarted, isActive, isFinished)
     local content = jsonrpc.TextResourceContents(desc.uri, json.encode(entries, { indent = false }), desc.mimeType)
     return { content }
 end
+
+local started_uri = pathutil.ToUri("game/started_quest.json", settings.uriScheme)
+local active_uri = pathutil.ToUri("game/active_quest.json", settings.uriScheme)
+local finished_uri = pathutil.ToUri("game/finished_quest.json", settings.uriScheme)
+
+-- TODO with handler?
+---@type MCP.ResourceEntry[]
+this.entries = {
+    {
+        descriptor = {
+            name = "started_quest.json",
+            title = "Started Quests",
+            uri = started_uri,
+            description = "Current player's started quest entries.",
+            mimeType = mcp.mimeType.application_json,
+            annotations = jsonrpc.Annotations(nil, nil, nil),
+        },
+        handler = function (desc)
+            return this.GetContents(desc, true, nil, nil)
+        end,
+    },
+    {
+        descriptor = {
+            name = "active_quest.json",
+            title = "Active Quests",
+            uri = active_uri,
+            description = "Current player's active quest entries.",
+            mimeType = mcp.mimeType.application_json,
+            annotations = jsonrpc.Annotations(nil, nil, nil),
+        },
+        handler = function (desc)
+            return this.GetContents(desc, nil, true, nil)
+        end,
+    },
+    {
+        descriptor = {
+            name = "finished_quest.json",
+            title = "Finished Quests",
+            uri = finished_uri,
+            description = "Current player's finished quest entries.",
+            mimeType = mcp.mimeType.application_json,
+            annotations = jsonrpc.Annotations(nil, nil, nil),
+        },
+        handler = function (desc)
+            return this.GetContents(desc, nil, nil, true)
+        end,
+    },
+}
 
 return this

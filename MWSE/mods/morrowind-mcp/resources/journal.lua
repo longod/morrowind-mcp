@@ -1,6 +1,9 @@
 local this = {}
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "journal" })
+local pathutil = require("morrowind-mcp.core.pathutil")
+local mcp = require("morrowind-mcp.core.mcp")
+local settings = require("morrowind-mcp.settings")
 
 -- TODO more compatible MCP.DateTimeInGame
 ---@class MCP.JournalParsedDate
@@ -157,6 +160,15 @@ function this.ParseJournalEntries(content, monthIndexByName)
     return entries
 end
 
+-- load <Morrowind>/Journal.htm
+-- perphaps, we can not access to journal entries in a save data.
+-- "JOUR"  recourds in ess stores just html same as journal.htm.
+-- https://en.uesp.net/morrow/tech/mw_esm.txt
+
+-- https://pt.uesp.net/wiki/Morrowind_Mod:Text_Defines
+-- https://wiki.openmw.org/index.php?title=Research:Dialogue_and_Messages
+-- hyperlink (@*#): https://github.com/OpenMW/openmw/blob/master/apps/openmw/mwdialogue/keywordsearch.cpp#L140
+
 ---@return MCP.JournalEntry[]?
 function this.ReadJournal()
     if tes3.onMainMenu() then
@@ -198,12 +210,80 @@ end
 
 ---@param desc MCP.Resource
 ---@return MCP.ResourceContent[]
-function this.ContentHandler(desc)
+function this.GetContents(desc)
     local entries = this.ReadJournal()
     local content = jsonrpc.TextResourceContents(desc.uri, json.encode(entries, { indent = false }), desc.mimeType)
     return { content }
 end
 
--- TODO URI define
+local relativePath = "game/journal.json"
+local uri = pathutil.ToUri(relativePath, settings.uriScheme) -- TODO wrapper?, injected scheme
+
+---@type MCP.ResourceEntry
+local entry = {
+    descriptor = {
+        name = relativePath,
+        title = "Journal",
+        uri = uri,
+        description = "Current player's journal entries.",
+        mimeType = mcp.mimeType.application_json,
+        annotations = jsonrpc.Annotations(nil, nil, nil),
+        -- size = nil,
+    },
+    handler = this.GetContents,
+}
+
+---@param e journalEventData
+---@param resource MCP.ResourceManager
+local function OnJournalUpdated(e, resource)
+    -- can execute?
+
+    logger:debug("Journal updated")
+    -- I considered journal.htm is not written yet. because event data has claim to be updated, be able to block.
+    -- but journal.htm is already written. So I can read journal.htm now.
+
+    resource:PublishResource(entry)
+end
+
+---@param e loadedEventData
+---@param resource MCP.ResourceManager
+local function OnLoaded(e, resource)
+    -- can execute?
+
+    -- new game is not write journal.htm yet.
+    if e.newGame then
+        resource:UnpublishResource(entry.descriptor.uri)
+        return
+    end
+
+    logger:debug("Game loaded")
+    resource:PublishResource(entry)
+end
+
+local journalCallback = nil ---@type fun(e : journalEventData)?
+local loadedCallback = nil ---@type fun(e : loadedEventData)?
+
+---@param resource MCP.ResourceManager
+function this.RegisterEvent(resource)
+    journalCallback = function(e)
+        OnJournalUpdated(e, resource)
+    end
+    event.register(tes3.event.journal, journalCallback)
+    loadedCallback = function(e)
+        OnLoaded(e, resource)
+    end
+    event.register(tes3.event.loaded, loadedCallback)
+end
+
+function this.UnregisterEvent()
+    if journalCallback then
+        event.unregister(tes3.event.journal, journalCallback)
+        journalCallback = nil
+    end
+    if loadedCallback then
+        event.unregister(tes3.event.loaded, loadedCallback)
+        loadedCallback = nil
+    end
+end
 
 return this
