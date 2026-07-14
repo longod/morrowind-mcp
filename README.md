@@ -235,3 +235,16 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 ## License
 
 [MIT License](LICENSE)
+
+
+## Disclaimer
+
+### 1. Limitation of Liability for AI Malfunctions
+This software is designed to operate in conjunction with Large Language Models (LLMs) and other Artificial Intelligence technologies ("AI"). Due to the inherent nature of AI and automation, it may produce inaccurate outputs, unexpected commands, or malfunctions (including, but not limited to, hallucinations). The developer shall not be liable for any direct, indirect, incidental, or consequential damages, data loss, system failures, or other disadvantages arising from operations performed under AI direction or from reliance on AI-generated output (such as data modification, deletion, external communication, or system configuration changes). Users are solely responsible for reviewing, managing, and monitoring connected AI services, prompts, instructions, and execution results.
+
+### 2. External AI Services and Data Transmission
+This software runs locally, but it is intended to be used with external AI clients and/or LLM services through the Model Context Protocol (MCP). When so used, data exposed through the MCP interface, including file contents, logs, and system information, may be transmitted to and processed by third-party services selected by the user. By accepting the in-game disclaimer and enabling the MCP server, you acknowledge and agree that such data may be transmitted to and processed by those services. The handling, confidentiality, and privacy of transmitted data are governed by the terms, privacy policies, and security practices of the respective providers, as well as by the configuration choices made by the user. If you do not accept this disclaimer, the MCP server will not start. Do not use this software with confidential, sensitive, or personally identifiable information unless you fully understand and accept those risks.
+
+### 3. No Warranty (Provided "As-Is")
+This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
+
