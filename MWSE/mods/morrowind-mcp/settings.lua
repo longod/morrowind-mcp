@@ -18,6 +18,7 @@ this.description_prefix = "[Morrowind] "
 
 ---@class MCP.MWSEConfig
 this.defaultConfig = {
+    disclaimer = 0, -- 0 is not accepted, 1 and above is accepted version.
     server = {
         address = "localhost",
         port = 33427, -- 3E427

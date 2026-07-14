@@ -239,6 +239,8 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 
 ## Disclaimer
 
+Disclaimer Version: 1
+
 ### 1. Limitation of Liability for AI Malfunctions
 This software is designed to operate in conjunction with Large Language Models (LLMs) and other Artificial Intelligence technologies ("AI"). Due to the inherent nature of AI and automation, it may produce inaccurate outputs, unexpected commands, or malfunctions (including, but not limited to, hallucinations). The developer shall not be liable for any direct, indirect, incidental, or consequential damages, data loss, system failures, or other disadvantages arising from operations performed under AI direction or from reliance on AI-generated output (such as data modification, deletion, external communication, or system configuration changes). Users are solely responsible for reviewing, managing, and monitoring connected AI services, prompts, instructions, and execution results.
 

@@ -1,6 +1,7 @@
 --- @param e modConfigReadyEventData
 local function OnModConfigReady(e)
     local config = require("morrowind-mcp.config")
+    local disclaimer = require("morrowind-mcp.disclaimer")
     local settings = require("morrowind-mcp.settings")
     local template = mwse.mcm.createTemplate(settings.modName)
     template:saveOnClose(settings.configPath, config)
@@ -9,11 +10,26 @@ local function OnModConfigReady(e)
     local page = template:createSideBarPage({
         label = settings.modName,
     })
-    local info = page.sidebar:createInfo({
+    page.sidebar:createInfo({
         label = string.format("%s Version: %s", settings.modName, settings.version),
-        text = "description",
+        text = settings.description,
     })
-
+    -- page.sidebar:createHyperlink({
+    --     text = "Nexus Mods Page",
+    --     url = settings.metadata.package.homepage,
+    -- })
+    page.sidebar:createHyperlink({
+        text = "GitHub Repository",
+        url = settings.metadata.package.repository,
+    })
+    page.sidebar:createInfo({
+        label = string.format("%s Version: %d", disclaimer.header, disclaimer.version),
+        text = disclaimer.text,
+    })
+    page.sidebar:createHyperlink({
+        text = "Full Disclaimer (GitHub)",
+        url = settings.metadata.package.repository .. "/blob/main/README.md#disclaimer",
+    })
     -- stop, start, restart buttons
     -- port, server status
 

@@ -166,8 +166,10 @@ $TargetIP = $Config.Connection.host
 $TargetPort = [int]$Config.Connection.port
 $StartScriptPath = ".\start_server_mo2.ps1"
 $StopScriptPath = ".\stop_server.ps1"
+$DisclaimerSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.accept-disclaimer-for-tests"
 
 $ExitCode = 0
+$CreatedDisclaimerSentinel = $false
 
 Push-Location $ScriptDir
 try {
@@ -181,6 +183,22 @@ try {
         Write-Host "[ERROR] $StopScriptPath was not found." -ForegroundColor Red
         $ExitCode = 1
         return
+    }
+
+    $DisclaimerSentinelDir = Split-Path -Parent $DisclaimerSentinelPath
+    if (Test-Path -LiteralPath $DisclaimerSentinelDir) {
+        $DisclaimerSentinelAlreadyExists = Test-Path -LiteralPath $DisclaimerSentinelPath
+        if ($DisclaimerSentinelAlreadyExists) {
+            Write-Host "[INFO] Disclaimer sentinel already exists. Reusing: $DisclaimerSentinelPath" -ForegroundColor DarkCyan
+        }
+        else {
+            New-Item -ItemType File -Path $DisclaimerSentinelPath -Force | Out-Null
+            $CreatedDisclaimerSentinel = $true
+            Write-Host "[INFO] Created disclaimer sentinel file: $DisclaimerSentinelPath" -ForegroundColor DarkCyan
+        }
+    }
+    else {
+        Write-Host "[WARN] Disclaimer sentinel directory was not found. Continue without sentinel: $DisclaimerSentinelDir" -ForegroundColor Yellow
     }
 
     & $StartScriptPath
@@ -263,6 +281,10 @@ finally {
     }
 
     Write-Host "[INFO] Inspector logs: $(Convert-ToFileUri -Path $InspectorLogPath)" -ForegroundColor Cyan
+
+    if ($CreatedDisclaimerSentinel) {
+        Remove-Item -LiteralPath $DisclaimerSentinelPath -ErrorAction SilentlyContinue
+    }
 
     Pop-Location
 }
