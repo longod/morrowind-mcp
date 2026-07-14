@@ -273,6 +273,7 @@ function this.RegisterEvent(resource)
         OnLoaded(e, resource)
     end
     event.register(tes3.event.loaded, loadedCallback)
+    logger:debug("Journal event handlers registered")
 end
 
 function this.UnregisterEvent()
@@ -284,6 +285,7 @@ function this.UnregisterEvent()
         event.unregister(tes3.event.loaded, loadedCallback)
         loadedCallback = nil
     end
+    logger:debug("Journal event handlers unregistered")
 end
 
 return this

@@ -3,6 +3,7 @@ local obj = require("morrowind-mcp.tes3.object")
 local pathutil = require("morrowind-mcp.core.pathutil")
 local mcp = require("morrowind-mcp.core.mcp")
 local settings = require("morrowind-mcp.settings")
+local logger = require("morrowind-mcp.logger").Get({ moduleName = "quest" })
 
 local this = {}
 
@@ -68,9 +69,8 @@ local started_uri = pathutil.ToUri("game/started_quest.json", settings.uriScheme
 local active_uri = pathutil.ToUri("game/active_quest.json", settings.uriScheme)
 local finished_uri = pathutil.ToUri("game/finished_quest.json", settings.uriScheme)
 
--- TODO with handler?
 ---@type MCP.ResourceEntry[]
-this.entries = {
+local entries = {
     {
         descriptor = {
             name = "started_quest.json",
@@ -111,5 +111,141 @@ this.entries = {
         end,
     },
 }
+
+
+---@param e journalEventData
+---@param resource MCP.ResourceManager
+local function OnJournalUpdated(e, resource)
+    local publishStarted = false
+    local publishActive = false
+    local publishFinished = false
+
+    if e.new then
+        publishStarted = true
+        publishActive = true
+        logger:debug("Quest publish by journal event: new")
+    end
+
+    if e.info then
+        if e.info.isQuestFinished then
+            publishActive = true
+            publishFinished = true
+            logger:debug("Quest publish by journal event: isQuestFinished")
+        end
+        if e.info.isQuestRestart then
+            publishActive = true
+            publishFinished = true
+            logger:debug("Quest publish by journal event: isQuestRestart")
+        end
+    end
+
+    if publishStarted then
+        resource:PublishResource(entries[1])
+    end
+    if publishActive then
+        resource:PublishResource(entries[2])
+    end
+    if publishFinished then
+        resource:PublishResource(entries[3])
+    end
+end
+
+---@param e scriptExecutedEventData
+---@param resource MCP.ResourceManager
+local function OnScriptExecuted(e, resource)
+
+    if e.info and e.info.journalIndex ~= nil then
+        local publishStarted = false
+        local publishActive = false
+        local publishFinished = false
+
+        if e.info.journalIndex > 0 then
+            publishStarted = true
+            publishActive = true
+            logger:debug("Quest publish by scriptExecuted event: journalIndex=%d", e.info.journalIndex)
+        end
+
+        if e.info.isQuestFinished then
+            publishActive = true
+            publishFinished = true
+            logger:debug("Quest publish by scriptExecuted event: isQuestFinished")
+        end
+        if e.info.isQuestRestart then
+            publishActive = true
+            publishFinished = true
+            logger:debug("Quest publish by scriptExecuted event: isQuestRestart")
+        end
+
+        if publishStarted then
+            resource:PublishResource(entries[1])
+        end
+        if publishActive then
+            resource:PublishResource(entries[2])
+        end
+        if publishFinished then
+            resource:PublishResource(entries[3])
+        end
+    else
+        -- logger:trace("Skip quest publish on scriptExecuted without journal info")
+    end
+
+end
+
+---@param e loadedEventData
+---@param resource MCP.ResourceManager
+local function OnLoaded(e, resource)
+    if e.newGame then
+        -- unpublish all quest resources on new game.
+        for _, entry in ipairs(entries) do
+            resource:UnpublishResource(entry.descriptor.uri)
+        end
+        logger:debug("Quest resources unpublished for new game")
+        return
+    end
+
+    -- re-publish all quest resources on game load.
+    for _, entry in ipairs(entries) do
+        resource:PublishResource(entry)
+    end
+    logger:debug("Quest resources republished after game load")
+end
+
+local journalCallback = nil ---@type fun(e : journalEventData)?
+local scriptExecutedCallback = nil ---@type fun(e : scriptExecutedEventData)?
+local loadedCallback = nil ---@type fun(e : loadedEventData)?
+
+---@param resource MCP.ResourceManager
+function this.RegisterEvent(resource)
+    journalCallback = function(e)
+        OnJournalUpdated(e, resource)
+    end
+    event.register(tes3.event.journal, journalCallback)
+    scriptExecutedCallback = function(e)
+        OnScriptExecuted(e, resource)
+    end
+    event.register(tes3.event.scriptExecuted, scriptExecutedCallback)
+    loadedCallback = function(e)
+        OnLoaded(e, resource)
+    end
+    event.register(tes3.event.loaded, loadedCallback)
+    logger:debug("Quest event handlers registered")
+end
+
+function this.UnregisterEvent()
+    if journalCallback then
+        event.unregister(tes3.event.journal, journalCallback)
+        journalCallback = nil
+    end
+    if scriptExecutedCallback then
+        event.unregister(tes3.event.scriptExecuted, scriptExecutedCallback)
+        scriptExecutedCallback = nil
+    end
+    if loadedCallback then
+        event.unregister(tes3.event.loaded, loadedCallback)
+        loadedCallback = nil
+    end
+    logger:debug("Quest event handlers unregistered")
+end
+
 
 return this

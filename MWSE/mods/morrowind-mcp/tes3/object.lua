@@ -3,6 +3,7 @@ local config = require("morrowind-mcp.config")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3object" })
 local enumname = require("morrowind-mcp.tes3.enumname")
 local ui = require("morrowind-mcp.tes3.ui")
+local iter = require("morrowind-mcp.tes3.iterator")
 
 local this = {}
 
@@ -107,28 +108,6 @@ local npcSexName = {
 
 
 
---- TODO move to other helper
----@param list tes3referenceList
----@return fun(): tes3reference
-function this.ForEachReferenceList(list)
-    local function iterator()
-        local ref = list.head
-
-        if list.size ~= 0 then
-            coroutine.yield(ref)
-        end
-
-        while ref.nextNode do
-            ref = ref.nextNode
-            coroutine.yield(ref)
-        end
-    end
-    return coroutine.wrap(iterator)
-end
-
-
-
-
 ---@param i tes3bountyData
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
@@ -139,7 +118,7 @@ function this.tes3bountyData(i, o)
     if not i.keys or table.size(i.keys) == 0 then
         return nil
     end
-    o = o or jsonrpc.object
+    o = o or jsonrpc.object(table.size(i.keys))
     local amount = 0
     for _, key in ipairs(i.keys) do
         if key then
@@ -607,18 +586,24 @@ local function tes3baseObject(i, o)
     if not i:isValid() then
         return nil
     end
+    if i.deleted then
+        return nil
+    end
+    if i.disabled then
+        return nil
+    end
     o = o or jsonrpc.object()
 
-    o.blocked = i.blocked
-    o.deleted = i.deleted
-    o.disabled = i.disabled
+    -- o.blocked = i.blocked -- locked on CS
+    -- o.deleted = i.deleted
+    -- o.disabled = i.disabled
     o.id = i.id
     o.modified = i.modified
     -- o.objectFlags = i.objectFlags -- TODO means flags
     o.objectType = enumname.objectType(i.objectType)
     o.persistent = i.persistent
     o.sourceless = i.sourceless
-    o.sourceMod = i.sourceMod
+    -- o.sourceMod = i.sourceMod
     o.supportsActivate = i.supportsActivate
 
     local _ = ValidateType(o)
@@ -636,7 +621,10 @@ local function tes3object(i, o)
     if not o then
         return nil
     end
-    o.isLocationMarker = i.isLocationMarker
+    if i.isLocationMarker then -- for CS
+        return nil
+    end
+    -- o.isLocationMarker = i.isLocationMarker
     -- o.nextInCollection = i.nextInCollection
     -- o.owningCollection = i.owningCollection
     -- o.previousInCollection = i.previousInCollection
@@ -807,7 +795,7 @@ function this.tes3alchemy(i, o)
     end
 
     -- o.autoCalc = i.autoCalc
-    -- o.effects = i.effects -- TODO
+    -- o.effects = iter.ForEach(i.effects, this.tes3effect) -- TODO
     -- o.flags = i.flags
     o.script = this.tes3script(i.script)
     o.value = i.value
@@ -859,7 +847,7 @@ function this.tes3armor(i, o)
     o.isLeftPart = i.isLeftPart
     o.isUsableByBeasts = i.isUsableByBeasts
     o.maxCondition = i.maxCondition
-    -- o.parts = i.parts -- TODO
+    -- o.parts = iter.ForEach(i.parts, ) -- TODO
     o.script = this.tes3script(i.script)
     o.slot = enumname.armorSlot(i.slot) -- same as slotName?
     o.slotName = i.slotName
@@ -996,7 +984,7 @@ function this.tes3class(i, o)
         return nil
     end
 
-    -- o.attributes = i.attributes -- TODO
+    o.attributes = iter.ForEachObject(i.attributes, enumname.attribute)
     o.bartersAlchemy = i.bartersAlchemy
     o.bartersApparatus = i.bartersApparatus
     o.bartersArmor = i.bartersArmor
@@ -1012,8 +1000,8 @@ function this.tes3class(i, o)
     o.bartersWeapons = i.bartersWeapons
     o.description = i.description
     o.image = i.image
-    -- o.majorSkills = i.majorSkills -- TODO
-    -- o.minorSkills = i.minorSkills -- TODO
+    o.majorSkills = iter.ForEachObject(i.majorSkills, enumname.skill)
+    o.minorSkills = iter.ForEachObject(i.minorSkills, enumname.skill)
     o.name = i.name
     o.offersBartering = i.offersBartering
     o.offersEnchanting = i.offersEnchanting
@@ -1023,7 +1011,7 @@ function this.tes3class(i, o)
     o.offersTraining = i.offersTraining
     o.playable = i.playable
     o.services = i.services
-    -- o.skills = i.skills -- TODO
+    o.skills = iter.ForEachObject(i.skills, enumname.skill)
     o.specialization = enumname.specialization(i.specialization)
 
     local _ = ValidateType(o)
@@ -1236,7 +1224,7 @@ function this.tes3enchantment(i, o)
     o.autoCalc = i.autoCalc
     o.castType = enumname.enchantmentType(i.castType)
     o.chargeCost = i.chargeCost
-    -- o.effects = i.effects -- TODO
+    -- o.effects = iter.ForEach(i.effects, this.tes3effect) -- TODO
     -- o.flags = i.flags -- flags mean?
     o.maxCharge = i.maxCharge
 
@@ -1574,7 +1562,7 @@ function this.tes3mobileActor(i, o)
     o.armorRating = i.armorRating
     o.attackBonus = i.attackBonus
     o.attacked = i.attacked
-    -- o.attributes = i.attributes -- TODO
+    o.attributes = iter.ForEachObject(i.attributes, this.tes3statistic)
     o.barterGold = i.barterGold
     o.blind = i.blind
     o.canAct = i.canAct
@@ -1705,7 +1693,7 @@ function this.tes3mobileCreature(i, o)
     o.moveSpeed = i.moveSpeed
     -- o.object = this.tes3creature(i.object) -- TODO avoid circular reference
     o.runSpeed = i.runSpeed
-    -- o.skills = i.skills
+    -- o.skills = iter.ForEach(i.skills, this.tes3statistic) -- TODO represent key=value
     o.stealth = this.tes3statistic(i.stealth)
     o.swimRunSpeed = i.swimRunSpeed
     o.swimSpeed = i.swimSpeed
@@ -1789,7 +1777,7 @@ function this.tes3mobilePlayer(i, o)
     o.autoRun = i.autoRun
     o.birthsign = this.tes3birthsign(i.birthsign)
     o.bounty = i.bounty
-    -- o.bountyData = i.bountyData -- TODO
+    o.bountyData = this.tes3bountyData(i.bountyData)
     o.cameraHeight = i.cameraHeight
     o.castReady = i.castReady
     -- o.clawMultiplier = i.clawMultiplier -- TODO
@@ -2140,6 +2128,8 @@ end
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
 function this.tes3script(i, o)
+    return nil -- no field
+    --[[
     if not i then
         return nil
     end
@@ -2153,10 +2143,11 @@ function this.tes3script(i, o)
     -- o.floatVariableCount = i.floatVariableCount
     -- o.longVariableCount = i.longVariableCount
     -- o.shortVariableCount = i.shortVariableCount
-    o.text = i.text
+    -- o.text = i.text -- access IO
 
     local _ = ValidateType(o)
     return o
+    --]]
 end
 
 ---@param i tes3skill?

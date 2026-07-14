@@ -8,6 +8,7 @@ local base64 = require("morrowind-mcp.core.base64")
 local datetime = require("morrowind-mcp.datetime")
 
 local journal = require("morrowind-mcp.resources.journal")
+local quest = require("morrowind-mcp.resources.quest")
 
 --- I want to idendify same or difference character.
 ---@class MCP.SaveGameState
@@ -59,12 +60,14 @@ function this.new(params)
     -- fastest in this server. because resource manager reset resource cache state. then any resources update on loaded.
     event.register(tes3.event.loaded, instance.loadedCallback, { priority = 100 })
 
-    journal.RegisterEvent(instance) -- register journal resource
+    journal.RegisterEvent(instance)
+    quest.RegisterEvent(instance)
     return instance
 end
 
 function this:Release()
-    journal.UnregisterEvent() -- unregister journal resource
+    journal.UnregisterEvent()
+    quest.UnregisterEvent()
 
     if self.loadedCallback then
         event.unregister(tes3.event.loaded, self.loadedCallback)

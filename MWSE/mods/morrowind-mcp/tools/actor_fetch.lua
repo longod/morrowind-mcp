@@ -1,6 +1,7 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local serializer = require("morrowind-mcp.tes3.object")
+local obj = require("morrowind-mcp.tes3.object")
+local iter = require("morrowind-mcp.tes3.iterator")
 
 
 ---@class MCP.ActorFetch: MCP.ITool
@@ -50,9 +51,9 @@ function this:Execute(params, context)
     end
     local actors = jsonrpc.array(size)
     for _, cell in ipairs(cells) do
-        for ref in serializer.ForEachReferenceList(cell.actors) do
+        for ref in iter.ForEachReferenceList(cell.actors) do
             if ref:isValid() then
-                local o = serializer.tes3reference(ref)
+                local o = obj.tes3reference(ref)
                 if o then
                     table.insert(actors, o)
                 end
