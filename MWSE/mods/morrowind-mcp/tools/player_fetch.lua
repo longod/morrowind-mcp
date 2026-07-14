@@ -45,6 +45,8 @@ function this:Execute(params, context)
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
+    -- too many fields, maybe need to filter out some fields.
+
     local structuredContent = jsonrpc.object({ player = obj.tes3mobilePlayer(player) })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end

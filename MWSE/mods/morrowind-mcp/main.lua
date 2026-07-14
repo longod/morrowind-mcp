@@ -27,6 +27,11 @@ if config.development.unitTest then
     Test()
 end
 
+local function HasAutomatedTestDisclaimerFlag()
+    local flagPath = settings.modDir .. ".accept-disclaimer-for-tests"
+    return lfs.attributes(flagPath, "mode") == "file"
+end
+
 ---@return string?
 local function GetNewestSave()
     local newestSave = nil
@@ -70,16 +75,9 @@ local function SkipMainMenu(e)
 end
 
 local function RegisterSkipMainMenu()
-    if config.autoplay.skipMainMenu then
+    if config.autoplay.skipMainMenu and not HasAutomatedTestDisclaimerFlag() then
         event.register(tes3.event.enterFrame, SkipMainMenu)
     end
-end
-
-
-
-local function HasAutomatedTestDisclaimerFlag()
-    local flagPath = settings.modDir .. ".accept-disclaimer-for-tests"
-    return lfs.attributes(flagPath, "mode") == "file"
 end
 
 local server = nil ---@type MCP.IServer?

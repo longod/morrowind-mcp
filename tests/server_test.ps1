@@ -248,6 +248,7 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
+        @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-menu-fetch")
         #, @("--method", "prompts/get", "--prompt-name", "placeholder")
     )

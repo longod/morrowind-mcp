@@ -96,6 +96,9 @@ function this:OnResourcesList(params)
 
     self.logger:debug("List resources count=%d, virutal=%d", #result.resources, table.size(self.resources))
 
+    -- I concern about security, putting some wrong file in resource directory...
+    -- allow only virtual resources?
+
     ---@param currentDir string
     ---@param relativeDir string
     local function CollectResources(currentDir, relativeDir)

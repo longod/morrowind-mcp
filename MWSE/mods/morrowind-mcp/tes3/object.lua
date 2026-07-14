@@ -921,7 +921,7 @@ function this.tes3book(i, o)
     o.enchantment = this.tes3enchantment(i.enchantment)
     o.script = this.tes3script(i.script)
     o.skill = enumname.skill(i.skill)
-    o.text = i.text
+    -- o.text = i.text -- TODO  dont read open check flag? convert html to markdown or json. or just empty until activate.
     o.type = enumname.bookType(i.type)
     o.value = i.value
     o.weight = i.weight

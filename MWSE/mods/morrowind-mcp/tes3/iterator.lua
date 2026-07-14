@@ -26,28 +26,37 @@ end
 ---@return fun(): tes3item, integer, tes3itemData|nil
 function this.ForEachInventory(inventory)
     local function iterator()
-        for _, stack in pairs(inventory) do
-            local item = stack.object
-            -- Skip uncarryable lights. They are hidden from the interface. A MWSE mod
-            -- could make the player glow from transferring such lights, which the player
-            -- can't remove. Some creatures like atronaches have uncarryable lights
-            -- in their inventory to make them glow that are not supposed to be looted.
-            if item.canCarry then
-                -- Account for restocking items,
-                -- since their count is negative.
-                local count = math.abs(stack.count)
+        local items = inventory.items or inventory
+        local itemCount = table.size(items)
+        for i = 1, itemCount do -- expects stable iteration order
+            local stack = items[i]
+            if stack then
+                local item = stack.object
+                -- Skip uncarryable lights. They are hidden from the interface. A MWSE mod
+                -- could make the player glow from transferring such lights, which the player
+                -- can't remove. Some creatures like atronaches have uncarryable lights
+                -- in their inventory to make them glow that are not supposed to be looted.
+                if item and item.canCarry ~= false then
+                    -- Account for restocking items,
+                    -- since their count is negative.
+                    local count = math.abs(stack.count)
 
-                -- First yield stacks with custom data
-                if stack.variables then
-                    for _, data in pairs(stack.variables) do
-                        coroutine.yield(item, data.count, data)
-                        count = count - data.count
+                    -- First yield stacks with custom data
+                    if stack.variables then
+                        local variableCount = table.size(stack.variables)
+                        for j = 1, variableCount do
+                            local data = stack.variables[j]
+                            if data then
+                                coroutine.yield(item, data.count, data)
+                                count = count - data.count
+                            end
+                        end
                     end
-                end
 
-                -- Then yield all the remaining copies
-                if count > 0 then
-                    coroutine.yield(item, count)
+                    -- Then yield all the remaining copies
+                    if count > 0 then
+                        coroutine.yield(item, count)
+                    end
                 end
             end
         end
