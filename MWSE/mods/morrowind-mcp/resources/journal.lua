@@ -5,19 +5,30 @@ local pathutil = require("morrowind-mcp.core.pathutil")
 local mcp = require("morrowind-mcp.core.mcp")
 local settings = require("morrowind-mcp.settings")
 local dialogue = require("morrowind-mcp.util.dialogue")
+local datetime = require("morrowind-mcp.util.datetime")
 
--- TODO more compatible MCP.DateTimeInGame
----@class MCP.JournalParsedDate
----@field day_of_month integer
----@field month_number integer 1 to 12
----@field day_count integer
+-- Reconstruct journal dates against the canonical game start used by Morrowind's in-game calendar.
+local tamrielMonthLengths = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
+local tamrielYearDays = 365
+local gameStartYear = 427
+local gameStartMonth = 8
+local gameStartDay = 16
+
 
 ---@class MCP.JournalEntry
 ---@field date_label string?
 ---@field sequence integer
 ---@field text string
 ---@field topics string[]
----@field parsed_date MCP.JournalParsedDate
+---@field in_game_time MCP.DateTimeInGame
+
+---@class MCP.JournalParsedDate
+---@field type "in-game time" -- annotation for agent
+---@field day_of_month integer
+---@field month_number integer 1 to 12
+---@field day_count integer
+---@field time_zone string
+
 
 ---@return number[]
 local month_gmst = {
@@ -66,6 +77,22 @@ function this.BuildMonthIndexByName()
     return monthIndexByName, nil
 end
 
+---@return boolean
+local function HasCalendarFix()
+    -- MWSE exposes the MCP patch feature constants in this environment, so a direct lookup keeps
+    -- the runtime check aligned with the engine's canonical feature id.
+    return tes3.hasCodePatchFeature(tes3.codePatchFeature.calendarFix) == true
+end
+
+---@return integer
+local function GetGameStartDayOfYearOffset()
+    local dayOffset = gameStartDay - 1
+    for monthIndex = 1, gameStartMonth - 1 do
+        dayOffset = dayOffset + tamrielMonthLengths[monthIndex]
+    end
+    return dayOffset
+end
+
 --- Parse the journal date label into numeric fields suitable for chronological sorting.
 ---@param dateLabel string?
 ---@param monthIndexByName table<string, number>
@@ -88,12 +115,82 @@ function this.ParseDateLabel(dateLabel, monthIndexByName)
     if not dayOfMonth or not dayCount or not monthNumber then
         return nil
     end
-
-    return jsonrpc.object({
+    ---@type MCP.JournalParsedDate
+    local date = {
+        type = "in-game time",
         day_of_month = dayOfMonth,
         month_number = monthNumber,
         day_count    = dayCount,
-    })
+        time_zone = datetime.tamrielTimeZone,
+    }
+    return jsonrpc.object(date)
+end
+
+--- Convert a parsed journal date into an in-game datetime shape.
+--- Without the calendar code patch, vanilla Morrowind does not expose a reliable full calendar,
+--- so only the parsed month/day plus day_count are preserved.
+---@param parsedDate MCP.JournalParsedDate?
+---@param hasCalendarFixOverride boolean?
+---@return MCP.DateTimeInGame?
+function this.ToInGameTime(parsedDate, hasCalendarFixOverride)
+    if not parsedDate then
+        return nil
+    end
+
+    local dayCount = parsedDate.day_count
+    local day = parsedDate.day_of_month
+    local month = parsedDate.month_number
+    if not dayCount then
+        return nil
+    end
+
+    ---@type MCP.DateTimeInGame
+    local dateTime = {
+        type = "in-game time",
+        day = day,
+        month = month,
+        day_count = math.floor(dayCount),
+        time_zone = parsedDate.time_zone or datetime.tamrielTimeZone,
+    }
+
+    -- Tests can override the patch state, but production code should follow the active MCP setting.
+    local hasCalendarFix = hasCalendarFixOverride
+    if hasCalendarFix == nil then
+        hasCalendarFix = HasCalendarFix()
+    end
+
+    if not hasCalendarFix then
+        return dateTime
+    end
+
+    local elapsedDays = dateTime.day_count - 1
+    if elapsedDays < 0 then
+        return nil
+    end
+
+    local absoluteDay = GetGameStartDayOfYearOffset() + elapsedDays
+    dateTime.year = gameStartYear + math.floor(absoluteDay / tamrielYearDays)
+
+    -- Prefer the journal label's month/day when present; only synthesize missing fields from day_count.
+    if dateTime.month and dateTime.day then
+        return dateTime
+    end
+
+    local dayOfYear = (absoluteDay % tamrielYearDays) + 1
+    local computedMonth = 1
+    while dayOfYear > tamrielMonthLengths[computedMonth] do
+        dayOfYear = dayOfYear - tamrielMonthLengths[computedMonth]
+        computedMonth = computedMonth + 1
+    end
+
+    if not dateTime.month then
+        dateTime.month = computedMonth
+    end
+    if not dateTime.day then
+        dateTime.day = dayOfYear
+    end
+
+    return dateTime
 end
 
 --- Parse Journal.htm into lightweight structured entries without game-data cross references.
@@ -128,7 +225,7 @@ function this.ParseJournalEntries(content, monthIndexByName)
                 })
                 local parsedDate = this.ParseDateLabel(dateLabel, monthIndexByName)
                 if parsedDate then
-                    entry.parsed_date = parsedDate
+                    entry.in_game_time = this.ToInGameTime(parsedDate)
                 end
                 table.insert(entries, entry)
             end

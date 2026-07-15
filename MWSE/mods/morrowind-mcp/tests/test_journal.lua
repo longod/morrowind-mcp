@@ -6,6 +6,7 @@ function this.Test()
         highlight = false,
     })
 
+    local datetime = require("morrowind-mcp.util.datetime")
     local journal = require("morrowind-mcp.resources.journal")
 
     unitwind:start("morrowind-mcp.tools.resources.journal")
@@ -71,7 +72,47 @@ function this.Test()
         unitwind:expect(entries[1].topics[1]).toBe("report")
         unitwind:expect(entries[1].topics[2]).toBe("Caius Cosades")
         unitwind:expect(entries[1].topics[3]).toBe(nil)
-        unitwind:expect(entries[1].parsed_date.month_number).toBe(8)
+        unitwind:expect(entries[1].in_game_time.type).toBe("in-game time")
+        unitwind:expect(entries[1].in_game_time.day_count).toBe(1)
+        unitwind:expect(entries[1].in_game_time.time_zone).toBe(datetime.tamrielTimeZone)
+    end)
+
+    unitwind:test("ToInGameTime returns partial datetime on vanilla calendar", function()
+        local dateTime = journal.ToInGameTime({
+            type = "in-game time",
+            day_of_month = 16,
+            month_number = 8,
+            day_count = 1,
+            time_zone = datetime.tamrielTimeZone,
+        }, false)
+
+        unitwind:expect(dateTime).NOT.toBe(nil)
+        if dateTime then
+            unitwind:expect(dateTime.type).toBe("in-game time")
+            unitwind:expect(dateTime.day_count).toBe(1)
+            unitwind:expect(dateTime.time_zone).toBe(datetime.tamrielTimeZone)
+            unitwind:expect(dateTime.year).toBe(nil)
+            unitwind:expect(dateTime.month).toBe(8)
+            unitwind:expect(dateTime.day).toBe(16)
+        end
+    end)
+
+    unitwind:test("ToInGameTime reconstructs year with calendar fix", function()
+        local dateTime = journal.ToInGameTime({
+            type = "in-game time",
+            day_of_month = 1,
+            month_number = 3,
+            day_count = 198,
+            time_zone = datetime.tamrielTimeZone,
+        }, true)
+
+        unitwind:expect(dateTime).NOT.toBe(nil)
+        if dateTime then
+            unitwind:expect(dateTime.year).toBe(428)
+            unitwind:expect(dateTime.month).toBe(3)
+            unitwind:expect(dateTime.day).toBe(1)
+            unitwind:expect(dateTime.day_count).toBe(198)
+        end
     end)
 
     unitwind:finish()

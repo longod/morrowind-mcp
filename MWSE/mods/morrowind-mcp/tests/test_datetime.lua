@@ -263,7 +263,7 @@ function this.Test()
             unitwind:expect(inGameNow.hour).toBe(13.25)
             unitwind:expect(inGameNow.day_count).toBe(1001)
             unitwind:expect(inGameNow.epoch_time).toBe(98765)
-            unitwind:expect(inGameNow.time_zone).toBe("Tamriel/Morrowind")
+            unitwind:expect(inGameNow.time_zone).toBe(datetime.tamrielTimeZone)
         end
     end)
 

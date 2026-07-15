@@ -1,5 +1,7 @@
 local this = {}
 
+this.tamrielTimeZone = "Tamriel/Morrowind"
+
 ---@param value string?
 ---@return string?
 local function NormalizeIsoOffset(value)
@@ -20,6 +22,7 @@ local function NormalizeIsoOffset(value)
     return nil
 end
 
+
 ---@class MCP.DateTime
 ---@field type "real time" -- annotation for agent
 ---@field year integer
@@ -34,13 +37,14 @@ end
 
 ---@class MCP.DateTimeInGame
 ---@field type "in-game time" -- annotation for agent
----@field year integer
----@field month integer 1 to 12
----@field day integer
----@field hour number minutes and seconds are contained in the decimal part
+---@field year integer?
+---@field month integer? 1 to 12
+---@field day integer?
+---@field hour number? minutes and seconds are contained in the decimal part
 ---@field day_count integer
----@field epoch_time number
+---@field epoch_time number?
 ---@field time_zone string
+
 
 ---@return MCP.DateTime
 function this.Now()
@@ -103,12 +107,12 @@ function this.ToISO8601(dateTime)
         return nil
     end
 
-    local year = tonumber(dateTime.year)
-    local month = tonumber(dateTime.month)
-    local day = tonumber(dateTime.day)
-    local hour = tonumber(dateTime.hour)
-    local minute = tonumber(dateTime.minute)
-    local second = tonumber(dateTime.second)
+    local year = dateTime.year
+    local month = dateTime.month
+    local day = dateTime.day
+    local hour = dateTime.hour
+    local minute = dateTime.minute
+    local second = dateTime.second
     if not year or not month or not day or not hour or not minute or not second then
         return nil
     end
@@ -156,7 +160,7 @@ function this.InGameNow()
         hour = wc.hour.value,       -- minutes and seconds are contained in the decimal part
         day_count = wc.daysPassed.value,
         epoch_time = tes3.getSimulationTimestamp(),
-        time_zone = "Tamriel/Morrowind",
+        time_zone = this.tamrielTimeZone,
     }
     return t
 end
