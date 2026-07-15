@@ -18,8 +18,8 @@ description: |
 3. `prompts`, `resources`, `tools` のロード元を確認し、実ファイルから `definition.name`, `definition.title`, `definition.description` を収集する。
  - `resources` は `resources/list` の結果に加えて、`PublishResource` で登録されるリソースを列挙対象に含める。
  - `resources` は `uri` も収集する。
- - `definition` が generator 経由（例: `jsonrpc.Tool(...)`）の場合は、generator 内の変換処理と事前設定（例: `SetPrimitivePrefix`）を追跡し、最終的に公開される `Name`, `Title`, `Description` を採用する。
- - ただしユーザーが「descriptionはprefix不要」を指定した場合は、`Description` は prefix 適用前の値を採用する。
+ - `definition` が generator 経由（例: `jsonrpc.Tool(...)`）の場合は、generator 内の変換処理と事前設定（例: `SetPrimitivePrefix`）を追跡し、`Name` は最終公開値を採用する。
+ - `Title`, `Description` は常に prefix 適用前の値を採用する（例: `[Morrowind] ` を除去する）。
 4. [FEATURES.md](../../../FEATURES.md) にMarkdownを3セクションに分けて出力する。
 - `prompts/list` -> `Prompts`
 - `resources/list` -> `Resources`
@@ -36,6 +36,7 @@ description: |
 - `definition.title`, `definition.description` が無い場合は空欄にする。推測で補完しない。
 - `Name` 列は必ず `` `name_value` `` の形式で出力する。
 - `Resources` の `URI` は必ず実装から取得した値を記載する。推測で補完しない。
+- `Title`, `Description` は常に `[Morrowind] ` などの prefix を除去して出力する。
 - 対象カテゴリに要素が無ければ、見出しのみを出力し、表は出さない。
 - `Input` は `inputSchema` を指す。`inputSchema` が実質空（例: `additionalProperties=false` だけ）なら空欄にする。
 - `Input` の required/optional は `inputSchema.required` を反映する。

@@ -5,6 +5,7 @@
 -- agent agressivly use morrowind mcp, first read resources, then use tools.
 
 -- set expected AI autonomy
+-- https://arxiv.org/abs/2506.12469
 -- level 1. assistant AI. can answer questions and give advice.
 -- level 2. co-pilot AI. can do some tasks.
 -- level 3. autonomous AI agent. within the limits of human player information and game rules.
