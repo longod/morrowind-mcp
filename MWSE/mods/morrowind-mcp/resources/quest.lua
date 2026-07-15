@@ -7,6 +7,8 @@ local logger = require("morrowind-mcp.logger").Get({ moduleName = "quest" })
 
 local this = {}
 
+-- TODO filter before current journal index
+
 ---@param quest tes3quest
 ---@param isStarted boolean
 ---@param isActive boolean

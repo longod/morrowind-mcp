@@ -56,34 +56,34 @@ function this.Test()
         end
     end)
 
-    unitwind:test("NormalizeJournalText strips markup and deduplicates keywords", function()
-        local text, keywords = journal.NormalizeJournalText(
+    unitwind:test("NormalizeJournalText strips markup and deduplicates topics", function()
+        local text, topics = journal.NormalizeJournalText(
             "My @orders# are to go to @Balmora# and @report# to @Caius Cosades# in @Balmora# for further @orders#."
         )
 
         unitwind:expect(text).toBe(
             "My orders are to go to Balmora and report to Caius Cosades in Balmora for further orders."
         )
-        unitwind:expect(getmetatable(keywords).__jsontype).toBe("array")
-        unitwind:expect(keywords[1]).toBe("orders")
-        unitwind:expect(keywords[2]).toBe("Balmora")
-        unitwind:expect(keywords[3]).toBe("report")
-        unitwind:expect(keywords[4]).toBe("Caius Cosades")
-        unitwind:expect(keywords[5]).toBe(nil)
+        unitwind:expect(getmetatable(topics).__jsontype).toBe("array")
+        unitwind:expect(topics[1]).toBe("orders")
+        unitwind:expect(topics[2]).toBe("Balmora")
+        unitwind:expect(topics[3]).toBe("report")
+        unitwind:expect(topics[4]).toBe("Caius Cosades")
+        unitwind:expect(topics[5]).toBe(nil)
     end)
 
-    unitwind:test("NormalizeJournalText deduplicates keywords case-insensitively", function()
-        local _, keywords = journal.NormalizeJournalText(
+    unitwind:test("NormalizeJournalText deduplicates topics case-insensitively", function()
+        local _, topics = journal.NormalizeJournalText(
             "Speak to @Caius Cosades# after you @report# to @caius cosades# and @Report#."
         )
 
-        unitwind:expect(getmetatable(keywords).__jsontype).toBe("array")
-        unitwind:expect(keywords[1]).toBe("Caius Cosades")
-        unitwind:expect(keywords[2]).toBe("report")
-        unitwind:expect(keywords[3]).toBe(nil)
+        unitwind:expect(getmetatable(topics).__jsontype).toBe("array")
+        unitwind:expect(topics[1]).toBe("Caius Cosades")
+        unitwind:expect(topics[2]).toBe("report")
+        unitwind:expect(topics[3]).toBe(nil)
     end)
 
-    unitwind:test("ParseJournalEntries excludes date labels from keywords", function()
+    unitwind:test("ParseJournalEntries excludes date labels from topics", function()
         local content =
             "<FONT COLOR=\"9F0000\">16 Theta Harvest (Day 1)</FONT><BR>I should @report# to @Caius Cosades#.<P>"
         local entries = journal.ParseJournalEntries(content, {
@@ -95,9 +95,9 @@ function this.Test()
         unitwind:expect(entries[1].date_label).toBe("16 Theta Harvest (Day 1)")
         unitwind:expect(entries[1].sequence).toBe(1)
         unitwind:expect(entries[1].text).toBe("I should report to Caius Cosades.")
-        unitwind:expect(entries[1].keywords[1]).toBe("report")
-        unitwind:expect(entries[1].keywords[2]).toBe("Caius Cosades")
-        unitwind:expect(entries[1].keywords[3]).toBe(nil)
+        unitwind:expect(entries[1].topics[1]).toBe("report")
+        unitwind:expect(entries[1].topics[2]).toBe("Caius Cosades")
+        unitwind:expect(entries[1].topics[3]).toBe(nil)
         unitwind:expect(entries[1].parsed_date.month_number).toBe(8)
     end)
 

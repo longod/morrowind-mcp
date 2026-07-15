@@ -15,7 +15,7 @@ local settings = require("morrowind-mcp.settings")
 ---@field date_label string?
 ---@field sequence integer
 ---@field text string
----@field keywords string[]
+---@field topics string[]
 ---@field parsed_date MCP.JournalParsedDate
 
 ---@return number[]
@@ -101,14 +101,14 @@ function this.NormalizeJournalText(value)
         return "", jsonrpc.array()
     end
 
-    local keywords = jsonrpc.array()
-    local keywordSeen = {}
+    local topics = jsonrpc.array()
+    local topicsSeen = {}
     local normalized = value
     normalized = normalized:gsub("@([^#]+)#", function(keyword)
         local keywordKey = keyword ~= "" and keyword:lower() or ""
-        if keywordKey ~= "" and not keywordSeen[keywordKey] then
-            keywordSeen[keywordKey] = true
-            table.insert(keywords, keyword)
+        if keywordKey ~= "" and not topicsSeen[keywordKey] then
+            topicsSeen[keywordKey] = true
+            table.insert(topics, keyword)
         end
         return keyword
     end)
@@ -119,7 +119,7 @@ function this.NormalizeJournalText(value)
     normalized = normalized:gsub("%s+", " ")
     normalized = string.trim(normalized)
 
-    return normalized, keywords
+    return normalized, topics
 end
 
 --- Parse Journal.htm into lightweight structured entries without game-data cross references.
@@ -138,15 +138,16 @@ function this.ParseJournalEntries(content, monthIndexByName)
         if trimmedParagraph and trimmedParagraph ~= "" then
             local dateLabel = trimmedParagraph:match("<FONT.-%>(.-)</FONT><BR>")
             local body = trimmedParagraph:match("</FONT><BR>(.*)") or trimmedParagraph
-            local normalizedText, keywords = this.NormalizeJournalText(body)
+            local normalizedText, topics = this.NormalizeJournalText(body)
 
             if normalizedText ~= "" then
                 sequence = sequence + 1
+                ---@type MCP.JournalEntry
                 local entry = jsonrpc.object({
                     date_label = dateLabel,
                     sequence = sequence,
                     text = normalizedText,
-                    keywords = keywords,
+                    topics = topics,
                 })
                 local parsedDate = this.ParseDateLabel(dateLabel, monthIndexByName)
                 if parsedDate then

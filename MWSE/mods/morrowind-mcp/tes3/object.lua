@@ -5,11 +5,13 @@ local enumname = require("morrowind-mcp.tes3.enumname")
 local ui = require("morrowind-mcp.tes3.ui")
 local iter = require("morrowind-mcp.tes3.iterator")
 
+-- serialzie tes3 various objects for json serialization.
 local this = {}
 
--- serialzie tes3 various objects for json serialization.
+--TODO text fields need to clean macro. replace variables like a journal.
 
--- focus on based on object or mobile object.
+--TODO fetch shallow (only id, name) or traverse once, traverse recrusively.
+
 
 -- default __tojson(self) just put id such as "tes3baseObject:DoorMarker".
 -- so we need to implement our own serialization function for tes3object and tes3reference... and more.
@@ -1145,7 +1147,7 @@ function this.tes3dialogue(i, o)
         return nil
     end
 
-    -- o.info = i.info -- TODO avoid circular reference
+    -- o.info = iter.ForEachObject(i.info, this.tes3dialogueInfo) -- contain all info
     o.journalIndex = i.journalIndex
     o.type = enumname.dialogueType(i.type)
 
@@ -1168,7 +1170,7 @@ function this.tes3dialogueInfo(i, o)
     o.actor = this.tes3anyObject(i.actor)
     o.cell = this.tes3cell(i.cell)
     o.disposition = i.disposition
-    o.firstHeardFrom = this.tes3anyObject(i.firstHeardFrom)
+    -- o.firstHeardFrom = this.tes3anyObject(i.firstHeardFrom) -- need?
     o.isQuestFinished = i.isQuestFinished
     o.isQuestName = i.isQuestName
     o.isQuestRestart = i.isQuestRestart
@@ -1974,8 +1976,8 @@ function this.tes3quest(i, o)
         return nil
     end
 
-    -- o.dialogue = i.dialogue -- TODO
-    -- o.info = i.info -- TODO
+    o.dialogue = iter.ForEachObject(i.dialogue, this.tes3dialogue)
+    o.info = iter.ForEachObject(i.info, this.tes3dialogueInfo)
     o.isActive = i.isActive
     o.isFinished = i.isFinished
     o.isStarted = i.isStarted
