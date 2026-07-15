@@ -112,6 +112,9 @@ local entries = {
     },
 }
 
+this.started_link = jsonrpc.ResourceLink(entries[1].descriptor.name, entries[1].descriptor.uri, entries[1].descriptor.title, entries[1].descriptor.description, entries[1].descriptor.mimeType)
+this.active_link = jsonrpc.ResourceLink(entries[2].descriptor.name, entries[2].descriptor.uri, entries[2].descriptor.title, entries[1].descriptor.description, entries[2].descriptor.mimeType)
+this.finished_link = jsonrpc.ResourceLink(entries[3].descriptor.name, entries[3].descriptor.uri, entries[3].descriptor.title, entries[3].descriptor.description, entries[3].descriptor.mimeType)
 
 ---@param e journalEventData
 ---@param resource MCP.ResourceManager

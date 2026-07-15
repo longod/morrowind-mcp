@@ -233,6 +233,9 @@ local entry = {
     handler = this.GetContents,
 }
 
+-- contain ResourceEntry?
+this.link = jsonrpc.ResourceLink(entry.descriptor.name, entry.descriptor.uri, entry.descriptor.title, entry.descriptor.description, entry.descriptor.mimeType)
+
 ---@param e journalEventData
 ---@param resource MCP.ResourceManager
 local function OnJournalUpdated(e, resource)

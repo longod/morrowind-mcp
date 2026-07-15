@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local datetime = require("morrowind-mcp.datetime")
+local datetime = require("morrowind-mcp.util.datetime")
 local journal = require("morrowind-mcp.resources.journal")
 
 -- improving resource management then maybe no nessessary to fetch some data.

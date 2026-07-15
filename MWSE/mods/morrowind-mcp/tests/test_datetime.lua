@@ -6,9 +6,9 @@ function this.Test()
         highlight = false,
     })
 
-    local datetime = require("morrowind-mcp.datetime")
+    local datetime = require("morrowind-mcp.util.datetime")
 
-    unitwind:start("morrowind-mcp.datetime")
+    unitwind:start("morrowind-mcp.util.datetime")
 
     unitwind:test("Now returns local real-time fields", function()
         local now = datetime.Now()

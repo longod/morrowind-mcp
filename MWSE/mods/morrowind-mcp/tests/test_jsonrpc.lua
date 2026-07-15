@@ -353,6 +353,62 @@ function this.Test()
         unitwind:expect(tool.inputSchema.additionalProperties).toBe(false)
     end)
 
+    unitwind:test("PromptArgument generator maps fields", function()
+        local argument = jsonrpc.PromptArgument("topic", "Topic", "Select a topic", true)
+        unitwind:expect(argument.name).toBe("topic")
+        unitwind:expect(argument.title).toBe("Topic")
+        unitwind:expect(argument.description).toBe("Select a topic")
+        unitwind:expect(argument.required).toBe(true)
+    end)
+
+    unitwind:test("PromptMessage generator maps role and content", function()
+        local message = jsonrpc.PromptMessage("user", jsonrpc.TextContent("hello"))
+        unitwind:expect(message.role).toBe("user")
+        unitwind:expect(message.content.type).toBe("text")
+        unitwind:expect(message.content.text).toBe("hello")
+    end)
+
+    unitwind:test("Prompt generator applies configured primitive prefixes", function()
+        jsonrpc.SetPrimitivePrefix("mw_", "[MW] ", "[MW] ")
+
+        local prompt = jsonrpc.Prompt({
+            name = "test_prompt",
+            title = "Test Prompt",
+            description = "Prompt for testing",
+            icons = { jsonrpc.Icon("mcp://icon.png", "image/png") },
+            arguments = {
+                jsonrpc.PromptArgument("topic", "Topic", "Select a topic", true),
+            },
+        })
+
+        unitwind:expect(prompt.name).toBe("mw_test_prompt")
+        unitwind:expect(prompt.title).toBe("[MW] Test Prompt")
+        unitwind:expect(prompt.description).toBe("[MW] Prompt for testing")
+        unitwind:expect(prompt.icons[1].src).toBe("mcp://icon.png")
+        unitwind:expect(getmetatable(prompt.arguments).__jsontype).toBe("array")
+        unitwind:expect(prompt.arguments[1].name).toBe("topic")
+
+        ResetPrimitivePrefix()
+    end)
+
+    unitwind:test("Prompt generator keeps nil title and description with prefixes", function()
+        jsonrpc.SetPrimitivePrefix("mw_", "[MW] ", "[MW] ")
+
+        local prompt = jsonrpc.Prompt({
+            name = "test_prompt",
+            title = nil,
+            description = nil,
+            arguments = nil,
+        })
+
+        unitwind:expect(prompt.name).toBe("mw_test_prompt")
+        unitwind:expect(prompt.title).toBe(nil)
+        unitwind:expect(prompt.description).toBe(nil)
+        unitwind:expect(prompt.arguments).toBe(nil)
+
+        ResetPrimitivePrefix()
+    end)
+
     unitwind:test("ListPromptsResult prepares MCP array field", function()
         local result = jsonrpc.ListPromptsResult(2)
         unitwind:expect(type(result)).toBe("table")

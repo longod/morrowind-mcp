@@ -5,7 +5,7 @@ local pathutil = require("morrowind-mcp.core.pathutil")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local base64 = require("morrowind-mcp.core.base64")
-local datetime = require("morrowind-mcp.datetime")
+local datetime = require("morrowind-mcp.util.datetime")
 
 local journal = require("morrowind-mcp.resources.journal")
 local quest = require("morrowind-mcp.resources.quest")

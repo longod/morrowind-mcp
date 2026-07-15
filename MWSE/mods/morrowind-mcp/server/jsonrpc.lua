@@ -1,5 +1,5 @@
 local this = {}
-local datetime = require("morrowind-mcp.datetime")
+local datetime = require("morrowind-mcp.util.datetime")
 
 --- -32000 to -32099	Server error -- Reserved for implementation-defined server-errors.
 ---@enum MCP.JSONRPCErrorCode
@@ -284,7 +284,7 @@ function this.ResourceLink(name, uri, title, description, mimeType, annotations,
     }
 end
 
----@param audience MCP.Role[]?
+---@param audience MCP.Role|MCP.Role[]|nil
 ---@param priority number?
 ---@param lastModified string|MCP.DateTime|nil
 ---@return MCP.Annotations
@@ -431,6 +431,46 @@ function this.Tool(tool)
     normalizedTool.outputSchema = tool.outputSchema
     normalizedTool.annotations = tool.annotations
     return normalizedTool
+end
+
+-- ============================================================================
+-- MCP Prompt Generators
+-- ============================================================================
+
+---@param name string
+---@param title string?
+---@param description string?
+---@param required boolean?
+---@return MCP.PromptArgument
+function this.PromptArgument(name, title, description, required)
+    return {
+        name = name,
+        title = title,
+        description = description,
+        required = required,
+    }
+end
+
+---@param role MCP.Role
+---@param content MCP.ContentBlock
+---@return MCP.PromptMessage
+function this.PromptMessage(role, content)
+    return {
+        role = role,
+        content = content,
+    }
+end
+
+---@param prompt MCP.Prompt
+---@return MCP.Prompt
+function this.Prompt(prompt)
+    local normalizedPrompt = this.object(5)
+    normalizedPrompt.icons = prompt.icons
+    normalizedPrompt.name = name_prefix .. prompt.name
+    normalizedPrompt.title = prompt.title and (title_prefix .. prompt.title) or nil
+    normalizedPrompt.description = prompt.description and (description_prefix .. prompt.description) or nil
+    normalizedPrompt.arguments = prompt.arguments and this.array(prompt.arguments) or nil
+    return normalizedPrompt
 end
 
 -- ============================================================================
