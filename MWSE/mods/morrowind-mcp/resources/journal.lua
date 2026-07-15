@@ -4,6 +4,7 @@ local logger = require("morrowind-mcp.logger").Get({ moduleName = "journal" })
 local pathutil = require("morrowind-mcp.core.pathutil")
 local mcp = require("morrowind-mcp.core.mcp")
 local settings = require("morrowind-mcp.settings")
+local dialogue = require("morrowind-mcp.util.dialogue")
 
 -- TODO more compatible MCP.DateTimeInGame
 ---@class MCP.JournalParsedDate
@@ -41,6 +42,7 @@ function this.NormalizeMonthKey(value)
     if not value then
         return nil
     end
+    -- Keep only alphabetic characters so month names can be compared consistently.
     local normalized = value:lower():gsub("[^%a]", "")
     return normalized
 end
@@ -73,12 +75,14 @@ function this.ParseDateLabel(dateLabel, monthIndexByName)
         return nil
     end
 
+    -- Split labels like "1st Morning Star (Day 1)" into day, month name, and day counter.
     local dayOfMonthText, monthName, dayInfo = dateLabel:match("^(%d+)%s+(.+)%s+%((.-)%)$")
     if not dayOfMonthText or not monthName or not dayInfo then
         return nil
     end
 
     local dayOfMonth = tonumber(dayOfMonthText)
+    -- Read the in-game day number from the trailing parenthesized text.
     local dayCount = tonumber(dayInfo:match("[Dd]ay%s+(%d+)"))
     local monthNumber = monthIndexByName[this.NormalizeMonthKey(monthName)]
     if not dayOfMonth or not dayCount or not monthNumber then
@@ -92,36 +96,6 @@ function this.ParseDateLabel(dateLabel, monthIndexByName)
     })
 end
 
---- Convert a journal paragraph into plain text and collect its explicit keyword markup.
----@param value string?
----@return string
----@return table
-function this.NormalizeJournalText(value)
-    if not value then
-        return "", jsonrpc.array()
-    end
-
-    local topics = jsonrpc.array()
-    local topicsSeen = {}
-    local normalized = value
-    normalized = normalized:gsub("@([^#]+)#", function(keyword)
-        local keywordKey = keyword ~= "" and keyword:lower() or ""
-        if keywordKey ~= "" and not topicsSeen[keywordKey] then
-            topicsSeen[keywordKey] = true
-            table.insert(topics, keyword)
-        end
-        return keyword
-    end)
-    normalized = normalized:gsub("<[^>]+>", " ")
-    normalized = normalized:gsub("\r\n", " ")
-    normalized = normalized:gsub("\n", " ")
-    normalized = normalized:gsub("\r", " ")
-    normalized = normalized:gsub("%s+", " ")
-    normalized = string.trim(normalized)
-
-    return normalized, topics
-end
-
 --- Parse Journal.htm into lightweight structured entries without game-data cross references.
 ---@param content string
 ---@param monthIndexByName table<string, number>
@@ -133,12 +107,15 @@ function this.ParseJournalEntries(content, monthIndexByName)
     end
 
     local sequence = 0
+    -- Journal.htm separates entries with <P>, so iterate one paragraph at a time.
     for paragraph in content:gmatch("(.-)<P>") do
         local trimmedParagraph = string.trim(paragraph)
         if trimmedParagraph and trimmedParagraph ~= "" then
+            -- Capture the date label that precedes the body text.
             local dateLabel = trimmedParagraph:match("<FONT.-%>(.-)</FONT><BR>")
+            -- Take the text after the date block as the entry body.
             local body = trimmedParagraph:match("</FONT><BR>(.*)") or trimmedParagraph
-            local normalizedText, topics = this.NormalizeJournalText(body)
+            local normalizedText, topics = dialogue.NormalizeDialogueText(body)
 
             if normalizedText ~= "" then
                 sequence = sequence + 1
@@ -165,10 +142,8 @@ end
 -- perphaps, we can not access to journal entries in a save data.
 -- "JOUR"  recourds in ess stores just html same as journal.htm.
 -- https://en.uesp.net/morrow/tech/mw_esm.txt
-
--- https://pt.uesp.net/wiki/Morrowind_Mod:Text_Defines
--- https://wiki.openmw.org/index.php?title=Research:Dialogue_and_Messages
--- hyperlink (@*#): https://github.com/OpenMW/openmw/blob/master/apps/openmw/mwdialogue/keywordsearch.cpp#L140
+-- https://en.uesp.net/wiki/Morrowind_Mod:Text_Defines
+-- hyperlink (@*#)
 
 ---@return MCP.JournalEntry[]?
 function this.ReadJournal()

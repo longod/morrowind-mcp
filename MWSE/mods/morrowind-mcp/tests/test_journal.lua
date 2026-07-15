@@ -56,33 +56,6 @@ function this.Test()
         end
     end)
 
-    unitwind:test("NormalizeJournalText strips markup and deduplicates topics", function()
-        local text, topics = journal.NormalizeJournalText(
-            "My @orders# are to go to @Balmora# and @report# to @Caius Cosades# in @Balmora# for further @orders#."
-        )
-
-        unitwind:expect(text).toBe(
-            "My orders are to go to Balmora and report to Caius Cosades in Balmora for further orders."
-        )
-        unitwind:expect(getmetatable(topics).__jsontype).toBe("array")
-        unitwind:expect(topics[1]).toBe("orders")
-        unitwind:expect(topics[2]).toBe("Balmora")
-        unitwind:expect(topics[3]).toBe("report")
-        unitwind:expect(topics[4]).toBe("Caius Cosades")
-        unitwind:expect(topics[5]).toBe(nil)
-    end)
-
-    unitwind:test("NormalizeJournalText deduplicates topics case-insensitively", function()
-        local _, topics = journal.NormalizeJournalText(
-            "Speak to @Caius Cosades# after you @report# to @caius cosades# and @Report#."
-        )
-
-        unitwind:expect(getmetatable(topics).__jsontype).toBe("array")
-        unitwind:expect(topics[1]).toBe("Caius Cosades")
-        unitwind:expect(topics[2]).toBe("report")
-        unitwind:expect(topics[3]).toBe(nil)
-    end)
-
     unitwind:test("ParseJournalEntries excludes date labels from topics", function()
         local content =
             "<FONT COLOR=\"9F0000\">16 Theta Harvest (Day 1)</FONT><BR>I should @report# to @Caius Cosades#.<P>"

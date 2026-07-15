@@ -4,6 +4,7 @@ local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3object" }
 local enumname = require("morrowind-mcp.tes3.enumname")
 local ui = require("morrowind-mcp.tes3.ui")
 local iter = require("morrowind-mcp.tes3.iterator")
+local dialogue = require("morrowind-mcp.util.dialogue")
 
 -- serialzie tes3 various objects for json serialization.
 local this = {}
@@ -1182,7 +1183,15 @@ function this.tes3dialogueInfo(i, o)
     o.npcSex = npcSexName[i.npcSex] or i.npcSex
     o.pcFaction = i.pcFaction -- TODO number to means string if possible
     o.pcRank = i.pcRank
-    o.text = i.text
+    ---@type MCP.DialogueDefineContext
+    local defineContext = dialogue.BuildDialogueDefineContext({
+        player = tes3.player,
+        actor = i.actor,
+        dialogueInfo = i,
+        cell = i.cell,
+        npcFaction = i.npcFaction,
+    })
+    o.text = dialogue.ReplaceDialogueDefines(i.text, defineContext)
     o.type = enumname.dialogueType(i.type)
 
     local _ = ValidateType(o)

@@ -43,6 +43,7 @@ luac.out
 .vscode/
 meta.ini
 .exit-after-tests
+.accept-disclaimer-for-tests
 *.log
 mwmcp.local.json
 .agents/mcp_config.json
