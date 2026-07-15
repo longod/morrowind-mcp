@@ -6,16 +6,16 @@ local pathutil = require("morrowind-mcp.core.pathutil")
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
 
----@class MCP.ScreenshotSave: MCP.ITool
+---@class MCP.Tools.ScreenshotSave: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.ScreenshotSave
+---@return MCP.Tools.ScreenshotSave
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.ScreenshotSave
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.ScreenshotSave
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "screenshot_save" })
     instance.definition = jsonrpc.Tool({
         name = "screenshot-save",

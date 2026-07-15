@@ -2,16 +2,16 @@ local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local quest = require("morrowind-mcp.resources.quest")
 
----@class MCP.QuestFetch: MCP.ITool
+---@class MCP.Tools.QuestFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.QuestFetch
+---@return MCP.Tools.QuestFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.QuestFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.QuestFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "quest_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "quest-fetch",

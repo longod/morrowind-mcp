@@ -4,16 +4,16 @@ local mcp = require("morrowind-mcp.core.mcp")
 local journal = require("morrowind-mcp.resources.journal")
 local quest = require("morrowind-mcp.resources.quest")
 
----@class MCP.Todo : MCP.IPrompt
+---@class MCP.Prompts.Todo : MCP.IPrompt
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.Todo
+---@return MCP.Prompts.Todo
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.Todo
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Prompts.Todo
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "todo" })
 
     instance.definition = jsonrpc.Prompt({

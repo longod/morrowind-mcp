@@ -8,17 +8,17 @@ local journal = require("morrowind-mcp.resources.journal")
 -- but manual fetch is useful for debugging and testing.
 
 
----@class MCP.JournalFetch: MCP.ITool
+---@class MCP.Tools.JournalFetch: MCP.ITool
 ---@field logger mwseLogger
 ---@field resource MCP.ResourceManager TODO use MCP.IResourceManager
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.JournalFetch
+---@return MCP.Tools.JournalFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.JournalFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.JournalFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "journal_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "journal-fetch",

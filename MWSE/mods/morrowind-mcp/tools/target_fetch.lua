@@ -4,16 +4,16 @@ local obj = require("morrowind-mcp.tes3.object")
 local ui = require("morrowind-mcp.tes3.ui")
 
 
----@class MCP.TargetFetch: MCP.ITool
+---@class MCP.Tools.TargetFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.TargetFetch
+---@return MCP.Tools.TargetFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.TargetFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.TargetFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "target_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "target-fetch",

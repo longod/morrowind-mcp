@@ -3,16 +3,16 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
 
 
----@class MCP.WorldFetch: MCP.ITool
+---@class MCP.Tools.WorldFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.WorldFetch
+---@return MCP.Tools.WorldFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.WorldFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.WorldFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "world_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "world-fetch",

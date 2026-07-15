@@ -4,16 +4,16 @@ local obj = require("morrowind-mcp.tes3.object")
 
 -- rename player stats?
 
----@class MCP.PlayerFetch: MCP.ITool
+---@class MCP.Tools.PlayerFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.PlayerFetch
+---@return MCP.Tools.PlayerFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.PlayerFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.PlayerFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "player_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "player-fetch",

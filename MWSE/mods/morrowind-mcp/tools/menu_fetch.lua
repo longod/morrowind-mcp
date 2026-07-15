@@ -5,16 +5,16 @@ local ui = require("morrowind-mcp.tes3.ui")
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
 
----@class MCP.MenuFetch: MCP.ITool
+---@class MCP.Tools.MenuFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.MenuFetch
+---@return MCP.Tools.MenuFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.MenuFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.MenuFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "menu_fetch" })
 
     -- TODO annotate widget containing element is actionable, or consumeMouseEvents = true (main men options image buttons)

@@ -4,16 +4,16 @@ local obj = require("morrowind-mcp.tes3.object")
 local iter = require("morrowind-mcp.tes3.iterator")
 
 
----@class MCP.ActivatorFetch: MCP.ITool
+---@class MCP.Tools.ActivatorFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
 
 ---@param params table?
----@return MCP.ActivatorFetch
+---@return MCP.Tools.ActivatorFetch
 function this.new(params)
     local instance = base.new(params)
-    setmetatable(instance, { __index = this }) ---@cast instance MCP.ActivatorFetch
+    setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.ActivatorFetch
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "activator_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "activator-fetch",
