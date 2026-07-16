@@ -67,15 +67,19 @@ function this.GetContents(desc, isStarted, isActive, isFinished)
     return { content }
 end
 
-local started_uri = pathutil.ToUri("game/started_quest.json", settings.uriScheme)
-local active_uri = pathutil.ToUri("game/active_quest.json", settings.uriScheme)
-local finished_uri = pathutil.ToUri("game/finished_quest.json", settings.uriScheme)
+local started_relative = "game/started_quest.json"
+local active_relative = "game/active_quest.json"
+local finished_relative = "game/finished_quest.json"
+
+local started_uri = pathutil.ToUri(started_relative, settings.uriScheme)
+local active_uri = pathutil.ToUri(active_relative, settings.uriScheme)
+local finished_uri = pathutil.ToUri(finished_relative, settings.uriScheme)
 
 ---@type MCP.ResourceEntry[]
 local entries = {
     {
         descriptor = {
-            name = "started_quest.json",
+            name = started_relative,
             title = "Started Quests",
             uri = started_uri,
             description = "Current player's started quest entries.",
@@ -88,7 +92,7 @@ local entries = {
     },
     {
         descriptor = {
-            name = "active_quest.json",
+            name = active_relative,
             title = "Active Quests",
             uri = active_uri,
             description = "Current player's active quest entries.",
@@ -101,7 +105,7 @@ local entries = {
     },
     {
         descriptor = {
-            name = "finished_quest.json",
+            name = finished_relative,
             title = "Finished Quests",
             uri = finished_uri,
             description = "Current player's finished quest entries.",

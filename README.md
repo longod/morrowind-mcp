@@ -112,6 +112,8 @@ https://code.claude.com/docs/en/mcp-quickstart
 
 ## Features
 
+This MCP server does not modify the game or generate and execute new code; it only performs actions that are possible within the game itself.
+
 [FEATURES.md](FEATURES.md)
 
 ## Development
@@ -230,7 +232,7 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 
 ## TODO
 
-- OpenMW is not supported yet.
+- OpenMW is not supported yet. I'd like to do it, but it's simply because I don't know much about modding with OpenMW.
 
 ## License
 
