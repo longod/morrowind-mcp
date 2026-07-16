@@ -1,4 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
+local inputvalidator = require("morrowind-mcp.core.inputvalidator")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local pathutil = require("morrowind-mcp.core.pathutil")
@@ -52,8 +53,27 @@ function this:CanExecute(params)
     return true -- tes3.game.screenShotsEnabled does not work.
 end
 
+function this:Validate(params)
+    local result = base.Validate(self, params)
+    if not result.valid then
+        return result
+    end
+
+    -- The file name becomes one filesystem path segment; reject unsafe names instead of silently rewriting them.
+    local arguments = params.arguments or {}
+    local filename = arguments["file_name"]
+    if filename ~= nil then
+        local filenameResult = inputvalidator.ValidateFileName(filename, "file_name", { maxLength = maxMenuNameLength })
+        for _, validationError in ipairs(filenameResult.errors) do
+            table.insert(result.errors, validationError)
+        end
+        result.valid = result.valid and filenameResult.valid
+    end
+    return result
+end
+
 function this:Execute(params, context)
-    -- TODO validation for injection
+    -- Argument validation already rejected unsafe caller-provided names; execution resolves defaults and collisions.
     local arguments = params.arguments or {}
 
     local ms = math.floor((os.clock() % 1) * 1000)
@@ -63,20 +83,8 @@ function this:Execute(params, context)
     self.logger:debug("arguments file_name=%s, extension=%s, capture_with_ui=%s", tostring(arguments["file_name"]),
         tostring(arguments["extension"]), tostring(arguments["capture_with_ui"]))
 
-    if type(filename) == "string" and #filename >= minMenuNameLength and #filename <= maxMenuNameLength then
-        -- or sanitize...
-        local has_invalid_char = false
-        for _, ch in ipairs({ "\\", "/", ":", "*", "?", "\"", "<", ">", "|" }) do
-            if string.find(filename, ch, 1, true) then
-                has_invalid_char = true
-                break
-            end
-        end
-        if not has_invalid_char then
-            name = filename
-        else
-            self.logger:warn("Invalid file_name: %s. Fallback to auto-generated name.", filename)
-        end
+    if filename ~= nil then
+        name = filename
     end
     local extension = arguments["extension"] or ".jpg"
     local settings = require("morrowind-mcp.settings")

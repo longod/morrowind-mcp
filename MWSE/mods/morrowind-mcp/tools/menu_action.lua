@@ -1,4 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
+local inputvalidator = require("morrowind-mcp.core.inputvalidator")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
 local minMenuNameLength = 1
@@ -35,10 +36,16 @@ function this.new(params)
                     {
                         -- empty is inspect how to use this menu element?
                         tes3.uiEvent.mouseClick,
-                        tes3.uiEvent.mouseDoubleClick,
+                        "textInput",
                     },
                     "Action",
                     "Action to perform on the menu."
+                ),
+                text = jsonrpc.StringSchema(
+                    "Text",
+                    "(Optional) Text to input if action is `textInput`.",
+                    0,
+                    1024
                 ),
             },
             jsonrpc.array({ "action" }) -- TODO one of id or name. but specification is not exist.
@@ -55,8 +62,27 @@ function this:CanExecute(params)
     return true
 end
 
+function this:Validate(params)
+    local result = base.Validate(self, params)
+    if not result.valid then
+        return result
+    end
+
+    -- Text input reaches a live UI element, so validate UI-specific reserved characters before Execute mutates it.
+    local arguments = params.arguments or {}
+    local text = arguments["text"]
+    if text ~= nil then
+        local textResult = inputvalidator.ValidateSingleLineUiText(text, "text")
+        for _, validationError in ipairs(textResult.errors) do
+            table.insert(result.errors, validationError)
+        end
+        result.valid = result.valid and textResult.valid
+    end
+    return result
+end
+
 function this:Execute(params, context)
-    -- TODO validation for injection
+    -- Argument validation already covered schema and text-sink checks; this function handles live UI state.
     local arguments = params.arguments or {}
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
@@ -99,7 +125,7 @@ function this:Execute(params, context)
         return jsonrpc.CallToolResult(jsonrpc.TextContent("One of menu_id or menu_name should be specified."), nil, true)
     end
 
-    -- TODO check if target is valid and can be clicked. (disabled, visible, etc.)
+    -- Target availability can only be checked against the current UI tree at execution time.
     if not target then
         local errorContent = jsonrpc.TextContent("Menu not found.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
@@ -113,18 +139,36 @@ function this:Execute(params, context)
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
-    if not target.consumeMouseEvents then
-        local errorContent = jsonrpc.TextContent("Menu does not consume mouse events.")
-        return jsonrpc.CallToolResult(errorContent, nil, true)
-    end
+    -- its not correct condition.
+    -- if not target.consumeMouseEvents then
+    --     local errorContent = jsonrpc.TextContent("Menu does not consume mouse events.")
+    --     return jsonrpc.CallToolResult(errorContent, nil, true)
+    -- end
 
     -- possible destory menu after action, so store name and id before action.
     local target_name = target.name
     local target_id = target.id
     self.logger:debug("Performing action %s to menu %s (ID: %d)", action, target_name, target_id)
-    -- FIXME currently, do triggerEvent then transit to movie mode immediately, morrowind completely stops processing lua scripts until movie mode ends.
-    -- use notifications/processing, sent responsse before triggerEvent, patch runtime code or skipping movie mod.
-    target:triggerEvent(action)
+    -- currently, do triggerEvent then transit to movie mode immediately, morrowind completely stops processing lua scripts until movie mode ends.
+    -- TODO use notifications/processing, sent responsse before triggerEvent, patch runtime code or skipping movie mod.
+    if action == "textInput" then
+        local text = arguments["text"]
+        if type(text) ~= "string" then
+            local errorContent = jsonrpc.TextContent("text should be a string.")
+            return jsonrpc.CallToolResult(errorContent, nil, true)
+        end
+        if target.type ~= "textInput" then
+            local errorContent = jsonrpc.TextContent("Menu is not a text input.")
+            return jsonrpc.CallToolResult(errorContent, nil, true)
+        end
+        -- FIXME it seems to enter name at the first time, no entered name later when character sheets shown.
+        target.text = text
+        -- target:triggerEvent(tes3.uiEvent.textUpdated) -- need?
+        -- target:updateLayout() -- need?
+    else
+        -- mouseClick
+        target:triggerEvent(action)
+    end
 
     return jsonrpc.CallToolResult(
         jsonrpc.TextContent(string.format("Action %s performed to menu %s (ID: %d) successfully.", action, target_name,

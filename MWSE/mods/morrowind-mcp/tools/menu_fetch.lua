@@ -65,7 +65,6 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params, context)
-    -- TODO validation for injection
     local arguments = params.arguments or {}
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]

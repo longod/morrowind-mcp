@@ -1,5 +1,4 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local config = require("morrowind-mcp.config")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 local enumname = require("morrowind-mcp.tes3.enumname")
 
@@ -301,6 +300,12 @@ function this.tes3uiElement(i, o)
     o.widget = this.tes3uiWidget(i.widget)
     -- o.width = i.width
     -- o.widthProportional = i.widthProportional
+
+    -- TODO embedded action type. for action.
+    -- click, text input, hold... but tool operation unsuite it.
+    -- it has widget is ok.
+    -- image buttons such as main menu, what is this clickable hint?
+
 
     local children = jsonrpc.array(table.size(i.children))
     for _, child in ipairs(i.children) do

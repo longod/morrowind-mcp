@@ -6,6 +6,8 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 
 **This mod contains source code generated or assisted by AI. and all code has been manually reviewed, refactored and verified by a senior software engineer.**
 
+![Morrowind MCP](./morrowind-mcp.png)
+
 ## How to use
 
 1. Install Morrowind full expansion, MGE XE, MWSE, MCP, and optionally MO2 and MGE XE UF.

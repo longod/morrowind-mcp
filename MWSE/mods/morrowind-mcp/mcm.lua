@@ -75,7 +75,7 @@ local function OnModConfigReady(e)
         })
         autoplay:createOnOffButton({
             label = "Skip Main Menu",
-            description = "Automatically skip the main menu and load the newest save.",
+            description = "Automatically skip the main menu and load the newest save.\nIf you want to stop this function, press ESC to open the options menu then go to mod config. Or delete this mod's config file: Data Files/MWSE/config/morrowind-mcp.json",
             variable = mwse.mcm.createTableVariable({
                 id = "skipMainMenu",
                 table = config.autoplay,

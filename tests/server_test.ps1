@@ -234,11 +234,7 @@ try {
         @("--method", "resources/list"),
         @("--method", "prompts/list"),
         @("--method", "resources/templates/list"),
-        @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
-        @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-menu-action", "--tool-arg", "menu_name=Pete_ContinueButton", "--tool-arg", "action=mouseClick"), # using continue mod
-        @("--method", "resources/list"),
-        @("--method", "resources/read", "--uri", "morrowind://screenshot/$RunTimestamp.jpg"), # TODO listから取得したファイルを読む
         @("--method", "tools/list"), # expect in game.
         @("--method", "prompts/list"),
         @("--method", "tools/call", "--tool-name", "mw-activator-fetch"),
@@ -250,11 +246,14 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
+        @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
         @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
+        @("--method", "resources/list"),
         @("--method", "resources/read", "--uri", "morrowind://game/journal.json"),
         @("--method", "resources/read", "--uri", "morrowind://game/active_quest.json"),
         @("--method", "resources/read", "--uri", "morrowind://game/finished_quest.json"),
         @("--method", "resources/read", "--uri", "morrowind://game/started_quest.json"),
+        @("--method", "resources/read", "--uri", "morrowind://screenshot/$RunTimestamp.jpg"), # TODO listから取得したファイルを読む
         @("--method", "prompts/get", "--prompt-name", "mw-loar"),
         @("--method", "prompts/get", "--prompt-name", "mw-role"),
         @("--method", "prompts/get", "--prompt-name", "mw-todo"),

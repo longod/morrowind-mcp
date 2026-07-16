@@ -1,4 +1,7 @@
 local this = {}
+local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+
+-- inputvalidator owns safety decisions; pathutil only converts already-safe logical resource paths.
 
 ---@param ch integer
 ---@return boolean
@@ -12,6 +15,25 @@ local function IsUnreservedByte(ch)
         ch == string.byte(".") or
         ch == string.byte("_") or
         ch == string.byte("~")
+end
+
+---@param path string
+---@return string
+local function PercentEncodePath(path)
+    -- Keep path separator "/" and unreserved bytes; encode everything else as %HH.
+    local result = {}
+    local len = string.len(path)
+    local i = 1
+    while i <= len do
+        local ch = string.byte(path, i)
+        if ch == string.byte("/") or IsUnreservedByte(ch) then
+            table.insert(result, string.char(ch))
+        else
+            table.insert(result, string.format("%%%02X", ch))
+        end
+        i = i + 1
+    end
+    return table.concat(result)
 end
 
 ---@param ch integer
@@ -35,28 +57,8 @@ local function HexPairToByte(hexPair)
 end
 
 ---@param path string
----@return string
-local function PercentEncodePath(path)
-    -- Keep path separator "/" and unreserved bytes; encode everything else as %HH.
-    local result = {}
-    local len = string.len(path)
-    local i = 1
-    while i <= len do
-        local ch = string.byte(path, i)
-        if ch == string.byte("/") or IsUnreservedByte(ch) then
-            table.insert(result, string.char(ch))
-        else
-            table.insert(result, string.format("%%%02X", ch))
-        end
-        i = i + 1
-    end
-    return table.concat(result)
-end
-
----@param path string
 ---@return string?
 local function PercentDecodePath(path)
-    -- Decode only valid %HH sequences and reject malformed percent encoding.
     local result = {}
     local len = string.len(path)
     local i = 1
@@ -86,49 +88,12 @@ local function PercentDecodePath(path)
 end
 
 ---@param resourcePath string
----@return boolean
-local function IsValidResourcePath(resourcePath)
-    -- Accept only safe, resourceRootDir-relative logical paths.
-    -- Reject empty input and absolute-style paths.
-    if resourcePath == "" or string.startswith(resourcePath, "/") then
-        return false
-    end
-
-    -- Reject Windows separators and drive/URI-like colon usage.
-    if string.find(resourcePath, "\\", 1, true) or string.find(resourcePath, ":", 1, true) then
-        return false
-    end
-
-    -- Parse each slash-delimited segment manually so we can reject malformed paths
-    -- (for example, "folder//file", trailing slash, ".", or "..") without
-    -- relying on external split helper behavior.
-    local pathLen = string.len(resourcePath)
-    local segmentStart = 1
-    while segmentStart <= pathLen + 1 do
-        local separatorIndex = string.find(resourcePath, "/", segmentStart, true)
-        local segmentEnd = separatorIndex and (separatorIndex - 1) or pathLen
-        local segment = string.sub(resourcePath, segmentStart, segmentEnd)
-        -- Empty segment means repeated or trailing slash.
-        -- "." and ".." are blocked to prevent directory traversal semantics.
-        if segment == "" or segment == "." or segment == ".." then
-            return false
-        end
-        if not separatorIndex then
-            break
-        end
-        segmentStart = separatorIndex + 1
-    end
-
-    return true
-end
-
----@param resourcePath string
 ---@param uriScheme string
 ---@return MCP.ResourceUri?
 function this.ToUri(resourcePath, uriScheme)
     -- Normalize separators so URI paths are consistently slash-separated.
     local normalizedPath = string.gsub(resourcePath, "\\", "/")
-    if not IsValidResourcePath(normalizedPath) then
+    if not inputvalidator.ValidateResourcePath(normalizedPath).valid then
         return nil
     end
 
@@ -141,22 +106,13 @@ end
 ---@return string?
 function this.FromUri(uri, uriScheme)
     -- URI must belong to this scheme before extracting the relative path.
-    if not string.startswith(uri, uriScheme) then
+    if not inputvalidator.ValidateResourceUri(uri, uriScheme).valid then
         return nil
     end
 
     local encodedPath = string.sub(uri, string.len(uriScheme) + 1)
-    -- Decode first, then validate decoded path safety.
-    local resourcePath = PercentDecodePath(encodedPath)
-    if not resourcePath then
-        return nil
-    end
-
-    if not IsValidResourcePath(resourcePath) then
-        return nil
-    end
-
-    return resourcePath
+    -- Validation above guarantees percent decoding and path safety.
+    return PercentDecodePath(encodedPath)
 end
 
 ---@param resourcePath string
@@ -165,7 +121,7 @@ end
 function this.ToResourceFilePath(resourcePath, resourceRootDir)
     -- Normalize and validate first, then convert to Windows separators for filesystem access.
     local normalizedPath = string.gsub(resourcePath, "\\", "/")
-    if not IsValidResourcePath(normalizedPath) then
+    if not inputvalidator.ValidateResourcePath(normalizedPath).valid then
         return nil
     end
 
@@ -188,7 +144,8 @@ function this.FromResourceFilePath(resourceFilePath, resourceRootDir)
     end
 
     local resourcePath = string.sub(normalizedFilePath, string.len(normalizedRootDir) + 1)
-    if not IsValidResourcePath(resourcePath) then
+    -- Re-check after prefix removal so sibling paths with tricky segments cannot become resource paths.
+    if not inputvalidator.ValidateResourcePath(resourcePath).valid then
         return nil
     end
 

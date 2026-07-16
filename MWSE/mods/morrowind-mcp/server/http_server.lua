@@ -3,6 +3,7 @@ local http = require("morrowind-mcp.server.http")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local mcp = require("morrowind-mcp.core.mcp")
 local pathutil = require("morrowind-mcp.core.pathutil")
+local inputvalidator = require("morrowind-mcp.core.inputvalidator")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.manager")
@@ -926,6 +927,18 @@ function this:OnToolsCall(params, request)
         }
     end
 
+    -- tools/call validation failures are returned as CallToolResult errors because the JSON-RPC envelope is valid.
+    local validationResult = tool:Validate(params)
+    if not validationResult.valid then
+        local message = inputvalidator.FormatErrors(validationResult)
+        self.logger:warn("Rejected tool arguments for %s: %s", tostring(params.name), message)
+        ---@type MCP.MethodResult
+        return {
+            http_response = http.response_code.ok,
+            result = jsonrpc.CallToolResult(jsonrpc.TextContent(message), nil, true),
+        }
+    end
+
     local sessionId = request and self:GetSessionId(request.http_request) or nil
     local progressToken = self:GetProgressToken(params)
     ---@type MCP.ToolExecutionContext
@@ -1624,3 +1637,4 @@ function this:Shutdown()
 end
 
 return this
+
