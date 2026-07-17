@@ -155,7 +155,7 @@ local function ContainsConst(oneOf, value)
     return false
 end
 
----@param property table
+---@param property MCP.JsonSchemaProperty
 ---@param value any
 ---@return boolean
 local function IsEnumValue(property, value)
@@ -168,7 +168,7 @@ local function IsEnumValue(property, value)
     return true
 end
 
----@param items table?
+---@param items MCP.UntitledMultiSelectEnumSchemaItems|MCP.TitledMultiSelectEnumSchemaItems?
 ---@param value any
 ---@return boolean
 local function IsArrayItemValid(items, value)
@@ -187,6 +187,8 @@ local function IsArrayItemValid(items, value)
     return true
 end
 
+--- minItems/maxItems currently require an extra pass over large arrays.
+--- This stays separate so the count matches ipairs-based item validation; merge the passes if large arrays become common.
 ---@param value any
 ---@return integer
 local function ArraySize(value)
@@ -495,7 +497,7 @@ end
 ---@param errors InputValidator.Error[]
 ---@param path string
 ---@param value any
----@param property table
+---@param property MCP.JsonSchemaProperty
 local function ValidateString(errors, path, value, property)
     if type(value) ~= "string" then
         AddError(errors, path, string.format("Expected string, got %s.", TypeName(value)))
@@ -519,7 +521,7 @@ end
 ---@param errors InputValidator.Error[]
 ---@param path string
 ---@param value any
----@param property table
+---@param property MCP.JsonSchemaProperty
 local function ValidateNumber(errors, path, value, property)
     if type(value) ~= "number" then
         AddError(errors, path, string.format("Expected number, got %s.", TypeName(value)))
@@ -545,7 +547,7 @@ end
 ---@param errors InputValidator.Error[]
 ---@param path string
 ---@param value any
----@param property table
+---@param property MCP.JsonSchemaProperty
 local function ValidateArray(errors, path, value, property)
     if not IsArray(value) then
         AddError(errors, path, string.format("Expected array, got %s.", TypeName(value)))
@@ -579,7 +581,7 @@ end
 ---@param errors InputValidator.Error[]
 ---@param path string
 ---@param value any
----@param property table
+---@param property MCP.JsonSchemaProperty
 local function ValidateProperty(errors, path, value, property)
     if type(property) ~= "table" then
         AddError(errors, path, "Expected property schema to be an object.")
@@ -601,7 +603,7 @@ local function ValidateProperty(errors, path, value, property)
     end
 end
 
----@param properties table<string, table>?
+---@param properties table<string, MCP.JsonSchemaProperty>?
 ---@param required string[]?
 ---@param errors InputValidator.Error[]
 local function ValidateRequired(properties, required, errors)
@@ -615,7 +617,7 @@ local function ValidateRequired(properties, required, errors)
     end
 end
 
----@param arguments table
+---@param arguments MCP.AnyMap
 ---@param inputSchema MCP.InputSchema
 ---@param errors InputValidator.Error[]
 local function ValidateObjectArguments(arguments, inputSchema, errors)
@@ -650,7 +652,7 @@ local function ValidateObjectArguments(arguments, inputSchema, errors)
     end
 end
 
----@param arguments table?
+---@param arguments MCP.AnyMap?
 ---@param inputSchema MCP.InputSchema
 ---@return InputValidator.Result
 function this.ValidateArguments(arguments, inputSchema)
