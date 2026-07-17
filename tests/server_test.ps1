@@ -234,6 +234,7 @@ try {
         @("--method", "resources/list"),
         @("--method", "prompts/list"),
         @("--method", "resources/templates/list"),
+        @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-menu-action", "--tool-arg", "menu_name=Pete_ContinueButton", "--tool-arg", "action=mouseClick"), # using continue mod
         @("--method", "tools/list"), # expect in game.
         @("--method", "prompts/list"),

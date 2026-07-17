@@ -1,6 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 local enumname = require("morrowind-mcp.tes3.enumname")
+local uiAction = require("morrowind-mcp.util.ui_action")
 
 local this = {}
 
@@ -301,11 +302,11 @@ function this.tes3uiElement(i, o)
     -- o.width = i.width
     -- o.widthProportional = i.widthProportional
 
-    -- TODO embedded action type. for action.
-    -- click, text input, hold... but tool operation unsuite it.
-    -- it has widget is ok.
-    -- image buttons such as main menu, what is this clickable hint?
-
+    -- Native widgetless layout action properties, if known.
+    local executableEvent = uiAction.GetActionProperties(i)
+    if executableEvent then
+        o.executableEvent = jsonrpc.array(executableEvent)
+    end
 
     local children = jsonrpc.array(table.size(i.children))
     for _, child in ipairs(i.children) do

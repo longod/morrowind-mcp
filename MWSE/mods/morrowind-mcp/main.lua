@@ -22,6 +22,7 @@ local config = require("morrowind-mcp.config")
 local disclaimer = require("morrowind-mcp.disclaimer")
 local logger = require("morrowind-mcp.logger").Get()
 local settings = require("morrowind-mcp.settings")
+local uiAction = require("morrowind-mcp.util.ui_action")
 
 if config.development.unitTest then
     Test()
@@ -95,6 +96,7 @@ local function StartServer()
 end
 
 local function StartRuntime()
+    uiAction.RegisterEventHandlers()
     RegisterSkipMainMenu()
     StartServer()
 end
