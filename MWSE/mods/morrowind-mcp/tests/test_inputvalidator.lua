@@ -191,6 +191,43 @@ function this.Test()
         unitwind:expect(table.size(invalidResult.errors)).toBe(2)
     end)
 
+    unitwind:test("NormalizeArguments applies schema defaults before validation", function()
+        local schema = jsonrpc.InputSchema({
+            mode = jsonrpc.StringSchema("Mode", nil, nil, nil, nil, "tap"),
+            seconds = jsonrpc.NumberSchema("Seconds", nil, 0, 10, 1.0),
+            capture_with_ui = jsonrpc.BooleanSchema("Capture with UI", nil, false),
+        }, { "mode", "seconds", "capture_with_ui" })
+
+        local normalizedArguments = inputvalidator.NormalizeArguments({}, schema)
+        local result = inputvalidator.ValidateArguments(normalizedArguments, schema)
+
+        unitwind:expect(normalizedArguments.mode).toBe("tap")
+        unitwind:expect(normalizedArguments.seconds).toBe(1.0)
+        unitwind:expect(normalizedArguments.capture_with_ui).toBe(false)
+        unitwind:expect(result.valid).toBe(true)
+    end)
+
+    unitwind:test("NormalizeArguments preserves explicit values and copies table defaults", function()
+        local defaultItems = setmetatable({ "red" }, { __jsontype = "array" })
+        local schema = jsonrpc.InputSchema({
+            mode = jsonrpc.StringSchema("Mode", nil, nil, nil, nil, "tap"),
+            items = {
+                type = "array",
+                default = defaultItems,
+            },
+        })
+
+        local originalFirstItem = defaultItems[1]
+        local normalizedArguments = inputvalidator.NormalizeArguments({ mode = "push" }, schema)
+        normalizedArguments.items[1] = "blue"
+
+        unitwind:expect(normalizedArguments.mode).toBe("push")
+        unitwind:expect(normalizedArguments.items).NOT.toBe(defaultItems)
+        unitwind:expect(normalizedArguments.items[1]).toBe("blue")
+        unitwind:expect(originalFirstItem).toBe("red")
+        unitwind:expect(getmetatable(normalizedArguments.items).__jsontype).toBe("array")
+    end)
+
     unitwind:test("ValidateUiText rejects reserved UI text characters", function()
         unitwind:expect(inputvalidator.ValidateUiText("plain text", "text").valid).toBe(true)
 
@@ -350,6 +387,11 @@ function this.Test()
     unitwind:test("OnToolsCall rejects invalid arguments before Execute", function()
         local executed = false
         local fakeTool = {
+            definition = {
+                inputSchema = jsonrpc.InputSchema({
+                    name = jsonrpc.StringSchema("Name"),
+                }, { "name" }),
+            },
             CanExecute = function()
                 return true
             end,
@@ -388,6 +430,9 @@ function this.Test()
     unitwind:test("OnToolsCall executes after valid arguments", function()
         local executed = false
         local fakeTool = {
+            definition = {
+                inputSchema = jsonrpc.InputSchema(),
+            },
             CanExecute = function()
                 return true
             end,
@@ -420,6 +465,48 @@ function this.Test()
         unitwind:expect(result.http_response).toBe(http.response_code.ok)
         unitwind:expect(callResult.content[1].text).toBe("executed")
         unitwind:expect(executed).toBe(true)
+    end)
+
+    unitwind:test("OnToolsCall normalizes defaults before Validate and Execute", function()
+        local validatedSeconds = nil
+        local executedSeconds = nil
+        local fakeTool = {
+            definition = {
+                inputSchema = jsonrpc.InputSchema({
+                    seconds = jsonrpc.NumberSchema("Seconds", nil, 0, 10, 1.0),
+                }, { "seconds" }),
+            },
+            CanExecute = function()
+                return true
+            end,
+            Validate = function(_, params)
+                validatedSeconds = params.arguments.seconds
+                return { valid = true, errors = {} }
+            end,
+            Execute = function(_, params)
+                executedSeconds = params.arguments.seconds
+                return jsonrpc.CallToolResult(jsonrpc.TextContent("executed"))
+            end,
+        }
+        local fakeServer = {
+            tools = { fake = fakeTool },
+            logger = {
+                warn = function()
+                end,
+            },
+            GetProgressToken = function()
+                return nil
+            end,
+            NotifyProgress = function()
+                return true
+            end,
+        }
+
+        local result = httpServer.OnToolsCall(fakeServer, { name = "fake", arguments = {} }, nil)
+
+        unitwind:expect(result.http_response).toBe(http.response_code.ok)
+        unitwind:expect(validatedSeconds).toBe(1.0)
+        unitwind:expect(executedSeconds).toBe(1.0)
     end)
 
     unitwind:finish()

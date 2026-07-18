@@ -927,6 +927,7 @@ function this:OnToolsCall(params, request)
         }
     end
 
+    params.arguments = inputvalidator.NormalizeArguments(params.arguments, tool.definition.inputSchema)
     -- tools/call validation failures are returned as CallToolResult errors because the JSON-RPC envelope is valid.
     local validationResult = tool:Validate(params)
     if not validationResult.valid then

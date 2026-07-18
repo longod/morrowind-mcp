@@ -51,7 +51,8 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params, context)
-    local arguments = params.arguments or {}
+    -- OnToolsCall normalizes arguments before Execute; direct Execute calls are not supported.
+    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
     local isStarted = arguments["is_started"]
     local isActive = arguments["is_active"]
     local isFinished = arguments["is_finished"]

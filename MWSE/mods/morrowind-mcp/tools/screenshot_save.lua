@@ -74,7 +74,7 @@ end
 
 function this:Execute(params, context)
     -- Argument validation already rejected unsafe caller-provided names; execution resolves defaults and collisions.
-    local arguments = params.arguments or {}
+    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
 
     local ms = math.floor((os.clock() % 1) * 1000)
     local default_name = os.date("%Y%m%d_%H%M%S") .. string.format("_%03d", ms)
@@ -86,7 +86,7 @@ function this:Execute(params, context)
     if filename ~= nil then
         name = filename
     end
-    local extension = arguments["extension"] or ".jpg"
+    local extension = arguments["extension"]
     local settings = require("morrowind-mcp.settings")
     local dir = settings.resourceRootDir .. "screenshot\\"
     pcall(lfs.mkdir, dir)
@@ -97,9 +97,6 @@ function this:Execute(params, context)
     end
 
     local capture_with_ui = arguments["capture_with_ui"]
-    if capture_with_ui == nil then
-        capture_with_ui = true
-    end
 
     -- it seems to save to files is no latency, syncronous. it can be readed immidiately.
     mge.saveScreenshot({ path = path, captureWithUI = capture_with_ui })

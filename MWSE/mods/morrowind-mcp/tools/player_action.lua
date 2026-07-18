@@ -106,10 +106,11 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params, context)
-    local arguments = params.arguments or {}
+    -- OnToolsCall normalizes arguments before Execute; direct Execute calls are not supported.
+    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
     local action = arguments["action"]
     local how = arguments["how"]
-    local seconds = arguments["seconds"] or defaultHoldSeconds
+    local seconds = arguments["seconds"]
 
     local key = tes3.keybind[action]
     if key == nil then

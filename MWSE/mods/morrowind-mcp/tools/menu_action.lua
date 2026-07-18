@@ -107,7 +107,7 @@ end
 
 function this:Execute(params, context)
     -- Argument validation already covered schema, cross-field, and text-sink checks; this function handles live UI state.
-    local arguments = params.arguments or {}
+    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
     local action = arguments["action"]

@@ -208,6 +208,35 @@ local function Result(errors)
     }
 end
 
+--- Copy schema defaults without relying on MWSE-specific table helpers, keeping this core module portable.
+--- Table defaults are deep-copied so a tool cannot mutate the schema's reusable default value.
+---@param value any
+---@param seen table<any, any>?
+---@return any
+local function CopyDefaultValue(value, seen)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    seen = seen or {}
+    if seen[value] then
+        return seen[value]
+    end
+
+    local copy = {}
+    seen[value] = copy
+    for key, item in pairs(value) do
+        copy[CopyDefaultValue(key, seen)] = CopyDefaultValue(item, seen)
+    end
+
+    local mt = getmetatable(value)
+    if mt then
+        -- Preserve jsonrpc.array/jsonrpc.object tags and any other schema default table identity metadata.
+        setmetatable(copy, mt)
+    end
+    return copy
+end
+
 ---@param ch integer
 ---@return boolean
 local function IsHexByte(ch)
@@ -678,6 +707,37 @@ function this.ValidateArguments(arguments, inputSchema)
     ValidateObjectArguments(actualArguments, inputSchema, errors)
 
     return Result(errors)
+end
+
+--- Apply schema defaults to a request-local argument table before validation and tool-specific checks run.
+--- Non-table arguments are returned unchanged so ValidateArguments can report the original shape error.
+---@param arguments MCP.AnyMap?
+---@param inputSchema MCP.InputSchema
+---@return MCP.AnyMap?
+function this.NormalizeArguments(arguments, inputSchema)
+    if arguments ~= nil and type(arguments) ~= "table" then
+        return arguments
+    end
+
+    -- Build a new top-level table so normalization does not mutate the decoded JSON-RPC request object in-place.
+    local normalizedArguments = {}
+    if type(arguments) == "table" then
+        for key, value in pairs(arguments) do
+            normalizedArguments[key] = value
+        end
+    end
+
+    if not inputSchema or type(inputSchema.properties) ~= "table" then
+        return normalizedArguments
+    end
+
+    for key, property in pairs(inputSchema.properties) do
+        if type(property) == "table" and normalizedArguments[key] == nil and property.default ~= nil then
+            -- Missing and nil are equivalent in Lua tables; explicit non-nil values are never overwritten.
+            normalizedArguments[key] = CopyDefaultValue(property.default)
+        end
+    end
+    return normalizedArguments
 end
 
 ---@param result InputValidator.Result
