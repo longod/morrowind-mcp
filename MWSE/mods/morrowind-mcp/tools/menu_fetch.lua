@@ -61,14 +61,27 @@ function this:CanExecute(params)
     return true
 end
 
+function this:Validate(params)
+    local result = base.Validate(self, params)
+    if not result.valid then
+        return result
+    end
+
+    local arguments = params.arguments or {}
+    if arguments["menu_id"] ~= nil and arguments["menu_name"] ~= nil then
+        table.insert(result.errors, {
+            path = "$",
+            message = "Only one of menu_id or menu_name should be specified.",
+        })
+        result.valid = false
+    end
+    return result
+end
+
 function this:Execute(params, context)
     local arguments = params.arguments or {}
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
-    if menu_id ~= nil and menu_name ~= nil then
-        local errorContent = jsonrpc.TextContent("Only one of menu_id or menu_name should be specified.")
-        return jsonrpc.CallToolResult(errorContent, nil, true)
-    end
 
     local menu = tes3.worldController.menuController.mainRoot
     local help = tes3.worldController.menuController.helpRoot
@@ -76,22 +89,11 @@ function this:Execute(params, context)
     -- better distinguish between fineMenu and findChild, but arguments too complex, so just use findChild.
 
     if menu_id ~= nil then
-        if type(menu_id) ~= "number" then
-            local errorContent = jsonrpc.TextContent("menu_id should be a number.")
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
-
         self.logger:debug("Searching for menu with ID: %d", menu_id)
 
         menu = menu:findChild(menu_id)
         help = help:findChild(menu_id)
     elseif menu_name ~= nil then
-        if type(menu_name) ~= "string" or #menu_name < minMenuNameLength or #menu_name > maxMenuNameLength then
-            local errorContent = jsonrpc.TextContent(string.format(
-            "menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
-
         self.logger:debug("Searching for menu with Name: %s", menu_name)
 
         menu = menu:findChild(menu_name)

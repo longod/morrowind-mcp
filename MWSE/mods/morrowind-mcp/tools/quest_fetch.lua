@@ -51,10 +51,10 @@ function this:CanExecute(params)
 end
 
 function this:Execute(params, context)
-    local isStarted = params.arguments["is_started"]
-    local isActive = params.arguments["is_active"]
-    local isFinished = params.arguments["is_finished"]
-    -- TODO validation
+    local arguments = params.arguments or {}
+    local isStarted = arguments["is_started"]
+    local isActive = arguments["is_active"]
+    local isFinished = arguments["is_finished"]
 
     local entries = quest.FindQuests(isStarted, isActive, isFinished)
 

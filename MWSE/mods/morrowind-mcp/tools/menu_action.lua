@@ -68,9 +68,33 @@ function this:Validate(params)
         return result
     end
 
+    -- The input schema cannot express these cross-field requirements.
     -- Text input reaches a live UI element, so validate UI-specific reserved characters before Execute mutates it.
     local arguments = params.arguments or {}
+    local menu_id = arguments["menu_id"]
+    local menu_name = arguments["menu_name"]
+    local action = arguments["action"]
     local text = arguments["text"]
+    if menu_id ~= nil and menu_name ~= nil then
+        table.insert(result.errors, {
+            path = "$",
+            message = "Only one of menu_id or menu_name should be specified.",
+        })
+        result.valid = false
+    elseif menu_id == nil and menu_name == nil then
+        table.insert(result.errors, {
+            path = "$",
+            message = "One of menu_id or menu_name should be specified.",
+        })
+        result.valid = false
+    end
+    if action == "textInput" and text == nil then
+        table.insert(result.errors, {
+            path = "text",
+            message = "Text is required when action is textInput.",
+        })
+        result.valid = false
+    end
     if text ~= nil then
         local textResult = inputvalidator.ValidateSingleLineUiText(text, "text")
         for _, validationError in ipairs(textResult.errors) do
@@ -82,20 +106,11 @@ function this:Validate(params)
 end
 
 function this:Execute(params, context)
-    -- Argument validation already covered schema and text-sink checks; this function handles live UI state.
+    -- Argument validation already covered schema, cross-field, and text-sink checks; this function handles live UI state.
     local arguments = params.arguments or {}
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
     local action = arguments["action"]
-    if menu_id ~= nil and menu_name ~= nil then
-        local errorContent = jsonrpc.TextContent("Only one of menu_id or menu_name should be specified.")
-        return jsonrpc.CallToolResult(errorContent, nil, true)
-    end
-
-    if type(action) ~= "string" then
-        local errorContent = jsonrpc.TextContent("action should be a string.")
-        return jsonrpc.CallToolResult(errorContent, nil, true)
-    end
 
     local menu = tes3.worldController.menuController.mainRoot
     local target = nil
@@ -103,26 +118,13 @@ function this:Execute(params, context)
     -- better distinguish between fineMenu and findChild, but arguments too complex, so just use findChild.
 
     if menu_id ~= nil then
-        if type(menu_id) ~= "number" then
-            local errorContent = jsonrpc.TextContent("menu_id should be a number.")
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
-
         self.logger:debug("Searching for menu with ID: %d", menu_id)
 
         target = menu:findChild(menu_id)
     elseif menu_name ~= nil then
-        if type(menu_name) ~= "string" or #menu_name < minMenuNameLength or #menu_name > maxMenuNameLength then
-            local errorContent = jsonrpc.TextContent(string.format(
-                "menu_name should be a string with length between %d and %d.", minMenuNameLength, maxMenuNameLength))
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
-
         self.logger:debug("Searching for menu with Name: %s", menu_name)
 
         target = menu:findChild(menu_name)
-    else
-        return jsonrpc.CallToolResult(jsonrpc.TextContent("One of menu_id or menu_name should be specified."), nil, true)
     end
 
     -- Target availability can only be checked against the current UI tree at execution time.
@@ -153,15 +155,12 @@ function this:Execute(params, context)
     -- TODO use notifications/processing, sent responsse before triggerEvent, patch runtime code or skipping movie mod.
     if action == "textInput" then
         local text = arguments["text"]
-        if type(text) ~= "string" then
-            local errorContent = jsonrpc.TextContent("text should be a string.")
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
         if target.type ~= "textInput" then
             local errorContent = jsonrpc.TextContent("Menu is not a text input.")
             return jsonrpc.CallToolResult(errorContent, nil, true)
         end
         -- FIXME it seems to enter name at the first time, no entered name later when character sheets shown.
+        -- tes3ui.acquireTextInput(target) -- TODO
         target.text = text
         -- target:triggerEvent(tes3.uiEvent.textUpdated) -- need?
         -- target:updateLayout() -- need?

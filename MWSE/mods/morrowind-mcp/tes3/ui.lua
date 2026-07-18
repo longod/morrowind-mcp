@@ -1,7 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 local enumname = require("morrowind-mcp.tes3.enumname")
-local uiAction = require("morrowind-mcp.util.ui_action")
+local ui_action = require("morrowind-mcp.util.ui_action")
 
 local this = {}
 
@@ -303,7 +303,7 @@ function this.tes3uiElement(i, o)
     -- o.widthProportional = i.widthProportional
 
     -- Native widgetless layout action properties, if known.
-    local executableEvent = uiAction.GetActionProperties(i)
+    local executableEvent = ui_action.GetActionProperties(i)
     if executableEvent then
         o.executableEvent = jsonrpc.array(executableEvent)
     end
