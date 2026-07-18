@@ -2,6 +2,7 @@ local this = {}
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "input_action" })
 
 local defaultMouseHammerIntervalSeconds = 0.2
+local defaultMouseTapHoldSeconds = 2.0 / 60.0
 
 --- Device IDs follow tes3inputConfig.device values from MWSE bindings.
 ---@enum MCP.InputAction.DeviceId
@@ -36,6 +37,7 @@ local activeTimedByKey = {}
 ---@field interval_frames integer?
 ---@field elapsed_seconds number
 ---@field elapsed_frames integer
+---@field is_pressed boolean
 
 ---@class MCP.InputAction.MouseHammerOptions
 ---@field interval_seconds number?
@@ -51,6 +53,27 @@ local function OnLoaded()
 end
 
 ---@param state MCP.InputAction.MouseHammerState
+---@return boolean?
+local function ToggleMouseHammerState(state)
+    if state.is_pressed then
+        local releaseOk = this.MouseRelease(state.button)
+        if not releaseOk then
+            logger:error("Mouse hammer release failed: button=%d", state.button)
+            return nil
+        end
+        state.is_pressed = false
+    else
+        local pushOk = this.MousePush(state.button)
+        if not pushOk then
+            logger:error("Mouse hammer push failed: button=%d", state.button)
+            return nil
+        end
+        state.is_pressed = true
+    end
+    return true
+end
+
+---@param state MCP.InputAction.MouseHammerState
 ---@param delta number
 local function StepMouseHammerSeconds(state, delta)
     local interval = state.interval_seconds
@@ -61,9 +84,8 @@ local function StepMouseHammerSeconds(state, delta)
     state.elapsed_seconds = state.elapsed_seconds + delta
     while state.elapsed_seconds >= interval do
         state.elapsed_seconds = state.elapsed_seconds - interval
-        local tapOk = this.MouseTap(state.button)
-        if not tapOk then
-            logger:error("Mouse hammer tap failed: button=%d", state.button)
+        local toggleOk = ToggleMouseHammerState(state)
+        if not toggleOk then
             return
         end
     end
@@ -79,10 +101,7 @@ local function StepMouseHammerFrames(state)
     state.elapsed_frames = state.elapsed_frames + 1
     if state.elapsed_frames >= interval then
         state.elapsed_frames = 0
-        local tapOk = this.MouseTap(state.button)
-        if not tapOk then
-            logger:error("Mouse hammer tap failed: button=%d", state.button)
-        end
+        local _ = ToggleMouseHammerState(state)
     end
 end
 
@@ -145,6 +164,13 @@ local function IsValidMouseButton(button)
         return false
     end
     return true
+end
+
+--- Convert MWSE mouse button id (0..7) to Lua array index (1..8).
+---@param button number
+---@return integer
+local function ToMouseButtonIndex(button)
+    return button + 1
 end
 
 --- Cancel an existing timed operation for the same key, if present.
@@ -225,7 +251,7 @@ function this.MousePush(button)
         return nil
     end
 
-    inputController.mouseState.buttons[button] = mouseButtonState.down
+    inputController.mouseState.buttons[ToMouseButtonIndex(button)] = mouseButtonState.down
     return true
 end
 
@@ -243,19 +269,37 @@ function this.MouseRelease(button)
         return nil
     end
 
-    inputController.mouseState.buttons[button] = mouseButtonState.up
+    inputController.mouseState.buttons[ToMouseButtonIndex(button)] = mouseButtonState.up
     return true
 end
 
---- Perform a single mouse click by push+release.
+--- Perform a single mouse click by push + short hold + release.
+--- A same-frame release can be ignored by some bindings (for example menuMode on mouse),
+--- so tap keeps the button down briefly and releases via a fail-safe timer.
 ---@param button number
 ---@return boolean?
 function this.MouseTap(button)
-    local ok = this.MousePush(button)
-    if not ok then
+    local pushOk = this.MousePush(button)
+    if not pushOk then
         return nil
     end
-    return this.MouseRelease(button)
+
+    local timerOk = StartFailSafeTimer("tap", deviceId.mouse, button, defaultMouseTapHoldSeconds, function()
+        local releaseOk = this.MouseRelease(button)
+        if not releaseOk then
+            logger:error("Timed mouse tap release failed")
+        end
+    end)
+    if timerOk then
+        return true
+    end
+
+    -- Fallback keeps old behavior when timer API is unavailable.
+    local releaseOk = this.MouseRelease(button)
+    if not releaseOk then
+        return nil
+    end
+    return true
 end
 
 --- Alias for a sustained mouse press to mirror keyboard naming.
@@ -265,9 +309,9 @@ function this.MouseHold(button)
     return this.MousePush(button)
 end
 
---- Start mouse auto-repeat (hammer) using simulate updates.
+--- Start mouse auto-repeat (hammer) by alternating press and release over time.
 --- interval_frames has priority when both interval values are provided.
---- When interval_frames = N, one tap is emitted every N simulate frames.
+--- When interval_frames = N, the button toggles state every N simulate frames.
 ---@param button number
 ---@param options MCP.InputAction.MouseHammerOptions?
 ---@return boolean?
@@ -301,12 +345,18 @@ function this.MouseHammer(button, options)
         end
     end
 
+    local pushOk = this.MousePush(button)
+    if not pushOk then
+        return nil
+    end
+
     activeMouseHammerByButton[button] = {
         button = button,
         interval_seconds = intervalFrames and nil or intervalSeconds,
         interval_frames = intervalFrames,
         elapsed_seconds = 0,
         elapsed_frames = 0,
+        is_pressed = true,
     }
     return true
 end
@@ -320,8 +370,11 @@ function this.MouseUnhammer(button)
         return nil
     end
 
+    local state = activeMouseHammerByButton[button]
     activeMouseHammerByButton[button] = nil
-    local _ = this.MouseRelease(button)
+    if state and state.is_pressed then
+        local _ = this.MouseRelease(button)
+    end
     return true
 end
 

@@ -30,13 +30,59 @@ function this.Test()
         tes3.worldController = originalWorldController
 
         unitwind:expect(pushOk).toBe(true)
-        unitwind:expect(mouseButtons[0]).toBe(0)
+        unitwind:expect(mouseButtons[1]).toBe(0)
         unitwind:expect(releaseOk).toBe(true)
     end)
 
     unitwind:test("MousePush rejects out-of-range button", function()
         local ok = inputAction.MousePush(8)
         unitwind:expect(ok).toBe(nil)
+    end)
+
+    unitwind:test("MouseTap keeps button down until timed release callback", function()
+        local mouseButtons = {}
+        local inputController = {
+            mouseState = {
+                buttons = mouseButtons,
+            },
+        }
+        local callbackRef = nil
+
+        local originalWorldController = tes3.worldController
+        ---@diagnostic disable-next-line: missing-fields, assign-type-mismatch
+        tes3.worldController = {
+            inputController = inputController,
+        }
+
+        local originalTimer = timer
+        ---@diagnostic disable-next-line: assign-type-mismatch
+        timer = {
+            real = 1,
+            start = function(params)
+                callbackRef = params.callback
+                return {
+                    cancel = function()
+                    end,
+                }
+            end,
+        }
+
+        inputAction.ClearTimedRegistry()
+        local tapOk = inputAction.MouseTap(1)
+
+        unitwind:expect(tapOk).toBe(true)
+        unitwind:expect(mouseButtons[2]).toBe(128)
+        unitwind:expect(inputAction.GetActiveTimedCount()).toBe(1)
+
+        if callbackRef then
+            callbackRef({})
+        end
+
+        unitwind:expect(mouseButtons[2]).toBe(0)
+        unitwind:expect(inputAction.GetActiveTimedCount()).toBe(0)
+
+        timer = originalTimer
+        tes3.worldController = originalWorldController
     end)
 
     unitwind:test("Tap uses keyboard tap for keyboard device", function()
@@ -142,14 +188,14 @@ function this.Test()
         local ok = inputAction.MousePushTimed(1, 0.15)
 
         unitwind:expect(ok).toBe(true)
-        unitwind:expect(mouseButtons[1]).toBe(128)
+        unitwind:expect(mouseButtons[2]).toBe(128)
         unitwind:expect(inputAction.GetActiveTimedCount()).toBe(1)
 
         if callbackRef then
             callbackRef({})
         end
 
-        unitwind:expect(mouseButtons[1]).toBe(0)
+        unitwind:expect(mouseButtons[2]).toBe(0)
         unitwind:expect(inputAction.GetActiveTimedCount()).toBe(0)
 
         timer = originalTimer
@@ -325,11 +371,16 @@ function this.Test()
         unitwind:expect(calledTimeout).toBe(0.4)
     end)
 
-    unitwind:test("MouseHammer with interval_seconds taps after elapsed delta", function()
-        local tapCount = 0
+    unitwind:test("MouseHammer with interval_seconds alternates push and release", function()
+        local pushCount = 0
+        local releaseCount = 0
 
-        unitwind:mock(inputAction, "MouseTap", function(button)
-            tapCount = tapCount + 1
+        unitwind:mock(inputAction, "MousePush", function(button)
+            pushCount = pushCount + 1
+            return true
+        end)
+        unitwind:mock(inputAction, "MouseRelease", function(button)
+            releaseCount = releaseCount + 1
             return true
         end)
 
@@ -340,18 +391,25 @@ function this.Test()
         inputAction.ProcessMouseHammerSimulate({ delta = 0.02 })
         local unhammerOk = inputAction.MouseUnhammer(0)
 
-        unitwind:unmock(inputAction, "MouseTap")
+        unitwind:unmock(inputAction, "MousePush")
+        unitwind:unmock(inputAction, "MouseRelease")
 
         unitwind:expect(hammerOk).toBe(true)
         unitwind:expect(unhammerOk).toBe(true)
-        unitwind:expect(tapCount).toBe(1)
+        unitwind:expect(pushCount).toBe(1)
+        unitwind:expect(releaseCount).toBe(1)
     end)
 
-    unitwind:test("MouseHammer with interval_frames taps on frame cadence", function()
-        local tapCount = 0
+    unitwind:test("MouseHammer with interval_frames alternates state on frame cadence", function()
+        local pushCount = 0
+        local releaseCount = 0
 
-        unitwind:mock(inputAction, "MouseTap", function(button)
-            tapCount = tapCount + 1
+        unitwind:mock(inputAction, "MousePush", function(button)
+            pushCount = pushCount + 1
+            return true
+        end)
+        unitwind:mock(inputAction, "MouseRelease", function(button)
+            releaseCount = releaseCount + 1
             return true
         end)
 
@@ -364,11 +422,13 @@ function this.Test()
         inputAction.ProcessMouseHammerSimulate({ delta = 0.5 })
         local unhammerOk = inputAction.MouseUnhammer(1)
 
-        unitwind:unmock(inputAction, "MouseTap")
+        unitwind:unmock(inputAction, "MousePush")
+        unitwind:unmock(inputAction, "MouseRelease")
 
         unitwind:expect(hammerOk).toBe(true)
         unitwind:expect(unhammerOk).toBe(true)
-        unitwind:expect(tapCount).toBe(1)
+        unitwind:expect(pushCount).toBe(1)
+        unitwind:expect(releaseCount).toBe(1)
     end)
 
     unitwind:finish()
