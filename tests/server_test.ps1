@@ -240,9 +240,7 @@ try {
         @("--method", "prompts/list"),
         @("--method", "tools/call", "--tool-name", "mw-activator-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-actor-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-journal-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-quest-fetch", "--tool-arg", "is_active=true"),
         @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
@@ -261,7 +259,8 @@ try {
         @("--method", "prompts/get", "--prompt-name", "mw-todo"),
         @("--method", "prompts/get", "--prompt-name", "mw-loar"),
         @("--method", "prompts/get", "--prompt-name", "mw-translate"),
-        @("--method", "prompts/get", "--prompt-name", "mw-walkthrough")
+        @("--method", "prompts/get", "--prompt-name", "mw-walkthrough"),
+        @("--method", "tools/call", "--tool-name", "mw-debug-action", "--tool-arg", "action=memory:SaveDebugDocuments")
     )
 
     $TestResult = 0

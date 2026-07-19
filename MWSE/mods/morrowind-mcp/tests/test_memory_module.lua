@@ -515,6 +515,87 @@ function this.Test()
         unitwind:unmock(tes3, "onMainMenu")
     end)
 
+    unitwind:test("Memory Actor module adds activation target without clearing loaded actors", function()
+        local published = {}
+        ---@type MCP.IResourceManager
+        local resource = {
+            Release = function(self)
+            end,
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(1)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local function object(id, name, objectType)
+            return {
+                id = id,
+                name = name,
+                objectType = objectType,
+                attributes = {},
+                skills = {},
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local function reference(object)
+            return {
+                id = object.id,
+                objectType = tes3.objectType.reference,
+                object = object,
+                baseObject = object,
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local caius = reference(object("caius cosades", "Caius Cosades", tes3.objectType.npc))
+        local fargoth = reference(object("fargoth", "Fargoth", tes3.objectType.npc))
+        local activeCells = {
+            {
+                actors = {
+                    size = 1,
+                    head = caius,
+                },
+            },
+        }
+        unitwind:mock(tes3, "onMainMenu", function()
+            return false
+        end)
+        unitwind:mock(tes3, "getActiveCells", function()
+            return activeCells
+        end)
+
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+        module:OnActivationTargetChanged({ claim = function() end, current = fargoth, previous = caius })
+        module:OnActivationTargetChanged({ claim = function() end, current = fargoth, previous = caius })
+
+        local actorLinks = module:GetLinksForParent("morrowind://memory/actors/index.json")
+        local indexDocument = module:BuildIndexDocument()
+
+        unitwind:expect(table.size(actorLinks)).toBe(2)
+        unitwind:expect(actorLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/index.json")
+        unitwind:expect(actorLinks[2].uri).toBe("morrowind://memory/actors/fargoth/index.json")
+        unitwind:expect(indexDocument.data.actor_count).toBe(2)
+        unitwind:expect(module.observedActors["caius-cosades"] ~= nil).toBe(true)
+        unitwind:expect(module.observedActors["fargoth"].source_description).toBe("Observed actor reference from activationTargetChanged.")
+        unitwind:expect(published[#published]).toBe("morrowind://memory/actors/fargoth/index.json")
+
+        unitwind:unmock(tes3, "getActiveCells")
+        unitwind:unmock(tes3, "onMainMenu")
+    end)
+
     unitwind:test("Memory module hides links after unpublish", function()
         local unpublished = {}
         ---@type MCP.IResourceManager

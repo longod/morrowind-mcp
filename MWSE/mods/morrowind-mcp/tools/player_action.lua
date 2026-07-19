@@ -105,9 +105,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params, context)
-    -- OnToolsCall normalizes arguments before Execute; direct Execute calls are not supported.
-    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
+function this:Execute(arguments, context)
     local action = arguments["action"]
     local how = arguments["how"]
     local seconds = arguments["seconds"]

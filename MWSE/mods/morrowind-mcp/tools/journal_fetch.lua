@@ -46,10 +46,11 @@ function this:CanExecute(params)
         return false
     end
     -- exclude tutorial?
-    return true
+    return false -- read resources
+    -- return true
 end
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
 
     local entries = journal.ReadJournal()
     if not entries then

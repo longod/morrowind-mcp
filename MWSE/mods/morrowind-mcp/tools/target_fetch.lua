@@ -42,7 +42,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
     local playerTarget = tes3.getPlayerTarget() -- not include non-activatable objects.
     local helpLayerMenu = tes3ui.getCursor() -- on item picking and dragging.
     local inventryTile = tes3ui.getCursorTile() -- on item picking and dragging.

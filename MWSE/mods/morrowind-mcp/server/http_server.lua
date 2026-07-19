@@ -951,7 +951,8 @@ function this:OnToolsCall(params, request)
         end,
     }
 
-    local result = tool:Execute(params, context)
+    -- Tools only receive normalized arguments; request-level metadata is exposed through the execution context.
+    local result = tool:Execute(params.arguments, context)
 
     ---@type MCP.MethodResult
     return {

@@ -78,9 +78,7 @@ function this:Validate(params)
     return result
 end
 
-function this:Execute(params, context)
-    -- OnToolsCall normalizes arguments before Execute; direct Execute calls are not supported.
-    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
+function this:Execute(arguments, context)
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
 

@@ -42,10 +42,10 @@ function this:Validate(params)
 end
 
 ---@public
----@param params MCP.CallToolRequestParams
+---@param arguments MCP.AnyMap
 ---@param context MCP.ToolExecutionContext?
 ---@return MCP.CallToolResult?
-function this:Execute(params, context)
+function this:Execute(arguments, context)
     -- if context and context.progressToken then
     --     context.NotifyProgress(0.5, 1, "Halfway done")
     -- end

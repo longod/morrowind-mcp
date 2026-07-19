@@ -199,6 +199,7 @@ function this.Test()
         }, { "mode", "seconds", "capture_with_ui" })
 
         local normalizedArguments = inputvalidator.NormalizeArguments({}, schema)
+        ---@cast normalizedArguments MCP.AnyMap
         local result = inputvalidator.ValidateArguments(normalizedArguments, schema)
 
         unitwind:expect(normalizedArguments.mode).toBe("tap")
@@ -219,6 +220,7 @@ function this.Test()
 
         local originalFirstItem = defaultItems[1]
         local normalizedArguments = inputvalidator.NormalizeArguments({ mode = "push" }, schema)
+        ---@cast normalizedArguments MCP.AnyMap
         normalizedArguments.items[1] = "blue"
 
         unitwind:expect(normalizedArguments.mode).toBe("push")
@@ -483,8 +485,8 @@ function this.Test()
                 validatedSeconds = params.arguments.seconds
                 return { valid = true, errors = {} }
             end,
-            Execute = function(_, params)
-                executedSeconds = params.arguments.seconds
+            Execute = function(_, arguments)
+                executedSeconds = arguments.seconds
                 return jsonrpc.CallToolResult(jsonrpc.TextContent("executed"))
             end,
         }

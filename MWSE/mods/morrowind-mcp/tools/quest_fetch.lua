@@ -47,12 +47,11 @@ function this:CanExecute(params)
     if tes3.onMainMenu() then
         return false
     end
-    return true
+    return false -- read resources
+    -- return true
 end
 
-function this:Execute(params, context)
-    -- OnToolsCall normalizes arguments before Execute; direct Execute calls are not supported.
-    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
+function this:Execute(arguments, context)
     local isStarted = arguments["is_started"]
     local isActive = arguments["is_active"]
     local isFinished = arguments["is_finished"]

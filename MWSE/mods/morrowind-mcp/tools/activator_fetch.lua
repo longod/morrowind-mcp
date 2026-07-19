@@ -38,7 +38,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
     -- it seems always returns non nil array, but it contains only valid references.
     local cells = tes3.getActiveCells()
     if not cells then

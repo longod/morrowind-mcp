@@ -39,7 +39,9 @@ function this:CanExecute(params)
 end
 
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
+    -- TODO replace memory obserbation
+
     local cells = tes3.getActiveCells()
     if not cells then
         local errorContent = jsonrpc.TextContent("no active cells found. Please enter a cell first.")

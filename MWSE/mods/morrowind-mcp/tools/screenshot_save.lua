@@ -72,10 +72,8 @@ function this:Validate(params)
     return result
 end
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
     -- Argument validation already rejected unsafe caller-provided names; execution resolves defaults and collisions.
-    local arguments = assert(params.arguments, "tools/call must normalize arguments before Execute")
-
     local ms = math.floor((os.clock() % 1) * 1000)
     local default_name = os.date("%Y%m%d_%H%M%S") .. string.format("_%03d", ms)
     local name = default_name
