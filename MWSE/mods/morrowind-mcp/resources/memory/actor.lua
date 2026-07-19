@@ -9,6 +9,7 @@ local iter = require("morrowind-mcp.tes3.iterator")
 ---@field indexEntry MCP.MemoryResourceEntry
 ---@field observedActors table<string, MCP.MemoryObservedActor>
 ---@field actorLinks MCP.MemoryLink[]
+---@field activationTargetChangedCallback fun(e: activationTargetChangedEventData)?
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -148,11 +149,42 @@ local function ActorLinkDescription(dataType, baseId, referenceId, actorIdentity
     return string.format("data_type=%s base_id=%s reference_id=%s identity_kind=%s", dataType, baseId, referenceId, actorIdentityKind)
 end
 
+--- Find an existing observed actor entry for the same concrete reference id.
+---@param observedActors table<string, MCP.MemoryObservedActor>
+---@param referenceId string
+---@return string?
+local function FindObservedActorId(observedActors, referenceId)
+    for actorId, observedActor in pairs(observedActors) do
+        if observedActor.data and observedActor.data.reference_id == referenceId then
+            return actorId
+        end
+    end
+    return nil
+end
+
+--- Allocate a route-friendly id while preserving raw TES3 ids in actor data.
+---@param observedActors table<string, MCP.MemoryObservedActor>
+---@param baseId string
+---@return string
+local function NextActorId(observedActors, baseId)
+    local baseSegment = SafeSegment(baseId)
+    if not observedActors[baseSegment] then
+        return baseSegment
+    end
+
+    local suffix = 2
+    while observedActors[string.format("%s-%d", baseSegment, suffix)] do
+        suffix = suffix + 1
+    end
+    return string.format("%s-%d", baseSegment, suffix)
+end
+
 --- Create an actor collection module; individual actor resource entries are rebuilt on refresh.
 ---@param params MCP.Resources.MemoryModuleParams
 ---@return MCP.Resources.Memory.Actor
 function this.new(params)
     params.publishOnLoaded = true
+    params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_actor" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Actor
     instance.observedActors = {}
@@ -167,72 +199,141 @@ end
 
 --- Remove all dynamic actor entries while keeping the collection entry owned by the module.
 function this:ClearObservedActors()
+    local previousCount = table.size(self.observedActors or {})
     self.observedActors = {}
     self.actorLinks = jsonrpc.array()
     self.entries = jsonrpc.array({ self.indexEntry })
+    self.logger:debug("Memory actor observations cleared: previous_count=%d", previousCount)
+end
+
+--- Add one actor reference to the dynamic registry without clearing existing observations.
+---@param ref tes3reference?
+---@param reason string?
+---@param publishIfVisible boolean?
+---@return boolean added
+function this:ObserveReference(ref, reason, publishIfVisible)
+    if not ref or not IsActorReference(ref) or not ref.object then
+        return false
+    end
+
+    local dataType = assert(ActorDataType(ref), "Actor references must have a supported Memory data type.")
+    local baseId = ActorBaseId(ref)
+    local referenceId = ActorReferenceId(ref)
+    if FindObservedActorId(self.observedActors, referenceId) then
+        self.logger:trace("Memory actor observation ignored: reason=%s cause=duplicate base_id=%s reference_id=%s", tostring(reason), baseId, referenceId)
+        return false
+    end
+
+    local actorId = NextActorId(self.observedActors, baseId)
+    local title = ActorTitle(ref)
+    local descriptor = document.Descriptor(
+        string.format("memory/actors/%s/index.json", actorId),
+        title,
+        string.format("Observed actor memory for %s.", title)
+    )
+    local actorIdentityKind = ActorIdentityKind(ref, baseId)
+    local observedActor = jsonrpc.object({
+        id = actorId,
+        base_id = baseId,
+        reference_id = referenceId,
+        identity_kind = actorIdentityKind,
+        is_instance = ref.object.isInstance == true,
+        reference = obj.tes3reference(ref),
+    })
+    local entry = document.LiveEntry(descriptor, function()
+        return self:BuildActorDocument(actorId)
+    end)
+    self.observedActors[actorId] = {
+        id = actorId,
+        title = title,
+        descriptor = descriptor,
+        entry = entry,
+        subject = document.Subject(document.SubjectTypeFromObject(ref), actorId, title),
+        source_description = reason and string.format("Observed actor reference from %s.", reason)
+            or "Observed actor reference captured from active cells.",
+        data_type = dataType,
+        data = observedActor,
+    }
+    table.insert(self.actorLinks, document.Link(document.linkRel.actor, descriptor.uri, title, ActorLinkDescription(dataType, baseId, referenceId, actorIdentityKind)))
+    table.insert(self.entries, entry)
+    document.MarkDirty(self.indexEntry)
+
+    if publishIfVisible ~= false and self.published then
+        self.resource:PublishResource(entry)
+    end
+    self.logger:trace(
+        "Memory actor observed: reason=%s actor_id=%s data_type=%s base_id=%s reference_id=%s identity_kind=%s published_now=%s",
+        tostring(reason),
+        actorId,
+        dataType,
+        baseId,
+        referenceId,
+        actorIdentityKind,
+        tostring(publishIfVisible ~= false and self.published)
+    )
+    return true
 end
 
 --- Rebuild dynamic actor entries from active cells; the manager still sees only this one module.
 function this:RefreshObservedActors()
     self:ClearObservedActors()
     if tes3.onMainMenu() then
+        self.logger:debug("Memory actor refresh skipped: reason=main_menu")
         return
     end
 
     local cells = tes3.getActiveCells()
     if not cells then
+        self.logger:debug("Memory actor refresh skipped: reason=no_active_cells")
         return
     end
 
-    local seen = {}
+    local cellCount = 0
+    local observedCount = 0
     for _, cell in ipairs(cells) do
+        cellCount = cellCount + 1
         if cell.actors then
             for ref in iter.ForEachReferenceList(cell.actors) do
-                if IsActorReference(ref) then
-                    local dataType = assert(ActorDataType(ref), "Actor references must have a supported Memory data type.")
-                    local baseId = ActorBaseId(ref)
-                    local referenceId = ActorReferenceId(ref)
-                    -- This prototype uses base id plus a suffix for duplicates; stable contact identity can replace it later.
-                    local segment = SafeSegment(baseId)
-                    seen[segment] = (seen[segment] or 0) + 1
-                    if seen[segment] > 1 then
-                        segment = string.format("%s-%d", segment, seen[segment])
-                    end
-
-                    local title = ActorTitle(ref)
-                    local descriptor = document.Descriptor(
-                        string.format("memory/actors/%s/index.json", segment),
-                        title,
-                        string.format("Observed actor memory for %s.", title)
-                    )
-                    local actorIdentityKind = ActorIdentityKind(ref, baseId)
-                    local observedActor = jsonrpc.object({
-                        id = segment,
-                        base_id = baseId,
-                        reference_id = referenceId,
-                        identity_kind = actorIdentityKind,
-                        is_instance = ref.object and ref.object.isInstance == true,
-                        reference = obj.tes3reference(ref),
-                    })
-                    local linkDescription = ActorLinkDescription(dataType, baseId, referenceId, actorIdentityKind)
-                    self.observedActors[segment] = {
-                        id = segment,
-                        title = title,
-                        descriptor = descriptor,
-                        subject = document.Subject(document.SubjectTypeFromObject(ref), segment, title),
-                        data_type = dataType,
-                        data = observedActor,
-                    }
-                    table.insert(self.actorLinks, document.Link(document.linkRel.actor, descriptor.uri, title, linkDescription))
-
-                    local actorId = segment
-                    table.insert(self.entries, document.LiveEntry(descriptor, function()
-                        return self:BuildActorDocument(actorId)
-                    end))
+                if self:ObserveReference(ref, "active cells", false) then
+                    observedCount = observedCount + 1
                 end
             end
         end
     end
+    self.logger:debug("Memory actor refresh completed: cells=%d observed=%d total=%d", cellCount, observedCount, table.size(self.observedActors))
+end
+
+--- Observe the player's activation target when it changes.
+---@param e activationTargetChangedEventData
+function this:OnActivationTargetChanged(e)
+    if e and self:ObserveReference(e.current, "activationTargetChanged") then
+        self:MarkDirty()
+        self.logger:debug("Memory actor activation target added: total=%d", table.size(self.observedActors))
+    end
+end
+
+--- Register loaded refreshes from the base module and target observation for actor memory.
+function this:RegisterEvent()
+    base.RegisterEvent(self)
+    if self.activationTargetChangedCallback then
+        return
+    end
+
+    self.activationTargetChangedCallback = function(e)
+        self:OnActivationTargetChanged(e)
+    end
+    event.register(tes3.event.activationTargetChanged, self.activationTargetChangedCallback)
+    self.logger:debug("Memory actor activation target handler registered")
+end
+
+--- Unregister actor-specific target observation and base loaded refreshes.
+function this:UnregisterEvent()
+    if self.activationTargetChangedCallback then
+        event.unregister(tes3.event.activationTargetChanged, self.activationTargetChangedCallback)
+        self.activationTargetChangedCallback = nil
+        self.logger:debug("Memory actor activation target handler unregistered")
+    end
+    base.UnregisterEvent(self)
 end
 
 --- Return either the root actor collection link or the collection's observed actor child links.
@@ -254,6 +355,7 @@ end
 --- Refresh observed actor entries, then publish the collection and individual actor resources.
 function this:Publish()
     self:RefreshObservedActors()
+    self.logger:debug("Memory actor publish prepared: entries=%d actors=%d", table.size(self.entries), table.size(self.observedActors))
     base.Publish(self)
 end
 
@@ -261,6 +363,7 @@ end
 function this:Unpublish()
     base.Unpublish(self)
     self:ClearObservedActors()
+    self.logger:debug("Memory actor unpublished and dynamic state cleared")
 end
 
 --- Hide stale actor memory for a new game; otherwise publish after loading a save.
@@ -308,7 +411,7 @@ function this:BuildActorDocument(actorId)
         {
             subject = observedActor.subject,
             scope = self.manager:GetScope(),
-            source = document.Source(document.sourceKind.liveState, nil, nil, "Observed actor reference captured from active cells."),
+            source = document.Source(document.sourceKind.liveState, nil, nil, observedActor.source_description),
         }
     )
 end

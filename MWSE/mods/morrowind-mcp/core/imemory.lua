@@ -93,7 +93,9 @@
 ---@field id string Stable memory id for the observed actor entry.
 ---@field title string Display label for the actor.
 ---@field descriptor MCP.Resource Resource descriptor for the actor memory entry.
+---@field entry MCP.MemoryResourceEntry Live resource entry for the actor memory document.
 ---@field subject MCP.MemorySubject Subject identity for the actor.
+---@field source_description string Source text describing how this actor was observed.
 ---@field data_type MCP.MemoryDataType Data type selected from the actor's TES3 object type.
 ---@field data MCP.AnyMap Serialized actor/reference data captured when the module refreshed.
 

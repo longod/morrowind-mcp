@@ -20,6 +20,7 @@ local descriptor = document.Descriptor(
 function this.new(params)
     params.publishOnRegister = true
     params.publishOnLoaded = true
+    params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_index" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Index
     instance.entry = document.LiveEntry(descriptor, function()

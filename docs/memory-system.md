@@ -128,7 +128,9 @@ Observed actors:
 - Exclude `leveledCreature` as a standalone Memory subject.
 - `tes3npcInstance` and `tes3creatureInstance` are valid actor observations when reachable through references.
 - Whether an actor object is an instance is detected by the presence of `isInstance`.
-- Dynamic actor entries are rebuilt from active-cell observations and owned internally by the actor module.
+- Dynamic actor entries are owned internally by the actor module.
+- The loaded-game refresh intentionally rebuilds actor entries from active cells because broad dumps are useful during debugging.
+- `activationTargetChanged.current` is an additional observation source and may add one actor without clearing actors found by the loaded-game active-cell refresh.
 
 Actor ids:
 

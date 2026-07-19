@@ -25,6 +25,7 @@ this.link = document.Link(document.linkRel.journal, descriptor.uri, descriptor.t
 function this.new(params)
     params.publishOnLoaded = true
     params.parentUri = "morrowind://memory/player/index.json"
+    params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_journal" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Journal
     instance.entry = document.LiveEntry(descriptor, function()

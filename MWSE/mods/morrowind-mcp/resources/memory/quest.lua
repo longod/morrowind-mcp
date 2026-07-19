@@ -26,6 +26,7 @@ this.link = document.Link(document.linkRel.quests, descriptor.uri, descriptor.ti
 function this.new(params)
     params.publishOnLoaded = true
     params.parentUri = "morrowind://memory/player/index.json"
+    params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_quest" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Quest
     instance.entry = document.LiveEntry(descriptor, function()

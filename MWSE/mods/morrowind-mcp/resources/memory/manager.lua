@@ -35,6 +35,7 @@ function this.new(params)
     for _, module in ipairs(modules) do
         table.insert(instance.modules, module.new({ manager = instance, resource = instance.resource }))
     end
+    instance.logger:debug("Memory manager created: modules=%d", table.size(instance.modules))
     return instance
 end
 
@@ -72,11 +73,14 @@ end
 
 --- Publish modules that explicitly expose resources as soon as Memory events are registered.
 function this:PublishOnRegisterModules()
+    local published = 0
     for _, module in ipairs(self.modules) do
         if module.publishOnRegister then
             module:Publish()
+            published = published + 1
         end
     end
+    self.logger:debug("Memory publish-on-register completed: published_modules=%d total_modules=%d", published, table.size(self.modules))
 end
 
 --- Save all current Memory entries to debug JSON files without publishing those files as resources.
@@ -94,19 +98,21 @@ function this:SaveDebugDocuments(rootDir)
                 local result = document.SaveEntry(entry, saveRootDir)
                 if result then
                     table.insert(saved, result)
+                    self.logger:trace("Saved Memory debug document: uri=%s file=%s bytes=%d", result.uri, result.file_path, result.bytes)
                 else
                     self.logger:warn("Failed to save Memory debug document: %s", uri)
                 end
             end
         end
     end
-    self.logger:info("Saved Memory debug documents: count=%d dir=%s", table.size(saved), saveRootDir)
+    self.logger:debug("Saved Memory debug documents: count=%d dir=%s", table.size(saved), saveRootDir)
     return saved
 end
 
 --- Notify modules when another module becomes visible or hidden.
 ---@param module MCP.Resources.MemoryModule
 function this:OnModuleVisibilityChanged(module)
+    self.logger:debug("Memory module visibility changed: published=%s parent_uri=%s", tostring(module.published), tostring(module.parentUri))
     for _, candidate in ipairs(self.modules) do
         if candidate ~= module then
             candidate:OnModuleVisibilityChanged(module)

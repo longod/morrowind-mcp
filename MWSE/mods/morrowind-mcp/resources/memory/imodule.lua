@@ -8,6 +8,7 @@ local document = require("morrowind-mcp.resources.memory.document")
 ---@field publishOnRegister boolean?
 ---@field publishOnLoaded boolean?
 ---@field parentUri MCP.ResourceUri?
+---@field logger mwseLogger?
 
 --- Base class for one Memory publishing unit, which may own one entry or many dynamic entries.
 ---@class MCP.Resources.MemoryModule
@@ -20,6 +21,7 @@ local document = require("morrowind-mcp.resources.memory.document")
 ---@field publishOnLoaded boolean
 ---@field parentUri MCP.ResourceUri?
 ---@field loadedCallback fun(e : loadedEventData)?
+---@field logger mwseLogger?
 local this = {}
 
 --- Create a Memory module with no resources, no links, and explicit publish policy flags.
@@ -36,6 +38,7 @@ function this.new(params)
         publishOnRegister = params.publishOnRegister == true,
         publishOnLoaded = params.publishOnLoaded == true,
         parentUri = params.parentUri,
+        logger = params.logger,
     }
     setmetatable(instance, { __index = this })
     return instance
@@ -62,8 +65,13 @@ end
 
 --- Invalidate all Memory entries owned by this module.
 function this:MarkDirty()
+    local count = 0
     for _, entry in ipairs(self.entries or {}) do
         document.MarkDirty(entry)
+        count = count + 1
+    end
+    if self.logger then
+        self.logger:debug("Memory module marked dirty: entries=%d", count)
     end
 end
 
@@ -76,10 +84,15 @@ end
 function this:Publish()
     local wasPublished = self.published
     self:MarkDirty()
+    local count = 0
     for _, entry in ipairs(self.entries or {}) do
         self.resource:PublishResource(entry)
+        count = count + 1
     end
     self.published = true
+    if self.logger then
+        self.logger:debug("Memory module published: entries=%d was_published=%s", count, tostring(wasPublished))
+    end
     if self.manager and not wasPublished then
         self.manager:OnModuleVisibilityChanged(self)
     end
@@ -89,10 +102,15 @@ end
 function this:Unpublish()
     local wasPublished = self.published
     self:MarkDirty()
+    local count = 0
     for _, entry in ipairs(self.entries or {}) do
         self.resource:UnpublishResource(entry.descriptor.uri)
+        count = count + 1
     end
     self.published = false
+    if self.logger then
+        self.logger:debug("Memory module unpublished: entries=%d was_published=%s", count, tostring(wasPublished))
+    end
     if self.manager and wasPublished then
         self.manager:OnModuleVisibilityChanged(self)
     end
@@ -108,6 +126,9 @@ function this:RegisterEvent()
         self:OnLoaded(e)
     end
     event.register(tes3.event.loaded, self.loadedCallback)
+    if self.logger then
+        self.logger:debug("Memory module loaded handler registered: publish_on_loaded=%s", tostring(self.publishOnLoaded))
+    end
 end
 
 --- Unregister events common to every Memory module.
@@ -115,12 +136,18 @@ function this:UnregisterEvent()
     if self.loadedCallback then
         event.unregister(tes3.event.loaded, self.loadedCallback)
         self.loadedCallback = nil
+        if self.logger then
+            self.logger:debug("Memory module loaded handler unregistered")
+        end
     end
 end
 
 --- Publish or hide this module after a game load according to its publish policy.
 ---@param e loadedEventData
 function this:OnLoaded(e)
+    if self.logger then
+        self.logger:debug("Memory module loaded event: publish_on_loaded=%s new_game=%s", tostring(self.publishOnLoaded), tostring(e and e.newGame == true))
+    end
     if self.publishOnLoaded then
         self:Publish()
         return

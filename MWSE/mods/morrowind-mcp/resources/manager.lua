@@ -64,8 +64,8 @@ function this.new(params)
     -- fastest in this server. because resource manager reset resource cache state. then any resources update on loaded.
     event.register(tes3.event.loaded, instance.loadedCallback, { priority = 100 })
 
-    journal.RegisterEvent(instance)
-    quest.RegisterEvent(instance)
+    -- journal.RegisterEvent(instance)
+    -- quest.RegisterEvent(instance)
     instance.memory = memory.new({ resource = instance })
     instance.memory:RegisterEvent()
     return instance
@@ -77,8 +77,8 @@ function this:Release()
         self.memory = nil
     end
 
-    journal.UnregisterEvent()
-    quest.UnregisterEvent()
+    -- journal.UnregisterEvent()
+    -- quest.UnregisterEvent()
 
     if self.loadedCallback then
         event.unregister(tes3.event.loaded, self.loadedCallback)

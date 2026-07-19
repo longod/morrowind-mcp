@@ -33,6 +33,7 @@ end
 ---@return MCP.Resources.Memory.Player
 function this.new(params)
     params.publishOnLoaded = true
+    params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_player" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Player
     instance.playerEntry = document.LiveEntry(playerDescriptor, function()
