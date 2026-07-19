@@ -8,6 +8,6 @@
     "mo2Application": "Morrowind",
     "mo2Profile": "Portable",
     "morrowindInstallDir": "C:/Morrowind",
-    "mwseConfigDir": "C:/Morrowind/Data Files/MWSE/config"
+    "datafilesOverwriteDir": "C:/Morrowind/Data Files/"
   }
 }

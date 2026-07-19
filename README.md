@@ -151,7 +151,9 @@ Environment variables:
 | `MWMCP_MO2_APPLICATION` | `paths.mo2Application` | Mod Organizer 2 application name to launch |
 | `MWMCP_MO2_PROFILE` | `paths.mo2Profile` | Mod Organizer 2 profile name |
 | `MWMCP_MORROWIND_INSTALL_DIR` | `paths.morrowindInstallDir` | Morrowind install directory path |
-| `MWMCP_MWSE_CONFIG_DIR` | `paths.mwseConfigDir` | MWSE config directory path |
+| `MWMCP_DATAFILES_OVERWRITE_DIR` | `paths.datafilesOverwriteDir` | Data Files overwrite directory path; Lua runtime mod data writes resolve to `<datafilesOverwriteDir>/MWSE/mods/morrowind-mcp`; MWSE config resolves to `<datafilesOverwriteDir>/MWSE/config` |
+
+Server-generated Lua output data can be inspected under `<paths.datafilesOverwriteDir>/MWSE/mods/morrowind-mcp`. The shared config helper exposes this physical path as `Paths.modDataDir`; script-created sentinel files are not considered server output data.
 
 ### Test scripts
 

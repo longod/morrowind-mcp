@@ -65,6 +65,10 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - MCP schema class を追加・変更した場合は、対応する generator と UnitWind テストを合わせて更新する
 - enum や default などの配列フィールドは `jsonrpc.array()` 経由で JSON array として扱える形にする
 
+### Memory system
+
+- Memory 関連の Lua ファイルを追加・変更する場合は、[memory-system.md](../../docs/memory-system.md) の仕様も確認し、仕様変更があれば同時に更新する
+
 
 ## Tests
 

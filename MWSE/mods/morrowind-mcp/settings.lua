@@ -10,8 +10,11 @@ this.configPath = "morrowind-mcp"
 this.dataFiles = "Data Files\\"
 this.modDirRelative = "MWSE\\mods\\morrowind-mcp\\"
 this.modDir = this.dataFiles .. this.modDirRelative
-this.resourceRootDir = this.dataFiles .. this.modDirRelative .. "temp\\"
-this.memoryDebugDumpDir = this.dataFiles .. this.modDirRelative .. "memory-dump\\"
+-- Runtime-generated mod data is written under the mod directory so MO2/USVFS can redirect it to the overwrite target.
+this.modDataDirRelative = this.modDirRelative
+this.modDataDir = this.modDir
+this.resourceRootDir = this.modDataDir .. "temp\\"
+this.memoryDebugDumpDir = this.modDataDir .. "memory-dump\\"
 this.uriScheme = "morrowind://"
 this.name_prefix = "mw-"
 this.title_prefix = "[Morrowind] "
