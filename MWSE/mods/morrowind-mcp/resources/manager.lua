@@ -9,7 +9,9 @@ local datetime = require("morrowind-mcp.util.datetime")
 
 local journal = require("morrowind-mcp.resources.journal")
 local quest = require("morrowind-mcp.resources.quest")
+local memory = require("morrowind-mcp.resources.memory.manager")
 
+--[[
 --- I want to idendify same or difference character.
 ---@class MCP.SaveGameState
 ---@field playerName string
@@ -25,6 +27,7 @@ local quest = require("morrowind-mcp.resources.quest")
 ---@field lastModifiedInGameTime number
 ---@field lastAccessedInSystemTime number
 ---@field lastAccessedInGameTime number
+--]]
 
 ---@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]
 
@@ -39,6 +42,7 @@ local quest = require("morrowind-mcp.resources.quest")
 ---@field changed integer for list changed
 ---@field updated table<MCP.ResourceUri, boolean> for subscription
 ---@field loadedCallback fun(e : loadedEventData)
+---@field memory MCP.Resources.MemoryManager?
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -62,10 +66,17 @@ function this.new(params)
 
     journal.RegisterEvent(instance)
     quest.RegisterEvent(instance)
+    instance.memory = memory.new({ resource = instance })
+    instance.memory:RegisterEvent()
     return instance
 end
 
 function this:Release()
+    if self.memory then
+        self.memory:UnregisterEvent()
+        self.memory = nil
+    end
+
     journal.UnregisterEvent()
     quest.UnregisterEvent()
 
@@ -133,6 +144,7 @@ function this:OnResourcesList(params)
         end
     end
 
+    -- Memory debug dumps are written outside resourceRootDir, so resources/list does not expose them.
     local rootDir = settings.resourceRootDir
     CollectResources(rootDir, "")
     table.sort(result.resources, function(a, b)

@@ -1526,9 +1526,9 @@ function this:PollPrimitiveCondition(e)
 
 end
 
---- @param e keyDownEventData
-function this:OnDebugKeyCallback(e)
-    self.logger:debug("Debug key pressed, opening MCP log level and tool selection menu")
+---@param e keyDownEventData
+function this:DebugNotification(e)
+    self.logger:debug("Debug Notification.")
 
     ---@type string[]
     local texts = {
@@ -1574,6 +1574,12 @@ function this:OnDebugKeyCallback(e)
     })
 end
 
+---@param e keyDownEventData
+function this:DebugMemory(e)
+    self.logger:debug("Debug Memory")
+    self.resource.memory:SaveDebugDocuments()
+end
+
 function this:Start()
     if self.server then
         self.logger:warn("MCP server is already running")
@@ -1599,7 +1605,8 @@ function this:Start()
     if config.development.debug then
         -- register debug command
         self.debugKeyCallback = function(e)
-            self:OnDebugKeyCallback(e)
+            -- self:DebugNotification(e)
+            self:DebugMemory(e)
         end
         event.register(tes3.event.keyDown, self.debugKeyCallback, { filter = tes3.scanCode.F4 })
     end

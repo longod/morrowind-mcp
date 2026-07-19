@@ -652,7 +652,11 @@ local function tes3physicalObject(i, o)
         return nil
     end
 
-    o.boundingBox = i.boundingBox
+    -- print(i.id)
+    -- FIXME some objects are not initialized on loaded. touching boundingBox caused error. it encounter problems to recalculate the boundingBox.
+    -- tes3leveledCreature: ex_ascadianisles_sleep
+    -- o.boundingBox = i.boundingBox
+
     -- o.referenceList = i.referenceList
 
     local _ = ValidateType(o)
@@ -951,7 +955,7 @@ function this.tes3cell(i, o)
     o.behavesAsExterior = i.behavesAsExterior
     -- o.cellFlags =  i.cellFlags
     o.displayName = i.displayName
-    o.editorName = i.editorName
+    -- o.editorName = i.editorName
     -- o.fogColor = i.fogColor -- TODO interior only, enough world controller and weather?
     -- o.fogDensity = i.fogDensity -- TODO interior only, enough world controller and weather?
     o.gridX = i.gridX
@@ -1699,16 +1703,16 @@ function this.tes3mobileCreature(i, o)
     end
 
     o.combat = this.tes3statistic(i.combat)
-    o.flySpeed = i.flySpeed
+    -- o.flySpeed = i.flySpeed
     o.magic = this.tes3statistic(i.magic)
-    o.moveSpeed = i.moveSpeed
+    -- o.moveSpeed = i.moveSpeed -- FIXME it crashes in ActorAnimController::calcActorMoveSpeed on loaded. it seems to uninitialized yet.
     -- o.object = this.tes3creature(i.object) -- TODO avoid circular reference
-    o.runSpeed = i.runSpeed
+    -- o.runSpeed = i.runSpeed
     -- o.skills = iter.ForEach(i.skills, this.tes3statistic) -- TODO represent key=value
     o.stealth = this.tes3statistic(i.stealth)
-    o.swimRunSpeed = i.swimRunSpeed
-    o.swimSpeed = i.swimSpeed
-    o.walkSpeed = i.walkSpeed
+    -- o.swimRunSpeed = i.swimRunSpeed
+    -- o.swimSpeed = i.swimSpeed
+    -- o.walkSpeed = i.walkSpeed
 
     local _ = ValidateType(o)
     return o
@@ -1737,7 +1741,7 @@ function this.tes3mobileNPC(i, o)
     o.conjuration = this.tes3statistic(i.conjuration)
     o.destruction = this.tes3statistic(i.destruction)
     o.enchant = this.tes3statistic(i.enchant)
-    o.flySpeed = i.flySpeed
+    -- o.flySpeed = i.flySpeed
     o.forceJump = i.forceJump
     o.forceMoveJump = i.forceMoveJump
     o.forceRun = i.forceRun
@@ -1750,21 +1754,21 @@ function this.tes3mobileNPC(i, o)
     o.marksman = this.tes3statistic(i.marksman)
     o.mediumArmor = this.tes3statistic(i.mediumArmor)
     o.mercantile = this.tes3statistic(i.mercantile)
-    o.moveSpeed = i.moveSpeed
+    -- o.moveSpeed = i.moveSpeed -- FIXME it crashes in ActorAnimController::calcActorMoveSpeed on loaded. it seems to uninitialized yet.
     o.mysticism = this.tes3statistic(i.mysticism)
     o.object = i.object
     o.restoration = this.tes3statistic(i.restoration)
-    o.runSpeed = i.runSpeed
+    -- o.runSpeed = i.runSpeed
     o.security = this.tes3statistic(i.security)
     o.shortBlade = this.tes3statistic(i.shortBlade)
     -- o.skills = i.skills
     o.sneak = this.tes3statistic(i.sneak)
     o.spear = this.tes3statistic(i.spear)
     o.speechcraft = this.tes3statistic(i.speechcraft)
-    o.swimRunSpeed = i.swimRunSpeed
-    o.swimSpeed = i.swimSpeed
+    -- o.swimRunSpeed = i.swimRunSpeed
+    -- o.swimSpeed = i.swimSpeed
     o.unarmored = this.tes3statistic(i.unarmored)
-    o.walkSpeed = i.walkSpeed
+    -- o.walkSpeed = i.walkSpeed
 
     local _ = ValidateType(o)
     return o

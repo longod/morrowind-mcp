@@ -17,4 +17,16 @@ end
 function this:Release()
 end
 
+---@param resource MCP.ResourceEntry
+---@return MCP.ResourceUri
+function this:PublishResource(resource)
+    return ""
+end
+
+---@param uri MCP.ResourceUri
+---@return boolean
+function this:UnpublishResource(uri)
+    return false
+end
+
 return this

@@ -11,6 +11,7 @@ this.dataFiles = "Data Files\\"
 this.modDirRelative = "MWSE\\mods\\morrowind-mcp\\"
 this.modDir = this.dataFiles .. this.modDirRelative
 this.resourceRootDir = this.dataFiles .. this.modDirRelative .. "temp\\"
+this.memoryDebugDumpDir = this.dataFiles .. this.modDirRelative .. "memory-dump\\"
 this.uriScheme = "morrowind://"
 this.name_prefix = "mw-"
 this.title_prefix = "[Morrowind] "
