@@ -1,6 +1,8 @@
 local this = {}
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "input_action" })
 
+-- It seems that input isn't forwarded when the app isn't in the foreground.
+
 local defaultMouseHammerIntervalSeconds = 0.2
 local defaultMouseTapHoldSeconds = 2.0 / 60.0
 

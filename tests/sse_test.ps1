@@ -14,8 +14,8 @@ $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $SseLogPath = Join-Path $LogsRoot "sse_$RunTimestamp.log"
 $MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
 $MwseLogSourcePath = $null
-$DisclaimerSentinelPath = Join-Path $ScriptDir "..\MWSE\mods\morrowind-mcp\.accept-disclaimer-for-tests"
-$CreatedDisclaimerSentinel = $false
+$ServerTestSentinelPath = Join-Path $ScriptDir "..\MWSE\mods\morrowind-mcp\.server-test-running"
+$CreatedServerTestSentinel = $false
 
 function Convert-ToFileUri {
     param(
@@ -175,20 +175,20 @@ $StopScriptPath = Join-Path $ScriptDir "stop_server.ps1"
 $ExitCode = 0
 
 try {
-    $DisclaimerSentinelDir = Split-Path -Parent $DisclaimerSentinelPath
-    if (Test-Path -LiteralPath $DisclaimerSentinelDir) {
-        $DisclaimerSentinelAlreadyExists = Test-Path -LiteralPath $DisclaimerSentinelPath
-        if ($DisclaimerSentinelAlreadyExists) {
-            Write-SseLog "[INFO] Disclaimer sentinel already exists. Reusing: $DisclaimerSentinelPath" -ForegroundColor Cyan
+    $ServerTestSentinelDir = Split-Path -Parent $ServerTestSentinelPath
+    if (Test-Path -LiteralPath $ServerTestSentinelDir) {
+        $ServerTestSentinelAlreadyExists = Test-Path -LiteralPath $ServerTestSentinelPath
+        if ($ServerTestSentinelAlreadyExists) {
+            Write-SseLog "[INFO] Server test sentinel already exists. Reusing: $ServerTestSentinelPath" -ForegroundColor Cyan
         }
         else {
-            New-Item -ItemType File -Path $DisclaimerSentinelPath -Force | Out-Null
-            $CreatedDisclaimerSentinel = $true
-            Write-SseLog "[INFO] Created disclaimer sentinel file: $DisclaimerSentinelPath" -ForegroundColor Cyan
+            New-Item -ItemType File -Path $ServerTestSentinelPath -Force | Out-Null
+            $CreatedServerTestSentinel = $true
+            Write-SseLog "[INFO] Created server test sentinel file: $ServerTestSentinelPath" -ForegroundColor Cyan
         }
     }
     else {
-        Write-SseLog "[WARN] Disclaimer sentinel directory was not found. Continue without sentinel: $DisclaimerSentinelDir" -ForegroundColor Yellow
+        Write-SseLog "[WARN] Server test sentinel directory was not found. Continue without sentinel: $ServerTestSentinelDir" -ForegroundColor Yellow
     }
 
     if (-not $NoStart) {
@@ -432,8 +432,8 @@ finally {
 
     Write-SseLog "[INFO] SSE test log: $(Convert-ToFileUri -Path $SseLogPath)" -ForegroundColor Cyan
 
-    if ($CreatedDisclaimerSentinel) {
-        Remove-Item -LiteralPath $DisclaimerSentinelPath -ErrorAction SilentlyContinue
+    if ($CreatedServerTestSentinel) {
+        Remove-Item -LiteralPath $ServerTestSentinelPath -ErrorAction SilentlyContinue
     }
 }
 

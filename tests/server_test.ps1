@@ -1,3 +1,7 @@
+param(
+    [switch]$NoForeground
+)
+
 $MaxTry = 10
 $IntervalSeconds = 3
 
@@ -31,6 +35,40 @@ function Convert-ToFileUri {
     catch {
         return $Path
     }
+}
+
+function Set-WindowForegroundBestEffort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessName,
+        [int]$MaxTry = 20,
+        [int]$IntervalMilliseconds = 500
+    )
+
+    for ($i = 0; $i -lt $MaxTry; $i++) {
+        $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowHandle -ne 0 } |
+            Select-Object -First 1
+
+        if ($proc) {
+            try {
+                $activated = (New-Object -ComObject WScript.Shell).AppActivate($proc.Id)
+            }
+            catch {
+                $activated = $false
+            }
+
+            if ($activated) {
+                Write-Host "[INFO] Activated $ProcessName window in foreground." -ForegroundColor Green
+                return $true
+            }
+        }
+
+        Start-Sleep -Milliseconds $IntervalMilliseconds
+    }
+
+    Write-Host "[WARN] Failed to activate $ProcessName window in foreground." -ForegroundColor Yellow
+    return $false
 }
 
 try {
@@ -166,10 +204,10 @@ $TargetIP = $Config.Connection.host
 $TargetPort = [int]$Config.Connection.port
 $StartScriptPath = ".\start_server_mo2.ps1"
 $StopScriptPath = ".\stop_server.ps1"
-$DisclaimerSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.accept-disclaimer-for-tests"
+$ServerTestSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.server-test-running"
 
 $ExitCode = 0
-$CreatedDisclaimerSentinel = $false
+$CreatedServerTestSentinel = $false
 
 Push-Location $ScriptDir
 try {
@@ -185,20 +223,20 @@ try {
         return
     }
 
-    $DisclaimerSentinelDir = Split-Path -Parent $DisclaimerSentinelPath
-    if (Test-Path -LiteralPath $DisclaimerSentinelDir) {
-        $DisclaimerSentinelAlreadyExists = Test-Path -LiteralPath $DisclaimerSentinelPath
-        if ($DisclaimerSentinelAlreadyExists) {
-            Write-Host "[INFO] Disclaimer sentinel already exists. Reusing: $DisclaimerSentinelPath" -ForegroundColor DarkCyan
+    $ServerTestSentinelDir = Split-Path -Parent $ServerTestSentinelPath
+    if (Test-Path -LiteralPath $ServerTestSentinelDir) {
+        $ServerTestSentinelAlreadyExists = Test-Path -LiteralPath $ServerTestSentinelPath
+        if ($ServerTestSentinelAlreadyExists) {
+            Write-Host "[INFO] Server test sentinel already exists. Reusing: $ServerTestSentinelPath" -ForegroundColor DarkCyan
         }
         else {
-            New-Item -ItemType File -Path $DisclaimerSentinelPath -Force | Out-Null
-            $CreatedDisclaimerSentinel = $true
-            Write-Host "[INFO] Created disclaimer sentinel file: $DisclaimerSentinelPath" -ForegroundColor DarkCyan
+            New-Item -ItemType File -Path $ServerTestSentinelPath -Force | Out-Null
+            $CreatedServerTestSentinel = $true
+            Write-Host "[INFO] Created server test sentinel file: $ServerTestSentinelPath" -ForegroundColor DarkCyan
         }
     }
     else {
-        Write-Host "[WARN] Disclaimer sentinel directory was not found. Continue without sentinel: $DisclaimerSentinelDir" -ForegroundColor Yellow
+        Write-Host "[WARN] Server test sentinel directory was not found. Continue without sentinel: $ServerTestSentinelDir" -ForegroundColor Yellow
     }
 
     & $StartScriptPath
@@ -226,6 +264,13 @@ try {
         return
     }
 
+    if (-not $NoForeground) {
+        Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
+    }
+    else {
+        Write-Host "[INFO] Skipping foreground activation (-NoForeground)." -ForegroundColor DarkCyan
+    }
+
     # TODO 成功を期待するテストのみなので、失敗を期待するテストも欲しい。無効な引数などで通信は成功するが、内容がエラーになることを確認する。
     # TODO luaからテストケースをある程度自動生成したい
     $TestCases = @(
@@ -244,6 +289,7 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
+        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=readyWeapon", "--tool-arg", "how=tap"),
         @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
         @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
@@ -293,8 +339,8 @@ finally {
 
     Write-Host "[INFO] Inspector logs: $(Convert-ToFileUri -Path $InspectorLogPath)" -ForegroundColor Cyan
 
-    if ($CreatedDisclaimerSentinel) {
-        Remove-Item -LiteralPath $DisclaimerSentinelPath -ErrorAction SilentlyContinue
+    if ($CreatedServerTestSentinel) {
+        Remove-Item -LiteralPath $ServerTestSentinelPath -ErrorAction SilentlyContinue
     }
 
     Pop-Location

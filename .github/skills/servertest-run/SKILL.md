@@ -21,6 +21,19 @@ description: |
 .\tests\server_test.ps1
 ```
 
+引数で foreground 制御を切り替えられる。
+
+```powershell
+# 既定: サーバー接続確認後に Morrowind を foreground 化する
+.\tests\server_test.ps1
+
+# 従来挙動: foreground 化を行わない
+.\tests\server_test.ps1 -NoForeground
+```
+
+`-NoForeground` を指定すると、接続確認後のフォアグラウンド化ステップをスキップする。
+バックグラウンドではキーボードのキー入力やマウスのボタン入力（mw-player-action など）が送られないため、入力を使う検証ではフォアグラウンド化する必要がある。入力送信が不要な検証では `-NoForeground` で実行してよい。
+
 2. 出力を確認する。
 
 3. 出力からテスト結果を抽出する。
@@ -42,6 +55,7 @@ description: |
 - `fetch failed` / connection refused / timeout が出た場合は、古いサーバープロセスや半端な起動状態を疑い、`tests/stop_server.ps1` の実行後に再実行する
 - `tests/server_test.ps1` は Inspector の詳細をコンソールへ全量表示しない。詳細は `inspector_<timestamp>.log` に集約保存される。
 - `tests/server_test.ps1` は実行終了時に `MWSE.log` を `mwse_<timestamp>.log` としてコピー保存する。サーバー側検証はこのコピーを優先利用できる。
+- `tests/server_test.ps1` の既定動作では接続確認後に foreground 化を試行する。バックグラウンドではキーボードのキー入力やマウスのボタン入力が送られないため、入力を使う検証では foreground 化が必要。入力送信が不要な検証は `-NoForeground` を使ってよい。
 - `tools/list` は prefixed name（例: `mw_...`）と prefixed title/description を確認し、`tools/call` も公開後の prefixed name で呼び出す
 - screenshot resource の検証では巨大な blob 全体をログに出さず、mimeType / blob length / PNG signature だけ確認する
 - 正常な PNG blob は base64 先頭が `iVBORw0KGgoA` で始まる

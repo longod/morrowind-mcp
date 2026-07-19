@@ -78,6 +78,8 @@ Windows上での開発のため、以下の運用ルールを必須とする。
 - ターミナルで検索が必要な場合は PowerShell cmdlet を使う（例: `Get-ChildItem`, `Select-String`）
 - 代替手段が無い場合は、実行前にユーザー確認を取る
 - [tests/server_test.ps1](tests/server_test.ps1): Morrowindを起動してMCP サーバーの実行・停止・通信をテストする
+	- 既定では接続確認後に Morrowind のフォアグラウンド化を試行する。バックグラウンドではキーボードのキー入力やマウスのボタン入力が送られないため、入力を使う検証ではフォアグラウンド化が必要。
+	- 入力送信を使わない検証では `-NoForeground` を指定して従来挙動で実行してよい。
 - [tests/unit_test.ps1](tests/unit_test.ps1): Lua モジュールの単体テストを実行する
 - [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Mod Organizer 2 経由で Morrowind を起動してサーバーを実行する
 - [tests/stop_server.ps1](tests/stop_server.ps1): Morrowindを終了して、実行中のサーバーを停止する

@@ -21,7 +21,7 @@ function this.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Tools.PlayerAction
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "player_action" })
     instance.definition = jsonrpc.Tool({
-        name = "player_action",
+        name = "player-action",
         description =
         "Perform an action on the player. This is the player character that the user is controlling.",
         inputSchema = jsonrpc.InputSchema(

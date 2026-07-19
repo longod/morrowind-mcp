@@ -14,7 +14,6 @@ $FoundFailed = $false
 $MwseLogPath = $null
 $MwseLogStatus = ""
 $SavedMwseCopy = $false
-$CreatedDisclaimerSentinel = $false
 
 function Convert-ToFileUri {
     param(
@@ -37,7 +36,6 @@ try {
     $StopScriptPath = ".\stop_server.ps1"
     # Sentinel file toggles exit-after-tests behavior in Lua.
     $SentinelPath = ".\..\MWSE\mods\morrowind-mcp\.exit-after-tests"
-    $DisclaimerSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.accept-disclaimer-for-tests"
 
     # start script is mandatory; stop script is optional fallback on timeout.
     if (-not (Test-Path -LiteralPath $StartScriptPath)) {
@@ -63,22 +61,6 @@ try {
     }
     else {
         Write-Host "[WARN] Sentinel directory was not found. Continue without sentinel: $SentinelDir" -ForegroundColor Yellow
-    }
-
-    $DisclaimerSentinelDir = Split-Path -Parent $DisclaimerSentinelPath
-    if (Test-Path -LiteralPath $DisclaimerSentinelDir) {
-        $DisclaimerSentinelAlreadyExists = Test-Path -LiteralPath $DisclaimerSentinelPath
-        if ($DisclaimerSentinelAlreadyExists) {
-            Write-Host "[INFO] Disclaimer sentinel already exists. Reusing: $DisclaimerSentinelPath" -ForegroundColor DarkCyan
-        }
-        else {
-            New-Item -ItemType File -Path $DisclaimerSentinelPath -Force | Out-Null
-            $CreatedDisclaimerSentinel = $true
-            Write-Host "[INFO] Created disclaimer sentinel file: $DisclaimerSentinelPath" -ForegroundColor DarkCyan
-        }
-    }
-    else {
-        Write-Host "[WARN] Disclaimer sentinel directory was not found. Continue without sentinel: $DisclaimerSentinelDir" -ForegroundColor Yellow
     }
 
     & $StartScriptPath
@@ -206,10 +188,6 @@ finally {
 
     if ($SavedMwseCopy) {
         Write-Host "[INFO] Saved MWSE.log copy: $(Convert-ToFileUri -Path $MwseCopyOutputPath)" -ForegroundColor DarkCyan
-    }
-
-    if ($CreatedDisclaimerSentinel) {
-        Remove-Item -LiteralPath $DisclaimerSentinelPath -ErrorAction SilentlyContinue
     }
 
     # Clean up only when this script created the sentinel file.
