@@ -10,10 +10,26 @@ function this.Test()
     local manager = require("morrowind-mcp.resources.memory.manager")
     local actor = require("morrowind-mcp.resources.memory.actor")
     local document = require("morrowind-mcp.resources.memory.document")
+    local datetime = require("morrowind-mcp.util.datetime")
 
     unitwind:start("morrowind-mcp.resources.memory.imodule")
 
-    unitwind:test("Memory module publishes all registered entries", function()
+    --- Run a Memory module test with in-game clock lookup mocked because UnitWind runs before TES3 is initialized.
+    ---@param name string
+    ---@param callback fun()
+    local function testMemoryModule(name, callback)
+        unitwind:test(name, function()
+            unitwind:mock(datetime, "InGameNow", function()
+                return nil
+            end)
+
+            callback()
+
+            unitwind:unmock(datetime, "InGameNow")
+        end)
+    end
+
+    testMemoryModule("Memory module publishes all registered entries", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -39,7 +55,7 @@ function this.Test()
         unitwind:expect(published[1]).toBe("morrowind://memory/module.json")
     end)
 
-    unitwind:test("Memory module marks all registered entries dirty", function()
+    testMemoryModule("Memory module marks all registered entries dirty", function()
         ---@type MCP.IResourceManager
         local resource = {
             Release = function(self)
@@ -69,7 +85,7 @@ function this.Test()
         unitwind:expect(buildCount).toBe(2)
     end)
 
-    unitwind:test("Memory module publish invalidates cached entries", function()
+    testMemoryModule("Memory module publish invalidates cached entries", function()
         ---@type MCP.IResourceManager
         local resource = {
             Release = function(self)
@@ -98,7 +114,7 @@ function this.Test()
         unitwind:expect(buildCount).toBe(2)
     end)
 
-    unitwind:test("Memory module unpublish invalidates cached entries", function()
+    testMemoryModule("Memory module unpublish invalidates cached entries", function()
         ---@type MCP.IResourceManager
         local resource = {
             Release = function(self)
@@ -127,7 +143,7 @@ function this.Test()
         unitwind:expect(buildCount).toBe(2)
     end)
 
-    unitwind:test("Memory module reports visibility only when published state changes", function()
+    testMemoryModule("Memory module reports visibility only when published state changes", function()
         local visibilityChanges = 0
         ---@type MCP.IResourceManager
         local resource = {
@@ -161,7 +177,7 @@ function this.Test()
         unitwind:expect(visibilityChanges).toBe(2)
     end)
 
-    unitwind:test("Memory module does not publish on loaded by default", function()
+    testMemoryModule("Memory module does not publish on loaded by default", function()
         local published = {}
         local unpublished = {}
         ---@type MCP.IResourceManager
@@ -190,7 +206,7 @@ function this.Test()
         unitwind:expect(unpublished[1]).toBe("morrowind://memory/load-default.json")
     end)
 
-    unitwind:test("Memory module can opt in to publish on loaded", function()
+    testMemoryModule("Memory module can opt in to publish on loaded", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -216,7 +232,7 @@ function this.Test()
         unitwind:expect(published[1]).toBe("morrowind://memory/load-opt-in.json")
     end)
 
-    unitwind:test("Memory manager publishes only modules that opt in on register", function()
+    testMemoryModule("Memory manager publishes only modules that opt in on register", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -249,7 +265,7 @@ function this.Test()
         unitwind:expect(published[1]).toBe("morrowind://memory/register-opt-in.json")
     end)
 
-    unitwind:test("Memory manager publishes only root index on register for built-in modules", function()
+    testMemoryModule("Memory manager publishes only root index on register for built-in modules", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -271,7 +287,7 @@ function this.Test()
         unitwind:expect(published[1]).toBe("morrowind://memory/index.json")
     end)
 
-    unitwind:test("Memory manager saves current debug documents once per URI", function()
+    testMemoryModule("Memory manager saves current debug documents once per URI", function()
         ---@type MCP.IResourceManager
         local resource = {
             Release = function(self)
@@ -318,7 +334,7 @@ function this.Test()
         unitwind:unmock(document, "SaveEntry")
     end)
 
-    unitwind:test("Memory manager groups links by parent", function()
+    testMemoryModule("Memory manager groups links by parent", function()
         ---@type MCP.IResourceManager
         local resource = {
             Release = function(self)
@@ -351,7 +367,7 @@ function this.Test()
         unitwind:expect(playerLinks[1].uri).toBe("morrowind://memory/player/child-link.json")
     end)
 
-    unitwind:test("Memory visibility changes dirty only related link indexes", function()
+    testMemoryModule("Memory visibility changes dirty only related link indexes", function()
         ---@type MCP.IResourceManager
         local resource = {
             Release = function(self)
@@ -397,7 +413,7 @@ function this.Test()
         unitwind:expect(playerEntry.cache.dirty).toBe(true)
     end)
 
-    unitwind:test("Memory Actor module manages observed actor instances internally", function()
+    testMemoryModule("Memory Actor module manages observed actor instances internally", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -518,7 +534,7 @@ function this.Test()
         unitwind:unmock(tes3, "onMainMenu")
     end)
 
-    unitwind:test("Memory Actor module adds activation target without clearing loaded actors", function()
+    testMemoryModule("Memory Actor module adds activation target without clearing loaded actors", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -601,7 +617,7 @@ function this.Test()
         unitwind:unmock(tes3, "onMainMenu")
     end)
 
-    unitwind:test("Memory Actor module marks player-activated actors", function()
+    testMemoryModule("Memory Actor module marks player-activated actors", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -701,7 +717,7 @@ function this.Test()
         unitwind:unmock(tes3, "onMainMenu")
     end)
 
-    unitwind:test("Memory Actor module marks dialog service actors as conversed", function()
+    testMemoryModule("Memory Actor module marks dialog service actors as conversed", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -817,7 +833,7 @@ function this.Test()
         unitwind:unmock(tes3, "onMainMenu")
     end)
 
-    unitwind:test("Memory module hides links after unpublish", function()
+    testMemoryModule("Memory module hides links after unpublish", function()
         local unpublished = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -847,7 +863,7 @@ function this.Test()
         unitwind:expect(table.size(module:GetLinks())).toBe(0)
     end)
 
-    unitwind:test("Memory manager registers loaded before module loaded callbacks", function()
+    testMemoryModule("Memory manager registers loaded before module loaded callbacks", function()
         local registered = {}
         ---@type MCP.IResourceManager
         local resource = {

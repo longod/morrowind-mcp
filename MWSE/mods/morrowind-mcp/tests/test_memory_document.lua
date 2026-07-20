@@ -7,8 +7,16 @@ function this.Test()
     })
 
     local document = require("morrowind-mcp.resources.memory.document")
+    local datetime = require("morrowind-mcp.util.datetime")
 
     unitwind:start("morrowind-mcp.resources.memory.document")
+
+    --- Mock in-game time lookup for tests that build generic Memory documents before TES3 is initialized.
+    local function MockNoInGameTime()
+        unitwind:mock(datetime, "InGameNow", function()
+            return nil
+        end)
+    end
 
     unitwind:test("Descriptor builds an application/json Memory resource", function()
         local descriptor = document.Descriptor("memory/test.json", "Test Memory", "Test description.")
@@ -21,6 +29,8 @@ function this.Test()
     end)
 
     unitwind:test("Document builds the Memory envelope with data and links", function()
+        MockNoInGameTime()
+
         local link = document.Link(document.linkRel.self, "morrowind://memory/test.json", "Self", nil)
         local subject = document.Subject(document.SubjectTypeFromObjectType(tes3.objectType.npc), "player", "Player")
         local scope = document.Scope(3, nil, "Player")
@@ -43,6 +53,36 @@ function this.Test()
         unitwind:expect(memoryDocument.scope.generation).toBe(3)
         unitwind:expect(memoryDocument.links[1].rel).toBe("self")
         unitwind:expect(memoryDocument.data.quests ~= nil).toBe(true)
+
+        unitwind:unmock(datetime, "InGameNow")
+    end)
+
+    unitwind:test("Document updated_at includes current in-game time when available", function()
+        local inGameTime = {
+            type = "in-game time",
+            year = 427,
+            month = 7,
+            day = 16,
+            hour = 13.5,
+            day_count = 12,
+            epoch_time = 123456,
+            time_zone = datetime.tamrielTimeZone,
+        }
+        unitwind:mock(datetime, "InGameNow", function()
+            return inGameTime
+        end)
+
+        local memoryDocument = document.Document(
+            document.documentType.entity,
+            document.dataType.playerSummary,
+            "Player Memory",
+            { value = 1 }
+        )
+
+        unitwind:expect(memoryDocument.updated_at.system_time ~= nil).toBe(true)
+        unitwind:expect(memoryDocument.updated_at.in_game_time).toBe(inGameTime)
+
+        unitwind:unmock(datetime, "InGameNow")
     end)
 
     unitwind:test("Subject type resolves from objectType and reference base object", function()
@@ -60,6 +100,8 @@ function this.Test()
     end)
 
     unitwind:test("LiveEntry reuses cached JSON until marked dirty", function()
+        MockNoInGameTime()
+
         local descriptor = document.Descriptor("memory/cache.json", "Cache Memory", "Cache test.")
         local buildCount = 0
         local entry = document.LiveEntry(descriptor, function()
@@ -79,9 +121,13 @@ function this.Test()
         document.MarkDirty(entry)
         entry.handler(descriptor)
         unitwind:expect(buildCount).toBe(2)
+
+        unitwind:unmock(datetime, "InGameNow")
     end)
 
     unitwind:test("SaveEntry writes a Memory resource entry as debug JSON", function()
+        MockNoInGameTime()
+
         local descriptor = document.Descriptor("memory/save/test.json", "Save Memory", "Save test.")
         local entry = document.LiveEntry(descriptor, function()
             return document.Document(
@@ -132,6 +178,7 @@ function this.Test()
         unitwind:unmock(io, "open")
         unitwind:unmock(lfs, "mkdir")
         unitwind:unmock(lfs, "attributes")
+        unitwind:unmock(datetime, "InGameNow")
     end)
 
     unitwind:finish()

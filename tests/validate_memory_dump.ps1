@@ -103,6 +103,15 @@ foreach ($documentInfo in $reachableDocuments) {
             $issues.Add(("Missing {0}: file={1}" -f $field, $documentInfo.File))
         }
     }
+    if ($null -eq $document.PSObject.Properties["updated_at"]) {
+        $issues.Add("Missing updated_at: file=$($documentInfo.File)")
+    }
+    elseif ($null -eq $document.updated_at.PSObject.Properties["system_time"]) {
+        $issues.Add("Missing updated_at.system_time: file=$($documentInfo.File)")
+    }
+    elseif ($null -eq $document.updated_at.PSObject.Properties["in_game_time"]) {
+        $issues.Add("Missing updated_at.in_game_time: file=$($documentInfo.File)")
+    }
 
     if ($document.type -match '^memory\.(index|collection)$' -and $null -ne $document.data.PSObject.Properties["links"]) {
         $issues.Add("Index/collection duplicates links inside data: file=$($documentInfo.File)")

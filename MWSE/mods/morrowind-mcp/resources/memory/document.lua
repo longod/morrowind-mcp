@@ -208,6 +208,10 @@ end
 ---@param inGameTime MCP.DateTimeInGame?
 ---@return MCP.MemoryTimestamp
 function this.TimestampNow(inGameTime)
+    if inGameTime == nil then
+        inGameTime = datetime.InGameNow()
+    end
+
     return jsonrpc.object({
         system_time = datetime.ToISO8601(datetime.UTCNow()),
         in_game_time = inGameTime,

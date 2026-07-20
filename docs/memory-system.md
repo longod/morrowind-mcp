@@ -30,7 +30,7 @@ Required or common fields:
 - `scope`: loaded-game boundary for the document.
 - `source`: provenance category for the data.
 - `links`: canonical traversal links to related Memory documents.
-- `created_at` and `updated_at`: timestamps.
+- `created_at` and `updated_at`: timestamps. `updated_at.system_time` is UTC wall-clock time; `updated_at.in_game_time` should be included when a loaded game exposes the current Tamriel time.
 - `data`: payload for the selected `data_type`.
 
 Document type values:

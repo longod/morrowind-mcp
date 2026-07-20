@@ -7,7 +7,7 @@ local function Test()
     -- supress logging for tests if we are exiting after, to avoid cluttering the test output
     if exitAfter then
         local config = require("morrowind-mcp.config")
-        config.development.logLevel = mwse.logLevel.none
+        config.development.logLevel = mwse.logLevel.info
         config.development.logToConsole = false
         local loggerFactory = require("morrowind-mcp.logger")
         loggerFactory.ApplyConfigToAll({ level = config.development.logLevel, logToConsole = config.development.logToConsole })
