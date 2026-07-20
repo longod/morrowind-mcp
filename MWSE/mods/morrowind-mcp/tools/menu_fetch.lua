@@ -20,7 +20,7 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "menu-fetch",
         description =
-        "Fetch current menu hierarchy. `menu` is user interface such as inventory. `help` is overlay such as tooltips. some menus have `widget` or `executableEvent` properties to indicate what kind of action can be performed on this menu.",
+        "Fetch current menu hierarchy. `menu` is user interface such as inventory. `help` is overlay such as tooltips. some menus have `widget` or `actionable` properties to indicate what kind of action can be performed on this menu.",
         inputSchema = jsonrpc.InputSchema(
             {
                 menu_id = jsonrpc.NumberSchema(

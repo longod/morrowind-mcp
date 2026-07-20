@@ -5,6 +5,7 @@ local enumname = require("morrowind-mcp.tes3.enumname")
 local ui = require("morrowind-mcp.tes3.ui")
 local iter = require("morrowind-mcp.tes3.iterator")
 local dialogue = require("morrowind-mcp.util.dialogue")
+local strutil = require("morrowind-mcp.core.strutil")
 
 -- serialzie tes3 various objects for json serialization.
 local this = {}
@@ -260,7 +261,7 @@ local function tes3weatherRain(i, o)
     o.particleHeightMin = i.particleHeightMin
     o.particleRadius = i.particleRadius
     o.rainActive = i.rainActive
-    o.rainLoopSound = this.tes3sound(i.rainLoopSound)
+    -- o.rainLoopSound = this.tes3sound(i.rainLoopSound)
     o.rainLoopSoundId = i.rainLoopSoundId
     o.threshold = i.threshold
 end
@@ -275,17 +276,17 @@ local function tes3weatherThunder(i, o)
     o.particleHeightMin = i.particleHeightMin
     o.particleRadius = i.particleRadius
     o.rainActive = i.rainActive
-    o.rainLoopSound = this.tes3sound(i.rainLoopSound)
+    -- o.rainLoopSound = this.tes3sound(i.rainLoopSound)
     o.rainLoopSoundId = i.rainLoopSoundId
     o.threshold = i.threshold
     o.thunderFrequency = i.thunderFrequency
-    o.thunderSound1 = this.tes3sound(i.thunderSound1)
+    -- o.thunderSound1 = this.tes3sound(i.thunderSound1)
     o.thunderSound1Id = i.thunderSound1Id
-    o.thunderSound2 = this.tes3sound(i.thunderSound2)
+    -- o.thunderSound2 = this.tes3sound(i.thunderSound2)
     o.thunderSound2Id = i.thunderSound2Id
-    o.thunderSound3 = this.tes3sound(i.thunderSound3)
+    -- o.thunderSound3 = this.tes3sound(i.thunderSound3)
     o.thunderSound3Id = i.thunderSound3Id
-    o.thunderSound4 = this.tes3sound(i.thunderSound4)
+    -- o.thunderSound4 = this.tes3sound(i.thunderSound4)
     o.thunderSound4Id = i.thunderSound4Id
     o.thunderSoundCount = i.thunderSoundCount
     o.thunderThreshold = i.thunderThreshold
@@ -349,9 +350,10 @@ function this.tes3weather(i, o)
     end
     o = o or jsonrpc.object()
 
-    o.ambientDayColor = i.ambientDayColor
-    o.ambientLoopSound = this.tes3sound(i.ambientLoopSound)
+    -- o.ambientDayColor = i.ambientDayColor
+    -- o.ambientLoopSound = this.tes3sound(i.ambientLoopSound)
     o.ambientLoopSoundId = i.ambientLoopSoundId
+    -- where is current ambient color?
     o.ambientNightColor = i.ambientNightColor
     o.ambientPlaying = i.ambientPlaying
     o.ambientSunriseColor = i.ambientSunriseColor
@@ -360,26 +362,27 @@ function this.tes3weather(i, o)
     o.cloudsSpeed = i.cloudsSpeed
     o.cloudTexture = i.cloudTexture
     -- o.controller = i.controller -- TODO avoid circular reference
-    o.fogDayColor = i.fogDayColor
-    o.fogNightColor = i.fogNightColor
-    o.fogSunriseColor = i.fogSunriseColor
-    o.fogSunsetColor = i.fogSunsetColor
+    -- o.fogDayColor = i.fogDayColor
+    -- o.fogNightColor = i.fogNightColor
+    -- o.fogSunriseColor = i.fogSunriseColor
+    -- o.fogSunsetColor = i.fogSunsetColor
     o.glareView = i.glareView
-    o.index = enumname.weather(i.index) -- equals name?
-    o.landFogDayDepth = i.landFogDayDepth
-    o.landFogNightDepth = i.landFogNightDepth
+    o.index = i.index -- enumname.weather(i.index)
+    -- o.landFogDayDepth = i.landFogDayDepth
+    -- o.landFogNightDepth = i.landFogNightDepth
     o.name = i.name
-    o.skyDayColor = i.skyDayColor
-    o.skyNightColor = i.skyNightColor
-    o.skySunriseColor = i.skySunriseColor
-    o.skySunsetColor = i.skySunsetColor
+    -- o.skyDayColor = i.skyDayColor
+    -- o.skyNightColor = i.skyNightColor
+    -- o.skySunriseColor = i.skySunriseColor
+    -- o.skySunsetColor = i.skySunsetColor
+    -- where is current sun color?
     o.sunDayColor = i.sunDayColor
     o.sundiscSunsetColor = i.sundiscSunsetColor
     o.sunNightColor = i.sunNightColor
     o.sunSunriseColor = i.sunSunriseColor
     o.sunSunsetColor = i.sunSunsetColor
     o.transitionDelta = i.transitionDelta
-    o.underwaterSoundState = i.underwaterSoundState
+    -- o.underwaterSoundState = i.underwaterSoundState
     o.windSpeed = i.windSpeed
 
     local handler = weatherHandler[i.index]
@@ -406,10 +409,10 @@ function this.tes3weatherController(i, o)
     -- TODO need to calculate current ambient color?
     -- TODO need to calculate current sun direction and color?
 
-    o.ambientPostSunriseTime = i.ambientPostSunriseTime
-    o.ambientPostSunsetTime = i.ambientPostSunsetTime
-    o.ambientPreSunriseTime = i.ambientPreSunriseTime
-    o.ambientPreSunsetTime = i.ambientPreSunsetTime
+    -- o.ambientPostSunriseTime = i.ambientPostSunriseTime
+    -- o.ambientPostSunsetTime = i.ambientPostSunsetTime
+    -- o.ambientPreSunriseTime = i.ambientPreSunriseTime
+    -- o.ambientPreSunsetTime = i.ambientPreSunsetTime
     o.currentFogColor = i.currentFogColor
     o.currentSkyColor = i.currentSkyColor
     o.currentWeather = this.tes3weather(i.currentWeather)
@@ -601,13 +604,19 @@ local function tes3baseObject(i, o)
     -- o.deleted = i.deleted
     -- o.disabled = i.disabled
     o.id = i.id
-    o.modified = i.modified
+    -- o.modified = i.modified
     -- o.objectFlags = i.objectFlags -- TODO means flags
     o.objectType = enumname.objectType(i.objectType)
-    o.persistent = i.persistent
-    o.sourceless = i.sourceless
+    if i.persistent then
+        o.persistent = i.persistent
+    end
+    if i.sourceless then
+        o.sourceless = i.sourceless
+    end
     -- o.sourceMod = i.sourceMod
-    o.supportsActivate = i.supportsActivate
+    if i.supportsActivate then
+        o.supportsActivate = i.supportsActivate
+    end
 
     local _ = ValidateType(o)
     return o
@@ -625,9 +634,8 @@ local function tes3object(i, o)
         return nil
     end
     if i.isLocationMarker then -- for CS
-        return nil
+        o.isLocationMarker = i.isLocationMarker -- indicate travel point, but it contains interior north markers.
     end
-    -- o.isLocationMarker = i.isLocationMarker
     -- o.nextInCollection = i.nextInCollection
     -- o.owningCollection = i.owningCollection
     -- o.previousInCollection = i.previousInCollection
@@ -675,11 +683,19 @@ local function tes3item(i, o)
         return nil
     end
 
-    o.icon = i.icon
-    o.isCarriable = i.isCarriable
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.icon) == false then
+        o.icon = i.icon
+    end
+    if i.isCarriable then
+        o.isCarriable = i.isCarriable
+    end
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.name = i.name
-    o.promptsEquipmentReevaluation = i.promptsEquipmentReevaluation
+    if i.promptsEquipmentReevaluation then
+        o.promptsEquipmentReevaluation = i.promptsEquipmentReevaluation
+    end
     -- o.stolenList = i.stolenList -- TODO
 
     local _ = ValidateType(o)
@@ -700,7 +716,7 @@ local function tes3actor(i, o)
 
     -- o.actorFlags = i.actorFlags
     o.barterGold = i.barterGold
-    o.blood = i.blood
+    o.blood = i.blood -- TODO to name
     -- o.cloneCount = i.cloneCount
     -- o.equipment = i.equipment -- TODO
     -- o.inventory = i.inventory -- TODO
@@ -721,11 +737,11 @@ local function tes3mobileObject(i, o)
     end
     o = o or jsonrpc.object()
 
-    o.boundSize = i.boundSize
-    o.boundSize2D = i.boundSize2D
+    -- o.boundSize = i.boundSize
+    -- o.boundSize2D = i.boundSize2D
     o.cellX = i.cellX
     o.cellY = i.cellY
-    o.dynamicLightingValid = i.dynamicLightingValid
+    -- o.dynamicLightingValid = i.dynamicLightingValid
     -- o.flags = i.flags
     o.height = i.height
     o.impulseVelocity = i.impulseVelocity
@@ -781,7 +797,9 @@ function this.tes3activator(i, o)
         return nil
     end
 
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.name = i.name
     o.script = this.tes3script(i.script)
 
@@ -881,7 +899,7 @@ function this.tes3birthsign(i, o)
     o.description = i.description
     o.name = i.name
     -- o.spells = i.spells -- TODO
-    o.texturePath = i.texturePath
+    -- o.texturePath = i.texturePath
 
     local _ = ValidateType(o)
     return o
@@ -900,13 +918,17 @@ function this.tes3bodyPart(i, o)
     end
 
     o.female = i.female
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.part = enumname.partIndex(i.part)
     o.partType = enumname.activeBodyPartLayer(i.partType)
-    o.playable = i.playable
+    -- o.playable = i.playable
     o.raceName = i.raceName
     -- o.sceneNode = i.sceneNode
-    o.vampiric = i.vampiric
+    if i.vampiric then
+        o.vampiric = i.vampiric
+    end
 
     local _ = ValidateType(o)
     return o
@@ -963,8 +985,8 @@ function this.tes3cell(i, o)
     o.hasMapMarker = i.hasMapMarker
     o.hasWater = i.hasWater
     o.isInterior = i.isInterior
-    o.isOrBehavesAsExterior = i.isOrBehavesAsExterior
-    o.landscape =  this.tes3land(i.landscape)
+    -- o.isOrBehavesAsExterior = i.isOrBehavesAsExterior
+    -- o.landscape =  this.tes3land(i.landscape) -- need?
     o.name = i.name
     -- o.pathGrid = this.tes3pathGrid(i.pathGrid) -- TODO avoid circular reference
     -- o.pickObjectsRoot = i.pickObjectsRoot
@@ -992,32 +1014,70 @@ function this.tes3class(i, o)
     end
 
     o.attributes = iter.ForEachObject(i.attributes, enumname.attribute)
-    o.bartersAlchemy = i.bartersAlchemy
-    o.bartersApparatus = i.bartersApparatus
-    o.bartersArmor = i.bartersArmor
-    o.bartersBooks = i.bartersBooks
-    o.bartersClothing = i.bartersClothing
-    o.bartersEnchantedItems = i.bartersEnchantedItems
-    o.bartersIngredients = i.bartersIngredients
-    o.bartersLights = i.bartersLights
-    o.bartersLockpicks = i.bartersLockpicks
-    o.bartersMiscItems = i.bartersMiscItems
-    o.bartersProbes = i.bartersProbes
-    o.bartersRepairTools = i.bartersRepairTools
-    o.bartersWeapons = i.bartersWeapons
+    if i.bartersAlchemy then
+        o.bartersAlchemy = i.bartersAlchemy
+    end
+    if i.bartersApparatus then
+        o.bartersApparatus = i.bartersApparatus
+    end
+    if i.bartersArmor then
+        o.bartersArmor = i.bartersArmor
+    end
+    if i.bartersBooks then
+        o.bartersBooks = i.bartersBooks
+    end
+    if i.bartersClothing then
+        o.bartersClothing = i.bartersClothing
+    end
+    if i.bartersEnchantedItems then
+        o.bartersEnchantedItems = i.bartersEnchantedItems
+    end
+    if i.bartersIngredients then
+        o.bartersIngredients = i.bartersIngredients
+    end
+    if i.bartersLights then
+        o.bartersLights = i.bartersLights
+    end
+    if i.bartersLockpicks then
+        o.bartersLockpicks = i.bartersLockpicks
+    end
+    if i.bartersMiscItems then
+        o.bartersMiscItems = i.bartersMiscItems
+    end
+    if i.bartersProbes then
+        o.bartersProbes = i.bartersProbes
+    end
+    if i.bartersRepairTools then
+        o.bartersRepairTools = i.bartersRepairTools
+    end
+    if i.bartersWeapons then
+        o.bartersWeapons = i.bartersWeapons
+    end
     o.description = i.description
     o.image = i.image
     o.majorSkills = iter.ForEachObject(i.majorSkills, enumname.skill)
     o.minorSkills = iter.ForEachObject(i.minorSkills, enumname.skill)
     o.name = i.name
-    o.offersBartering = i.offersBartering
-    o.offersEnchanting = i.offersEnchanting
-    o.offersRepairs = i.offersRepairs
-    o.offersSpellmaking = i.offersSpellmaking
-    o.offersSpells = i.offersSpells
-    o.offersTraining = i.offersTraining
-    o.playable = i.playable
-    o.services = i.services
+    if i.offersBartering then
+        o.offersBartering = i.offersBartering
+    end
+    if i.offersEnchanting then
+        o.offersEnchanting = i.offersEnchanting
+    end
+    if i.offersRepairs then
+        o.offersRepairs = i.offersRepairs
+    end
+    if i.offersSpellmaking then
+        o.offersSpellmaking = i.offersSpellmaking
+    end
+    if i.offersSpells then
+        o.offersSpells = i.offersSpells
+    end
+    if i.offersTraining then
+        o.offersTraining = i.offersTraining
+    end
+    -- o.playable = i.playable
+    -- o.services = i.services
     o.skills = iter.ForEachObject(i.skills, enumname.skill)
     o.specialization = enumname.specialization(i.specialization)
 
@@ -1066,7 +1126,9 @@ function this.tes3container(i, o)
 
     -- common fields
     o.isInstance = i.isInstance
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.name = i.name
     o.organic = i.organic
     o.respawns = i.respawns
@@ -1100,7 +1162,9 @@ function this.tes3creature(i, o)
     -- common field
     -- o.aiConfig = i.aiConfig -- TODO
     -- o.attacks = i.attacks -- TODO
-    o.attributes = jsonrpc.array(i.attributes)
+    if #i.attributes > 0 then
+        o.attributes = jsonrpc.array(i.attributes) -- TODO readable
+    end
     o.biped = i.biped
     o.fatigue = i.fatigue
     o.flies = i.flies
@@ -1111,11 +1175,15 @@ function this.tes3creature(i, o)
     o.isRespawn = i.isRespawn
     o.level = i.level
     o.magicka = i.magicka
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.name = i.name
     o.respawns = i.respawns
     o.script = this.tes3script(i.script)
-    o.skills = jsonrpc.array(i.skills)
+    if #i.skills > 0 then
+        o.skills = jsonrpc.array(i.skills) -- TODO readable
+    end
     o.soul = i.soul
     o.soundCreature = this.tes3creature(i.soundCreature)
     -- o.spells = i.spells -- TODO
@@ -1215,7 +1283,9 @@ function this.tes3door(i, o)
     end
 
     o.closeSound = this.tes3sound(i.closeSound)
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.name = i.name
     o.openSound = this.tes3sound(i.openSound)
     o.script = this.tes3script(i.script)
@@ -1485,7 +1555,7 @@ function this.tes3magicEffect(i, o)
     o.areaVisualEffect = this.tes3anyObject(i.areaVisualEffect)
     -- o.baseFlags = i.baseFlags -- means?
     o.baseMagickaCost = i.baseMagickaCost
-    o.bigIcon = i.bigIcon
+    -- o.bigIcon = i.bigIcon
     o.boltSoundEffect = this.tes3sound(i.boltSoundEffect)
     o.boltVisualEffect = this.tes3anyObject(i.boltVisualEffect)
     o.canCastSelf = i.canCastSelf
@@ -1497,7 +1567,7 @@ function this.tes3magicEffect(i, o)
     o.description = i.description
     -- o.flags = i.flags -- means?
     o.hasActorLighting = i.hasActorLighting
-    o.hasContinuousVFX = i.hasContinuousVFX
+    -- o.hasContinuousVFX = i.hasContinuousVFX
     o.hasNoDuration = i.hasNoDuration
     o.hasNoMagnitude = i.hasNoMagnitude
     o.hitSoundEffect = this.tes3sound(i.hitSoundEffect)
@@ -1540,12 +1610,18 @@ function this.tes3misc(i, o)
         return nil
     end
 
-    o.isGold = i.isGold
-    o.isKey = i.isKey
-    o.isSoulGem = i.isSoulGem
+    if i.isGold then
+        o.isGold = i.isGold
+    end
+    if i.isKey then
+        o.isKey = i.isKey
+    end
+    if i.isSoulGem then
+        o.isSoulGem = i.isSoulGem
+        o.soulGemCapacity = i.soulGemCapacity
+        -- o.soulGemData = i.soulGemData -- TODO
+    end
     o.script = this.tes3script(i.script)
-    o.soulGemCapacity = i.soulGemCapacity
-    -- o.soulGemData = i.soulGemData -- TODO
     o.value = i.value
     o.weight = i.weight
 
@@ -1600,8 +1676,8 @@ function this.tes3mobileActor(i, o)
     o.flee = i.flee
     -- o.friendlyActors = i.friendlyActors -- TODO
     o.friendlyFireHitCount = i.friendlyFireHitCount
-    o.greetDuration = i.greetDuration
-    o.greetTimer = i.greetTimer
+    -- o.greetDuration = i.greetDuration
+    -- o.greetTimer = i.greetTimer
     o.hasBlightDisease = i.hasBlightDisease
     o.hasCommonDisease = i.hasCommonDisease
     o.hasCorprusDisease = i.hasCorprusDisease
@@ -1648,15 +1724,15 @@ function this.tes3mobileActor(i, o)
     o.luck = this.tes3statistic(i.luck)
     o.magicka = this.tes3statistic(i.magicka)
     o.magickaMultiplier = this.tes3statistic(i.magickaMultiplier)
-    o.nextActionWeight = i.nextActionWeight
+    -- o.nextActionWeight = i.nextActionWeight
     o.paralyze = i.paralyze
     o.personality = this.tes3statistic(i.personality)
     -- o.readiedAmmo = i.readiedAmmo -- TODO
     o.readiedAmmoCount = i.readiedAmmoCount
     -- o.readiedShield = i.readiedShield -- TODO
     -- o.readiedWeapon = i.readiedWeapon -- TODO
-    -- o.resistBlightDisease = i.resistBlightDisease -- TODO
-    o.resistCommonDisease = i.resistCommonDisease -- TODO
+    o.resistBlightDisease = i.resistBlightDisease
+    o.resistCommonDisease = i.resistCommonDisease
     o.resistCorprus = i.resistCorprus
     o.resistFire = i.resistFire
     o.resistFrost = i.resistFrost
@@ -1670,7 +1746,7 @@ function this.tes3mobileActor(i, o)
     o.scanTimer = i.scanTimer
     o.shield = i.shield
     o.silence = i.silence
-    o.sound = i.sound -- magic effect sound
+    -- o.sound = i.sound -- magic effect sound
     o.speed = this.tes3statistic(i.speed)
     o.spellReadied = i.spellReadied
     o.strength = this.tes3statistic(i.strength)
@@ -1706,7 +1782,7 @@ function this.tes3mobileCreature(i, o)
     -- o.flySpeed = i.flySpeed
     o.magic = this.tes3statistic(i.magic)
     -- o.moveSpeed = i.moveSpeed -- FIXME it crashes in ActorAnimController::calcActorMoveSpeed on loaded. it seems to uninitialized yet.
-    -- o.object = this.tes3creature(i.object) -- TODO avoid circular reference
+    o.object = this.tes3creature(i.object)
     -- o.runSpeed = i.runSpeed
     -- o.skills = iter.ForEach(i.skills, this.tes3statistic) -- TODO represent key=value
     o.stealth = this.tes3statistic(i.stealth)
@@ -1756,7 +1832,7 @@ function this.tes3mobileNPC(i, o)
     o.mercantile = this.tes3statistic(i.mercantile)
     -- o.moveSpeed = i.moveSpeed -- FIXME it crashes in ActorAnimController::calcActorMoveSpeed on loaded. it seems to uninitialized yet.
     o.mysticism = this.tes3statistic(i.mysticism)
-    o.object = i.object
+    o.object = this.tes3npc(i.object)
     o.restoration = this.tes3statistic(i.restoration)
     -- o.runSpeed = i.runSpeed
     o.security = this.tes3statistic(i.security)
@@ -1890,8 +1966,10 @@ function this.tes3npc(i, o)
     end
 
     -- o.aiConfig = i.aiConfig -- TODO
-    o.attributes = jsonrpc.array(i.attributes)
-    o.autoCalc = i.autoCalc
+    if #i.attributes > 0 then
+        o.attributes = jsonrpc.array(i.attributes) -- TODO represent key=value
+    end
+    -- o.autoCalc = i.autoCalc
     o.baseDisposition = i.baseDisposition
     o.class = this.tes3class(i.class)
     o.faction = this.tes3faction(i.faction)
@@ -1906,12 +1984,16 @@ function this.tes3npc(i, o)
     o.isRespawn = i.isRespawn
     o.level = i.level
     o.magicka = i.magicka
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.name = i.name
     o.race = this.tes3race(i.race)
     o.reputation = i.reputation
     o.script = this.tes3script(i.script)
-    o.skills = jsonrpc.array(i.skills)
+    if #i.skills then
+        o.skills = jsonrpc.array(i.skills) -- TODO represent key=value
+    end
     o.soul = i.soul
     -- o.spells = i.spells -- TODO
     o.weight = i.weight
@@ -1946,7 +2028,7 @@ function this.tes3pathGrid(i, o)
     end
 
     o.granularity = i.granularity
-    o.isLoaded = i.isLoaded
+    -- o.isLoaded = i.isLoaded
     o.nodeCount = i.nodeCount
     -- o.nodes = i.nodes -- TODO
     -- o.parentCell = this.tes3cell(i.parentCell) -- TODO avoid circular reference
@@ -2018,7 +2100,7 @@ function this.tes3race(i, o)
     -- o.flags = i.flags
     -- o.height = i.height -- TODO
     o.isBeast = i.isBeast
-    o.isPlayable = i.isPlayable
+    -- o.isPlayable = i.isPlayable
     -- o.maleBody = i.maleBody -- TODO
     o.name = i.name
     -- o.skillBonuses = i.skillBonuses -- TODO
@@ -2050,8 +2132,10 @@ function this.tes3reference(i, o)
     -- o.data = i.data
     -- o.destination = i.destination -- TODO
     o.facing = i.facing
-    o.forwardDirection = i.forwardDirection
-    o.hasNoCollision = i.hasNoCollision
+    o.forwardDirection = i.forwardDirection -- It perhaps be easier to understand than the facing angle.
+    if i.hasNoCollision then
+        o.hasNoCollision = i.hasNoCollision
+    end
     o.isDead = i.isDead
     o.isEmpty = i.isEmpty
     o.isLeveledSpawn = i.isLeveledSpawn
@@ -2060,15 +2144,17 @@ function this.tes3reference(i, o)
     o.leveledBaseReference = this.tes3reference(i.leveledBaseReference)
     -- o.light = i.light
     -- o.lockNode = i.lockNode -- TODO
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
     o.mobile = this.tes3anyObject(i.mobile)
     -- o.nextNode = i.nextNode
     -- o.nodeData = i.nodeData
     o.object = this.tes3anyObject(i.object)
-    o.orientation = i.orientation
+    -- o.orientation = i.orientation -- Is the facing angle sufficient?
     o.position = i.position
     -- o.previousNode = i.previousNode
-    o.rightDirection = i.rightDirection
+    -- o.rightDirection = i.rightDirection
     -- o.sceneNode = i.sceneNode
     -- o.sourceFormId = i.sourceFormId
     -- o.sourceModId = i.sourceModId
@@ -2079,7 +2165,7 @@ function this.tes3reference(i, o)
     -- o.targetFormId = i.targetFormId
     -- o.targetModId = i.targetModId
     -- o.tempData = i.tempData
-    o.upDirection = i.upDirection
+    -- o.upDirection = i.upDirection
 
     local _ = ValidateType(o)
     return o
@@ -2098,9 +2184,9 @@ function this.tes3region(i, o)
     end
 
     o.name = i.name
-    o.sleepCreature = this.tes3leveledCreature(i.sleepCreature)
+    -- o.sleepCreature = this.tes3leveledCreature(i.sleepCreature) -- it seems to be not useless.
     -- o.sounds = i.sounds -- TODO
-    -- o.weather = i.weather -- TODO
+    -- o.weather = this.tes3weather(i.weather) -- access to weather controlelr is better
     o.weatherChanceAsh = i.weatherChanceAsh
     o.weatherChanceBlight = i.weatherChanceBlight
     o.weatherChanceBlizzard = i.weatherChanceBlizzard
@@ -2204,7 +2290,7 @@ function this.tes3sound(i, o)
     o.filename = i.filename
     o.maxDistance = i.maxDistance
     o.minDistance = i.minDistance
-    o.volume = i.volume
+    -- o.volume = i.volume
 
     local _ = ValidateType(o)
     return o
@@ -2296,7 +2382,9 @@ function this.tes3static(i, o)
         return nil
     end
 
-    o.mesh = i.mesh
+    if strutil.IsNullOrEmpty(i.mesh) == false then
+        o.mesh = i.mesh
+    end
 
     local _ = ValidateType(o)
     return o

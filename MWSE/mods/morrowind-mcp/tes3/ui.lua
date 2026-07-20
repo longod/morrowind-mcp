@@ -2,8 +2,15 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 local enumname = require("morrowind-mcp.tes3.enumname")
 local ui_action = require("morrowind-mcp.util.ui_action")
+local strutil = require("morrowind-mcp.core.strutil")
 
 local this = {}
+
+local fontId = {
+    magic_cards_regular = 0,
+    century_gothic_font_regular = 1,
+    daedric_font = 2,
+}
 
 local fontName = {
     [0] = "magic_cards_regular",         -- Magic Cards, default
@@ -262,12 +269,17 @@ function this.tes3uiElement(i, o)
     -- o.childOffsetX = i.childOffsetX
     -- o.childOffsetY = i.childOffsetY
     -- o.color = i.color
-    o.consumeMouseEvents = i.consumeMouseEvents
+    -- o.consumeMouseEvents = i.consumeMouseEvents
     o.contentPath = i.contentPath
     -- o.contentType = i.contentType -- already a string from MWSE; tes3.contentType holds numbers, not this field
-    o.disabled = i.disabled
+    if i.disabled then
+        o.disabled = i.disabled
+    end
     -- o.flowDirection = enumname.flowDirection(i.flowDirection)
-    o.font = fontName[i.font] -- TODO ommit non deadric font?
+    -- o.font = fontName[i.font]
+    if i.font == fontId.daedric_font then
+        o.writtenInDaedric = true -- only for daedric texts, because they are like ciphers.
+    end
     -- o.height = i.height
     -- o.heightProportional = i.heightProportional
     o.id = i.id
@@ -290,11 +302,17 @@ function this.tes3uiElement(i, o)
     -- o.parent = i.parent
     -- o.positionX = i.positionX
     -- o.positionY = i.positionY
-    o.rawText = i.rawText
-    o.repeatKeys = i.repeatKeys
+    -- o.rawText = i.rawText
+    -- o.repeatKeys = i.repeatKeys -- need?
     -- o.scaleMode = i.scaleMode
     -- o.sceneNode = i.sceneNode, -- need?
-    o.text = i.text
+    -- o.text = i.text
+    -- Same condition, because rawText is text + formatting and caret.
+    -- We want to output text if they exsist and text is empty, because they indicate this element is any text type.
+    if strutil.IsNullOrEmpty(i.rawText) == false then
+        o.rawText = i.rawText
+        o.text = i.text
+    end
     -- o.texture = i.texture, -- need
     o.type = i.type -- already a string from MWSE; tes3.uiElementType holds numbers, not this field
     -- o.visible = i.visible -- if element is not terminated, it is needed to contain
@@ -303,9 +321,9 @@ function this.tes3uiElement(i, o)
     -- o.widthProportional = i.widthProportional
 
     -- Native widgetless layout action properties, if known.
-    local executableEvent = ui_action.GetActionProperties(i)
-    if executableEvent then
-        o.executableEvent = jsonrpc.array(executableEvent)
+    local actionable = ui_action.GetActionProperties(i)
+    if actionable then
+        o.actionable = jsonrpc.array(actionable)
     end
 
     local children = jsonrpc.array(table.size(i.children))

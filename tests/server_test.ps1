@@ -4,6 +4,7 @@ param(
 
 $MaxTry = 10
 $IntervalSeconds = 3
+$ProtocolVersion = "2025-11-25"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "mwmcp_config.ps1")
@@ -200,6 +201,211 @@ function Invoke-MCPInspector {
     }
 }
 
+function New-McpRequest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Method,
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+        [string]$SessionId,
+        [string]$Body
+    )
+
+    $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::$Method, $Url)
+    $request.Headers.TryAddWithoutValidation("Accept", "application/json, text/event-stream") | Out-Null
+    $request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", $ProtocolVersion) | Out-Null
+    if (-not [string]::IsNullOrWhiteSpace($SessionId)) {
+        $request.Headers.TryAddWithoutValidation("MCP-Session-Id", $SessionId) | Out-Null
+    }
+    if ($null -ne $Body) {
+        $request.Content = [System.Net.Http.StringContent]::new($Body, [System.Text.Encoding]::UTF8, "application/json")
+    }
+    return $request
+}
+
+function Get-RequiredHeaderValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Net.Http.HttpResponseMessage]$Response,
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $values = [string[]]@()
+    if (-not $Response.Headers.TryGetValues($Name, [ref]$values)) {
+        throw "Missing response header: $Name"
+    }
+    if ($values.Count -eq 0 -or [string]::IsNullOrWhiteSpace($values[0])) {
+        throw "Empty response header: $Name"
+    }
+    return $values[0]
+}
+
+function Send-McpJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Net.Http.HttpClient]$Client,
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+        [string]$SessionId,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Message
+    )
+
+    $body = $Message | ConvertTo-Json -Depth 16 -Compress
+    $request = New-McpRequest -Method "Post" -Url $Url -SessionId $SessionId -Body $body
+    return $Client.SendAsync($request).GetAwaiter().GetResult()
+}
+
+function Invoke-MemoryTraversalTest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EndpointUrl
+    )
+
+    Write-Host "[RUN] live memory traversal" -ForegroundColor Cyan
+    $client = [System.Net.Http.HttpClient]::new()
+    $sessionId = $null
+    $requestId = 10000
+    $issues = [System.Collections.Generic.List[string]]::new()
+    $visited = @{}
+    $queue = [System.Collections.Queue]::new()
+    $queue.Enqueue("morrowind://memory/index.json")
+
+    try {
+        $initialize = @{
+            jsonrpc = "2.0"
+            id = $requestId++
+            method = "initialize"
+            params = @{
+                protocolVersion = $ProtocolVersion
+                capabilities = @{}
+                clientInfo = @{
+                    name = "morrowind-mcp-server-test"
+                    version = "1.0.0"
+                }
+            }
+        }
+        $initializeResponse = Send-McpJson -Client $client -Url $EndpointUrl -Message $initialize
+        if ($initializeResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+            throw "Initialize failed: HTTP $([int]$initializeResponse.StatusCode)"
+        }
+        $sessionId = Get-RequiredHeaderValue -Response $initializeResponse -Name "MCP-Session-Id"
+
+        $initialized = @{
+            jsonrpc = "2.0"
+            method = "notifications/initialized"
+        }
+        $initializedResponse = Send-McpJson -Client $client -Url $EndpointUrl -SessionId $sessionId -Message $initialized
+        if ($initializedResponse.StatusCode -ne [System.Net.HttpStatusCode]::Accepted) {
+            throw "Initialized notification failed: HTTP $([int]$initializedResponse.StatusCode)"
+        }
+
+        while ($queue.Count -gt 0) {
+            $uri = [string]$queue.Dequeue()
+            if ($visited.ContainsKey($uri)) {
+                continue
+            }
+            $visited[$uri] = $true
+
+            $read = @{
+                jsonrpc = "2.0"
+                id = $requestId++
+                method = "resources/read"
+                params = @{
+                    uri = $uri
+                }
+            }
+            $readResponse = Send-McpJson -Client $client -Url $EndpointUrl -SessionId $sessionId -Message $read
+            $readText = $readResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ($readResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+                $issues.Add("Read failed: uri=$uri http=$([int]$readResponse.StatusCode)")
+                continue
+            }
+
+            try {
+                $readBody = $readText | ConvertFrom-Json -ErrorAction Stop
+            }
+            catch {
+                $issues.Add("Read returned invalid JSON-RPC: uri=$uri error=$($_.Exception.Message)")
+                continue
+            }
+            if ($readBody.error) {
+                $issues.Add("Read returned JSON-RPC error: uri=$uri code=$($readBody.error.code) message=$($readBody.error.message)")
+                continue
+            }
+
+            $content = @($readBody.result.contents | Where-Object { $_.uri -eq $uri } | Select-Object -First 1)
+            if ($content.Count -eq 0) {
+                $issues.Add("Read result missing requested content: uri=$uri")
+                continue
+            }
+            if ($content[0].mimeType -ne "application/json" -or [string]::IsNullOrWhiteSpace($content[0].text)) {
+                $issues.Add("Memory content is not JSON text: uri=$uri mimeType=$($content[0].mimeType)")
+                continue
+            }
+
+            try {
+                $document = $content[0].text | ConvertFrom-Json -ErrorAction Stop
+            }
+            catch {
+                $issues.Add("Memory document text is invalid JSON: uri=$uri error=$($_.Exception.Message)")
+                continue
+            }
+
+            foreach ($field in @("schema_version", "type", "data_type", "title", "source", "data")) {
+                if ($null -eq $document.PSObject.Properties[$field]) {
+                    $issues.Add(("Missing {0}: uri={1}" -f $field, $uri))
+                }
+            }
+            if ($document.type -match '^memory\.(index|collection)$' -and $null -ne $document.data.PSObject.Properties["links"]) {
+                $issues.Add("Index/collection duplicates links inside data: uri=$uri")
+            }
+
+            foreach ($link in @($document.links)) {
+                if ($null -eq $link) {
+                    continue
+                }
+                if ([string]::IsNullOrWhiteSpace($link.uri)) {
+                    $issues.Add("Link is missing uri: parent=$uri")
+                    continue
+                }
+                if ($link.uri -notlike "morrowind://memory/*") {
+                    continue
+                }
+                if ($uri -eq "morrowind://memory/actors/index.json" -and $link.rel -eq "actor") {
+                    $description = [string]$link.description
+                    foreach ($token in @("data_type=", "base_id=", "reference_id=", "identity_kind=")) {
+                        if (-not $description.Contains($token)) {
+                            $issues.Add("Actor link description missing $token parent=$uri child=$($link.uri)")
+                        }
+                    }
+                }
+                if (-not $visited.ContainsKey($link.uri)) {
+                    $queue.Enqueue($link.uri)
+                }
+            }
+        }
+    }
+    catch {
+        $issues.Add($_.Exception.Message)
+    }
+    finally {
+        $client.Dispose()
+    }
+
+    if ($issues.Count -gt 0) {
+        Write-Host "[FAILED] live memory traversal" -ForegroundColor Red
+        foreach ($issue in ($issues | Select-Object -First 10)) {
+            Write-Host "  $issue" -ForegroundColor DarkYellow
+        }
+        return 1
+    }
+
+    Write-Host "[PASSED] live memory traversal: documents=$($visited.Count)" -ForegroundColor Green
+    return 0
+}
+
 $TargetIP = $Config.Connection.host
 $TargetPort = [int]$Config.Connection.port
 $StartScriptPath = ".\start_server_mo2.ps1"
@@ -313,6 +519,7 @@ try {
     foreach ($Test in $TestCases) {
         $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
     }
+    $TestResult = $TestResult -bor (Invoke-MemoryTraversalTest -EndpointUrl $Config.Connection.url)
 
     $ExitCode = $ExitCode -bor $TestResult
 

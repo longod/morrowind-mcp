@@ -140,12 +140,6 @@ function this:Execute(arguments, context)
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
-    -- its not correct condition.
-    -- if not target.consumeMouseEvents then
-    --     local errorContent = jsonrpc.TextContent("Menu does not consume mouse events.")
-    --     return jsonrpc.CallToolResult(errorContent, nil, true)
-    -- end
-
     -- possible destory menu after action, so store name and id before action.
     local target_name = target.name
     local target_id = target.id
