@@ -33,6 +33,7 @@ description: |
 
 `-NoForeground` を指定すると、接続確認後のフォアグラウンド化ステップをスキップする。
 バックグラウンドではキーボードのキー入力やマウスのボタン入力（mw-player-action など）が送られないため、入力を使う検証ではフォアグラウンド化する必要がある。入力送信が不要な検証では `-NoForeground` で実行してよい。
+自動 foreground 化は best effort であり、ロードされるセーブ内容や実際のウィンドウ状態に依存するため、`tests/server_test.ps1` は target/activate/MenuDialog への到達を必須にしない。会話 actor まで到達したかは、実行後の `MWSE.log` と `tests/validate_memory_dump.ps1` の `conversationActors` 集計で判断する。
 
 2. 出力を確認する。
 
@@ -45,6 +46,10 @@ description: |
 5. `mwse_<timestamp>.log` を確認する（必要に応じて元の `MWSE.log` も確認する）。
 
 6. `MWSE.log` からサーバー側の挙動を検査する。
+
+7. Memory dump を検査する。
+  - `tests/server_test.ps1` が `mw-debug-action action=memory:SaveDebugDocuments` を実行した後、`tests/validate_memory_dump.ps1` を実行する。
+  - 出力の `conversationActors` は、debug dump 成果物上で `target -> activate -> MenuDialog` まで到達した actor 数を表す。セーブ内容や foreground 状態に依存するため、通常の server test 合否とは分けて読む。
 
 ## Notes
 - Inspector v0.22.0 では、`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94` が必ず発生する。

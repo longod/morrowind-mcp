@@ -131,6 +131,7 @@ Observed actors:
 - Dynamic actor entries are owned internally by the actor module.
 - The loaded-game refresh intentionally rebuilds actor entries from active cells because broad dumps are useful during debugging.
 - `activationTargetChanged.current` is an additional observation source and may add one actor without clearing actors found by the loaded-game active-cell refresh.
+- Player `activate` events are an additional interaction source for actor targets. They update the existing actor entry when the actor is already observed, or add one actor when the activated target was not observed yet.
 
 Actor ids:
 
@@ -146,14 +147,54 @@ Actor document data includes:
 - `reference_id`: raw TES3 reference or instance id.
 - `identity_kind`: `unique`, `generic`, or `unknown`.
 - `is_instance`: whether the observed actor object is an MWSE instance object.
-- `reference`: serialized TES3 reference snapshot.
+- `facts`: lightweight blackboard facts currently known about the actor.
+- `interaction`: mechanical player interaction state, counters, and observation sources.
+
+Actor `facts` should be lightweight and human-oriented. They may include:
+
+- `name`, `subject_type`, and `data_type`.
+- `alive`, `is_empty`, `is_respawn`, and `is_leveled_spawn`.
+- `location`, `position`, and `facing`.
+- Compact actor object facts such as `actor_id`, `race`, `class`, `level`, `disposition`, `health`, `is_guard`, and `is_essential`.
+- `services` when dialogue has exposed an NPC service actor and its class provides service fields.
+
+Actor `interaction` includes:
+
+- `state`: strongest mechanical player interaction observed for this actor. Current values are `observed`, `targeted`, `activated`, and `conversed`.
+- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, and `menu_dialog`.
+- `observed`, `targeted`, `activated`, and `conversed`: booleans for observed interaction categories.
+- `activation_count`: number of player `activate` events observed for this actor.
+- `conversation_count`: number of newly created `MenuDialog` events observed for this actor.
+
+Normal actor Memory reads must not expose the full serialized TES3 reference by default. Actor documents should update the blackboard from each mechanical source:
+
+- `active_cells`: active-cell refresh saw the actor.
+- `activation_target_changed`: `activationTargetChanged` exposed the actor as the current activation target.
+- `activate`: the player activated the actor.
+- `menu_dialog`: a newly created `MenuDialog` exposed the service actor through `tes3ui.getServiceActor()`.
+
+Dialogue-derived service facts are stored under `facts.services` only when the actor is observed from `menu_dialog` and the actor object has a class. The shape is compact:
+
+- `facts.services.offers`: true-only service booleans such as `bartering`, `training`, `spells`, `spellmaking`, `enchanting`, and `repairs`.
+- `facts.services.barters`: true-only barter category booleans such as `ingredients`, `weapons`, `books`, `armor`, and related class barter fields.
+
+Full serialized TES3 reference data stays out of Actor Memory. When raw active actor data is needed, clients should call `mw-actor-fetch`, which is the tool-level interface for full active-cell actor serialization. Current normal reads and debug dumps both use lightweight actor facts and interaction metadata only.
 
 Actor `data_type` values:
 
 - NPC actors use `npc_summary`.
 - Creature actors use `creature_summary`.
 
-Actor link descriptions should include enough identity fields to decide which actor link to follow without first reading every child document. Include at least `data_type`, `base_id`, `reference_id`, and `identity_kind`.
+Actor link descriptions should include enough identity and interaction fields to decide which actor link to follow without first reading every child document. Include at least `data_type`, `base_id`, `reference_id`, `identity_kind`, and `interaction_state`.
+
+Actor interaction states are mechanical facts, not importance judgments:
+
+- `observed`: the actor was seen in active cells.
+- `targeted`: the actor was the player's current activation target.
+- `activated`: the actor was activated by the player.
+- `conversed`: the actor was returned by `tes3ui.getServiceActor()` when a newly created `MenuDialog` was activated.
+
+Interaction state only moves to stronger states: `observed < targeted < activated < conversed`.
 
 ## Actor Identity Classification
 

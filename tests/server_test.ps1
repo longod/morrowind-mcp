@@ -72,6 +72,15 @@ function Set-WindowForegroundBestEffort {
     return $false
 }
 
+function Test-RequiresForegroundActivation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    return $Arguments -contains "mw-player-action"
+}
+
 try {
     $null = New-Item -Path $LogsRoot -ItemType Directory -Force
     Set-Content -Path $InspectorLogPath -Value @(
@@ -375,7 +384,7 @@ function Invoke-MemoryTraversalTest {
                 }
                 if ($uri -eq "morrowind://memory/actors/index.json" -and $link.rel -eq "actor") {
                     $description = [string]$link.description
-                    foreach ($token in @("data_type=", "base_id=", "reference_id=", "identity_kind=")) {
+                    foreach ($token in @("data_type=", "base_id=", "reference_id=", "identity_kind=", "interaction_state=")) {
                         if (-not $description.Contains($token)) {
                             $issues.Add("Actor link description missing $token parent=$uri child=$($link.uri)")
                         }
@@ -495,7 +504,7 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=readyWeapon", "--tool-arg", "how=tap"),
+        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=activate", "--tool-arg", "how=tap"),
         @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
         @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
@@ -517,6 +526,9 @@ try {
 
     $TestResult = 0
     foreach ($Test in $TestCases) {
+        if (-not $NoForeground -and (Test-RequiresForegroundActivation -Arguments $Test)) {
+            Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
+        }
         $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
     }
     $TestResult = $TestResult -bor (Invoke-MemoryTraversalTest -EndpointUrl $Config.Connection.url)

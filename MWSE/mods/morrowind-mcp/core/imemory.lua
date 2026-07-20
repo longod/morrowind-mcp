@@ -107,7 +107,8 @@
 ---@field reference_id string Raw TES3 reference or runtime instance id.
 ---@field identity_kind MCP.MemoryActorIdentityKind Unique, generic, or unknown identity classification.
 ---@field is_instance boolean Whether the observed actor object is an MWSE instance object.
----@field reference MCP.AnyMap Serialized TES3 reference snapshot.
+---@field facts MCP.AnyMap Lightweight blackboard facts currently known about the actor.
+---@field interaction MCP.AnyMap Mechanical player interaction state, counters, and observation sources.
 
 --- File written by a debug-only Memory dump operation.
 ---@class MCP.MemoryDebugSaveResult

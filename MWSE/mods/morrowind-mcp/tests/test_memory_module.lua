@@ -491,17 +491,20 @@ function this.Test()
         unitwind:expect(rootLinks[1].uri).toBe("morrowind://memory/actors/index.json")
         unitwind:expect(table.size(actorLinks)).toBe(5)
         unitwind:expect(actorLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/index.json")
-        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique")
+        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=observed")
         unitwind:expect(actorLinks[2].uri).toBe("morrowind://memory/actors/fargoth/index.json")
         unitwind:expect(actorLinks[3].uri).toBe("morrowind://memory/actors/rat/index.json")
-        unitwind:expect(actorLinks[3].description).toBe("data_type=creature_summary base_id=rat reference_id=rat00000004 identity_kind=generic")
-        unitwind:expect(actorLinks[4].description).toBe("data_type=npc_summary base_id=imperial guard reference_id=imperial guard identity_kind=generic")
-        unitwind:expect(actorLinks[5].description).toBe("data_type=npc_summary base_id=din reference_id=din identity_kind=unique")
+        unitwind:expect(actorLinks[3].description).toBe("data_type=creature_summary base_id=rat reference_id=rat00000004 identity_kind=generic interaction_state=observed")
+        unitwind:expect(actorLinks[4].description).toBe("data_type=npc_summary base_id=imperial guard reference_id=imperial guard identity_kind=generic interaction_state=observed")
+        unitwind:expect(actorLinks[5].description).toBe("data_type=npc_summary base_id=din reference_id=din identity_kind=unique interaction_state=observed")
         unitwind:expect(indexDocument.data.actor_count).toBe(5)
         unitwind:expect(indexDocument.data.actors == nil).toBe(true)
         unitwind:expect(table.size(indexDocument.links)).toBe(5)
         unitwind:expect(module.observedActors["caius-cosades"].subject.tes3_type).toBe("tes3npc")
         unitwind:expect(module.observedActors["caius-cosades"].data_type).toBe("npc_summary")
+        unitwind:expect(module.observedActors["caius-cosades"].data.interaction.state).toBe("observed")
+        unitwind:expect(module.observedActors["caius-cosades"].data.interaction.source_kinds[1]).toBe("active_cells")
+        unitwind:expect(module.observedActors["caius-cosades"].data.interaction.activation_count).toBe(0)
         unitwind:expect(module.observedActors["rat"].subject.tes3_type).toBe("tes3creature")
         unitwind:expect(module.observedActors["rat"].data_type).toBe("creature_summary")
         unitwind:expect(module.observedActors["rat"].data.base_id).toBe("rat")
@@ -590,8 +593,226 @@ function this.Test()
         unitwind:expect(indexDocument.data.actor_count).toBe(2)
         unitwind:expect(module.observedActors["caius-cosades"] ~= nil).toBe(true)
         unitwind:expect(module.observedActors["fargoth"].source_description).toBe("Observed actor reference from activationTargetChanged.")
+        unitwind:expect(module.observedActors["fargoth"].data.interaction.state).toBe("targeted")
+        unitwind:expect(module.observedActors["fargoth"].data.interaction.source_kinds[1]).toBe("activation_target_changed")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/fargoth/index.json")
 
+        unitwind:unmock(tes3, "getActiveCells")
+        unitwind:unmock(tes3, "onMainMenu")
+    end)
+
+    unitwind:test("Memory Actor module marks player-activated actors", function()
+        local published = {}
+        ---@type MCP.IResourceManager
+        local resource = {
+            Release = function(self)
+            end,
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(1)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local function object(id, name, objectType)
+            return {
+                id = id,
+                name = name,
+                objectType = objectType,
+                attributes = {},
+                skills = {},
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local function reference(object)
+            return {
+                id = object.id,
+                objectType = tes3.objectType.reference,
+                object = object,
+                baseObject = object,
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local playerObject = object("player", "Player", tes3.objectType.npc)
+        local playerRef = reference(playerObject)
+        local caius = reference(object("caius cosades", "Caius Cosades", tes3.objectType.npc))
+        local activeCells = {
+            {
+                actors = {
+                    size = 1,
+                    head = caius,
+                },
+            },
+        }
+        unitwind:mock(tes3, "onMainMenu", function()
+            return false
+        end)
+        unitwind:mock(tes3, "getActiveCells", function()
+            return activeCells
+        end)
+
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+        module:OnActivate({ block = false, claim = false, activator = playerRef, target = caius })
+        module:OnActivate({ block = false, claim = false, activator = playerRef, target = caius })
+
+        local actorLinks = module:GetLinksForParent("morrowind://memory/actors/index.json")
+        local observedActor = module.observedActors["caius-cosades"]
+        local actorDocument = module:BuildActorDocument("caius-cosades")
+        local debugActorDocument = module:BuildActorDocument("caius-cosades")
+
+        unitwind:expect(table.size(actorLinks)).toBe(1)
+        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=activated")
+        unitwind:expect(observedActor.source_description).toBe("Observed actor reference from activate.")
+        unitwind:expect(observedActor.data.interaction.state).toBe("activated")
+        unitwind:expect(observedActor.data.interaction.activation_count).toBe(2)
+        unitwind:expect(observedActor.data.interaction.conversation_count).toBe(0)
+        unitwind:expect(table.size(observedActor.data.interaction.source_kinds)).toBe(2)
+        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("active_cells")
+        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("activate")
+        unitwind:expect(actorDocument ~= nil).toBe(true)
+        unitwind:expect(debugActorDocument ~= nil).toBe(true)
+        ---@cast actorDocument MCP.MemoryDocument
+        ---@cast debugActorDocument MCP.MemoryDocument
+        local actorData = actorDocument.data
+        local debugActorData = debugActorDocument.data
+        unitwind:expect(actorData.reference == nil).toBe(true)
+        unitwind:expect(actorData.debug == nil).toBe(true)
+        unitwind:expect(actorData.observations == nil).toBe(true)
+        unitwind:expect(actorData.facts.name).toBe("Caius Cosades")
+        unitwind:expect(actorData.facts.data_type).toBe("npc_summary")
+        unitwind:expect(actorData.interaction.state).toBe("activated")
+        unitwind:expect(actorData.interaction.activated).toBe(true)
+        unitwind:expect(debugActorData.debug == nil).toBe(true)
+
+        unitwind:unmock(tes3, "getActiveCells")
+        unitwind:unmock(tes3, "onMainMenu")
+    end)
+
+    unitwind:test("Memory Actor module marks dialog service actors as conversed", function()
+        local published = {}
+        ---@type MCP.IResourceManager
+        local resource = {
+            Release = function(self)
+            end,
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(1)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local function object(id, name, objectType, actorClass)
+            return {
+                id = id,
+                name = name,
+                objectType = objectType,
+            class = actorClass,
+                attributes = {},
+                skills = {},
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local function reference(object)
+            return {
+                id = object.id,
+                objectType = tes3.objectType.reference,
+                object = object,
+                baseObject = object,
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local serviceClass = {
+            id = "agent",
+            name = "Agent",
+            offersBartering = true,
+            offersSpells = true,
+            offersTraining = true,
+            bartersIngredients = true,
+            bartersWeapons = true,
+        }
+        local caius = reference(object("caius cosades", "Caius Cosades", tes3.objectType.npc, serviceClass))
+        local activeCells = {
+            {
+                actors = {
+                    size = 1,
+                    head = caius,
+                },
+            },
+        }
+        unitwind:mock(tes3, "onMainMenu", function()
+            return false
+        end)
+        unitwind:mock(tes3, "getActiveCells", function()
+            return activeCells
+        end)
+        unitwind:mock(tes3ui, "getServiceActor", function()
+            return { reference = caius }
+        end)
+        ---@param newlyCreated boolean
+        ---@return uiActivatedEventData
+        local function uiActivatedEvent(newlyCreated)
+            ---@diagnostic disable-next-line: missing-fields
+            return { claim = false, newlyCreated = newlyCreated, element = {} }
+        end
+
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+        module:OnMenuDialogActivated(uiActivatedEvent(false))
+        module:OnMenuDialogActivated(uiActivatedEvent(true))
+        module:OnMenuDialogActivated(uiActivatedEvent(true))
+
+        local actorLinks = module:GetLinksForParent("morrowind://memory/actors/index.json")
+        local observedActor = module.observedActors["caius-cosades"]
+        local actorDocument = module:BuildActorDocument("caius-cosades")
+
+        unitwind:expect(table.size(actorLinks)).toBe(1)
+        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=conversed")
+        unitwind:expect(observedActor.source_description).toBe("Observed actor reference from MenuDialog.")
+        unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
+        unitwind:expect(observedActor.data.interaction.activation_count).toBe(0)
+        unitwind:expect(observedActor.data.interaction.conversation_count).toBe(2)
+        unitwind:expect(table.size(observedActor.data.interaction.source_kinds)).toBe(2)
+        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("active_cells")
+        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("menu_dialog")
+        unitwind:expect(actorDocument ~= nil).toBe(true)
+        ---@cast actorDocument MCP.MemoryDocument
+        local actorData = actorDocument.data
+        unitwind:expect(actorData.observations == nil).toBe(true)
+        unitwind:expect(actorData.interaction.state).toBe("conversed")
+        unitwind:expect(actorData.interaction.conversed).toBe(true)
+        unitwind:expect(actorData.facts.services.offers.bartering).toBe(true)
+        unitwind:expect(actorData.facts.services.offers.spells).toBe(true)
+        unitwind:expect(actorData.facts.services.offers.training).toBe(true)
+        unitwind:expect(actorData.facts.services.barters.ingredients).toBe(true)
+        unitwind:expect(actorData.facts.services.barters.weapons).toBe(true)
+        unitwind:expect(actorData.debug == nil).toBe(true)
+
+        unitwind:unmock(tes3ui, "getServiceActor")
         unitwind:unmock(tes3, "getActiveCells")
         unitwind:unmock(tes3, "onMainMenu")
     end)

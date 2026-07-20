@@ -317,6 +317,7 @@ end
 --- Resource entry whose handler lazily builds and caches one Memory document.
 ---@class MCP.MemoryResourceEntry: MCP.ResourceEntry
 ---@field cache MCP.MemoryCacheState
+---@field debugHandler (fun(desc: MCP.Resource): table[])? Optional handler used only when writing debug dump files.
 
 --- Create a live Memory resource entry that rebuilds JSON only when marked dirty.
 ---@param descriptor MCP.Resource
@@ -379,7 +380,8 @@ function this.SaveEntry(entry, rootDir)
         return nil
     end
 
-    local contents = entry.handler(entry.descriptor)
+    local handler = entry.debugHandler or entry.handler
+    local contents = handler(entry.descriptor)
     local content = contents and contents[1]
     if not content or type(content.text) ~= "string" then
         return nil
