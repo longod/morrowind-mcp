@@ -99,9 +99,14 @@ local staticHints = {
         name = "MenuOptions_Save_container"
     },
     {
+        path = "layout|MenuOptions|PartNonDragMenu_main|null|ImprovedMainMenu:ContinueButton",
+        properties = { "mouseClick" },
+        name = "ImprovedMainMenu:ContinueButton" -- Improved Main Menu mod
+    },
+    {
         path = "layout|MenuOptions|PartNonDragMenu_main|null|Pete_ContinueButton",
         properties = { "mouseClick" },
-        name = "Pete_ContinueButton"
+        name = "Pete_ContinueButton" -- Continue mod
     },
     {
         path = "layout|MenuScroll|PartNonDragMenu_main|null|MenuBook_PickupButton",
