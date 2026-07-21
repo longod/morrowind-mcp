@@ -256,12 +256,6 @@ local function RegisterTestEvents()
     end
     event.register(tes3.event.addTempSound, addTempSoundCallback)
 
-    ---@param e attackHitEventData
-    local function attackHitCallback(e)
-        logger:trace("attackHit %s", FormatEventData(e))
-    end
-    event.register(tes3.event.attackHit, attackHitCallback)
-
     ---@param e barterOfferEventData
     local function barterOfferCallback(e)
         logger:trace("barterOffer %s", FormatEventData(e))
@@ -381,9 +375,123 @@ local function RegisterTestEvents()
         logger:trace("weatherTransitionFinished %s", FormatEventData(e))
     end
     event.register(tes3.event.weatherTransitionFinished, weatherTransitionFinishedCallback)
+
+    --- @param e enterFrameEventData
+    local function enterFrameCallback(e)
+        local wc = tes3.worldController
+        if not wc then
+            return
+        end
+        local ic = wc.inputController
+        if not ic then
+            return
+        end
+        if ic:isKeyDown(tes3.scanCode.keyLeft) then
+            -- ic.mouseState.x = ic.mouseState.x - 10
+            tes3.player.facing = tes3.player.facing - 0.1
+        end
+        if ic:isKeyDown(tes3.scanCode.keyRight) then
+            -- ic.mouseState.x = ic.mouseState.x + 10
+            tes3.player.facing = tes3.player.facing + 0.1
+        end
+        if ic:isKeyDown(tes3.scanCode.keyUp) then
+            local eulerAngles = tes3.mobilePlayer.animationController.verticalRotation:toEulerXYZ()
+            -- Looking up is negative pitch, and verticalRotation should only contain X-axis rotation.
+            local pitch = math.clamp(eulerAngles.x - math.rad(1.0), math.rad(-89.0), math.rad(89.0))
+            local verticalRotation = tes3matrix33.new()
+            verticalRotation:toRotationX(pitch)
+            tes3.mobilePlayer.animationController.verticalRotation = verticalRotation
+        end
+
+        if ic:isKeyDown(tes3.scanCode.keyDown) then
+            local target = tes3.getPlayerTarget()
+            if target then
+                local player = tes3.player
+                local mobilePlayer = tes3.mobilePlayer
+                local targetPoint = target.position:copy()
+                local foundTargetHead = false
+                if target.animationData and target.animationData.headNode then
+                    targetPoint = target.animationData.headNode.worldTransform.translation:copy()
+                    foundTargetHead = true
+                else
+                    local manager = target.bodyPartManager
+                    if manager then
+                        local headAttach = manager:getAttachNode(tes3.bodyPartAttachment.head)
+                        if headAttach and headAttach.node then
+                            targetPoint = headAttach.node.worldTransform.translation:copy()
+                            foundTargetHead = true
+                        end
+                    end
+                end
+                if not foundTargetHead and target.sceneNode then
+                    targetPoint = target.sceneNode.worldBoundOrigin:copy()
+                end
+
+                -- Split target tracking into actor yaw and player-only pitch so movement logic stays aligned.
+                local eyePoint = tes3.getPlayerEyePosition()
+                if eyePoint then
+                    eyePoint = eyePoint:copy()
+                else
+                    eyePoint = player.position:copy() + player.upDirection:copy() * mobilePlayer.cameraHeight
+                end
+                local direction = targetPoint - eyePoint
+                local horizontalDistance = math.sqrt(direction.x * direction.x + direction.y * direction.y)
+                if horizontalDistance > 0.001 then
+                    player.facing = math.atan2(direction.x, direction.y)
+
+                    local pitch = math.clamp(-math.atan2(direction.z, horizontalDistance), math.rad(-89.0),
+                        math.rad(89.0))
+                    local verticalRotation = tes3matrix33.new()
+                    verticalRotation:toRotationX(pitch)
+                    mobilePlayer.animationController.verticalRotation = verticalRotation
+                end
+            end
+        end
+
+        if ic:isKeyPressedThisFrame(tes3.scanCode.n) then
+            local hitResult = tes3.rayTest(
+                {
+                    position = tes3.getCameraPosition(),
+                    direction = tes3.getCameraVector(),
+                    maxDistance = 1000.0,
+                    ignore = { tes3.player },
+                })
+            local distance = hitResult and hitResult.distance or 1000.0
+            local destination = tes3.getCameraPosition() + tes3.getCameraVector() * distance
+            -- Player mobiles are not driven by an AI planner, so AITravel can be accepted without moving them.
+            if not tes3.mobilePlayer.aiPlanner then
+                tes3.messageBox("AI travel is not processed for the player. Destination was %s from %s", tostring(destination),
+                    tostring(tes3.player.position))
+                return
+            end
+            local package = tes3.mobilePlayer.aiPlanner:getActivePackage()
+            if package then
+            end
+
+            tes3.setPlayerControlState({ enabled = false })
+
+            local ok, err = pcall(function()
+                tes3.setAITravel({
+                    reference = tes3.mobilePlayer,
+                    destination = destination,
+                    reset = true,
+                })
+            end)
+            if ok then
+                tes3.messageBox("AI travel started to %s from %s", tostring(destination), tostring(tes3.player.position))
+            else
+                tes3.setPlayerControlState({ enabled = true })
+                tes3.messageBox("AI travel failed to start to %s from %s: %s", tostring(destination),
+                    tostring(tes3.player.position), tostring(err))
+            end
+        end
+    end
+    event.register(tes3.event.enterFrame, enterFrameCallback)
 end
 
-RegisterTestEvents()
+if config.development.debug then
+    RegisterTestEvents()
+end
 
 -- missing annotations
 
