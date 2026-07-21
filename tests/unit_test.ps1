@@ -1,9 +1,16 @@
+param(
+    [Parameter(Position = 0)]
+    [string[]]$TestTargets,
+    [switch]$NoForeground
+)
+
 $MaxWaitSeconds = 10
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 $ExitCode = 0
 $CreatedSentinel = $false
+$SentinelOriginalContent = $null
 $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OutputDir = Join-Path $ScriptDir "logs\unit_test"
 $ExtractOutputPath = Join-Path $OutputDir "unitwind_$RunTimestamp.log"
@@ -34,8 +41,9 @@ Push-Location $ScriptDir
 try {
     $StartScriptPath = ".\start_server_mo2.ps1"
     $StopScriptPath = ".\stop_server.ps1"
-    # Sentinel file toggles exit-after-tests behavior in Lua.
-    $SentinelPath = ".\..\MWSE\mods\morrowind-mcp\.exit-after-tests"
+    # Sentinel file lists target test files. Empty content means run the full suite.
+    $SentinelPath = ".\..\MWSE\mods\morrowind-mcp\.unit-test-targets"
+    $TargetLines = @($TestTargets | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
     # start script is mandatory; stop script is optional fallback on timeout.
     if (-not (Test-Path -LiteralPath $StartScriptPath)) {
@@ -51,12 +59,29 @@ try {
     if (Test-Path -LiteralPath $SentinelDir) {
         $SentinelAlreadyExists = Test-Path -LiteralPath $SentinelPath
         if ($SentinelAlreadyExists) {
+            $SentinelOriginalContent = Get-Content -LiteralPath $SentinelPath -Raw
             Write-Host "[INFO] Sentinel file already exists. Reusing: $SentinelPath" -ForegroundColor DarkCyan
         }
         else {
             New-Item -ItemType File -Path $SentinelPath -Force | Out-Null
             $CreatedSentinel = $true
             Write-Host "[INFO] Created sentinel file: $SentinelPath" -ForegroundColor DarkCyan
+        }
+
+        if ($TargetLines.Count -gt 0) {
+            Set-Content -LiteralPath $SentinelPath -Value $TargetLines -Encoding UTF8
+            Write-Host "[INFO] Wrote $($TargetLines.Count) target(s) to sentinel file." -ForegroundColor DarkCyan
+        }
+        else {
+            Clear-Content -LiteralPath $SentinelPath -ErrorAction SilentlyContinue
+            Write-Host "[INFO] Cleared sentinel file for full test run." -ForegroundColor DarkCyan
+        }
+
+        if ($TargetLines.Count -gt 0) {
+            Write-Host "[INFO] Planned unit test targets: $($TargetLines -join ', ')" -ForegroundColor DarkCyan
+        }
+        else {
+            Write-Host "[INFO] Planned unit test targets: all test files" -ForegroundColor DarkCyan
         }
     }
     else {
@@ -190,8 +215,11 @@ finally {
         Write-Host "[INFO] Saved MWSE.log copy: $(Convert-ToFileUri -Path $MwseCopyOutputPath)" -ForegroundColor DarkCyan
     }
 
-    # Clean up only when this script created the sentinel file.
-    if ($CreatedSentinel) {
+    # Restore or clean up the sentinel after the run.
+    if ($SentinelOriginalContent -ne $null) {
+        Set-Content -LiteralPath $SentinelPath -Value $SentinelOriginalContent -Encoding UTF8 -ErrorAction SilentlyContinue
+    }
+    elseif ($CreatedSentinel) {
         Remove-Item -LiteralPath $SentinelPath -ErrorAction SilentlyContinue
     }
     Pop-Location

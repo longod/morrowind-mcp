@@ -72,7 +72,7 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 
 ## Tests
 
-- 単体テスト対象になっているファイルのコードの変更後は、[tests/unit_test.ps1](../../tests/unit_test.ps1) を実行して、正しく動作することを確認する（スキル /unittest_run）
+- 単体テスト対象になっているファイルのコードの変更後は、[tests/unit_test.ps1](../../tests/unit_test.ps1) を実行して、正しく動作することを確認する（スキル /unittest_run）。必要なら引数で対象ファイルを指定できる。
 - MCP Serverに関するコードを変更して動作を確認したい場合は、[tests/server_test.ps1](../../tests/server_test.ps1) を実行する（/servertest_run）。ただし、軽微の変更であれば実行しなくてもよい。
 
 ## 参考リンク

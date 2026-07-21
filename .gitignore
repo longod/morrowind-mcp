@@ -42,6 +42,7 @@ luac.out
 # Project
 .vscode/
 meta.ini
+.unit-test-targets
 .exit-after-tests
 .server-test-running
 *.log

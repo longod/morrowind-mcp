@@ -157,7 +157,7 @@ Server-generated Lua output data can be inspected under `<paths.datafilesOverwri
 
 ### Test scripts
 
-- [tests/unit_test.ps1](tests/unit_test.ps1): Run Lua unit tests for MWSE mod modules
+- [tests/unit_test.ps1](tests/unit_test.ps1): Run Lua unit tests for MWSE mod modules. Pass test file names to run only those files.
 - [tests/server_test.ps1](tests/server_test.ps1): Start Morrowind/MWSE server, run integration tests, and stop the server
   - By default, after connectivity is confirmed, it attempts to bring Morrowind to the foreground. This is required for tests that use keyboard key or mouse button input, because those inputs are not sent while Morrowind is in the background.
   - For tests that do not require input sending, run with `-NoForeground` to keep the previous behavior.
