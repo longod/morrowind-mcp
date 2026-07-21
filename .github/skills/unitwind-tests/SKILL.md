@@ -39,6 +39,7 @@ applyTo:
 ## 注意点
 - テスト対象のファイルと同名が `test_` の後にあるテストファイルがあれば、そこにテストを追加することを優先します。
 - テストファイルは `dofile` で呼び出されてテストされるため、`function this.Test()` 関数内に追加・更新します。
+- 戻り値は `---@return MCP.UnitWindResult` で、 `return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }` を返すようにします。
 - 新しいテストフレームワークは導入しません。
 - リポジトリ固有の規約は `.github/instructions/mwse.instructions.md` に従います。
 

@@ -27,6 +27,7 @@ local function NewUiPreEvent(source, property)
     }
 end
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -46,14 +47,14 @@ function this.Test()
         local button = NewElement("MenuBook_PickupButton", "layout", holder)
 
         unitwind:expect(uiAction.BuildElementPath(button)).toBe(
-        "layout|MenuScroll|PartNonDragMenu_main|null|MenuBook_PickupButton")
+            "layout|MenuScroll|PartNonDragMenu_main|null|MenuBook_PickupButton")
     end)
 
     unitwind:test("BuildElementPath accepts an alternate separator", function()
         local root = NewElement(nil, "layout")
         local child = NewElement("Child", "layout", root)
 
-        unitwind:expect(uiAction.BuildElementPath(child, ">")) .toBe("layout>Child")
+        unitwind:expect(uiAction.BuildElementPath(child, ">")).toBe("layout>Child")
     end)
 
     unitwind:test("BuildElementPath does not include runtime ids", function()
@@ -163,6 +164,8 @@ function this.Test()
     uiAction.ClearObservedHints()
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

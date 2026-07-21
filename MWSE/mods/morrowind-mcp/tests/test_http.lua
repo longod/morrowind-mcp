@@ -1,5 +1,6 @@
 local this = {}
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -98,7 +99,8 @@ function this.Test()
     end)
 
     unitwind:test("AcceptsContentType handles exact and wildcard media ranges", function()
-        unitwind:expect(http.AcceptsContentType("application/json, text/event-stream", http.content_type.event_stream)).toBe(true)
+        unitwind:expect(http.AcceptsContentType("application/json, text/event-stream", http.content_type.event_stream))
+            .toBe(true)
         unitwind:expect(http.AcceptsContentType("text/*;q=0.9", http.content_type.event_stream)).toBe(true)
         unitwind:expect(http.AcceptsContentType("*/*", http.content_type.json)).toBe(true)
         unitwind:expect(http.AcceptsContentType("application/json", http.content_type.event_stream)).toBe(false)
@@ -106,8 +108,10 @@ function this.Test()
     end)
 
     unitwind:test("FormatServerSentEvent writes SSE data frame", function()
-        local event = http.FormatServerSentEvent('{"jsonrpc":"2.0","method":"notifications/message"}', "message", "1", 1000)
-        unitwind:expect(event).toBe("id: 1\nevent: message\nretry: 1000\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\"}\n\n")
+        local event = http.FormatServerSentEvent('{"jsonrpc":"2.0","method":"notifications/message"}', "message", "1",
+            1000)
+        unitwind:expect(event).toBe(
+        "id: 1\nevent: message\nretry: 1000\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\"}\n\n")
     end)
 
     unitwind:test("SendSSEHeaders writes event-stream response headers without body", function()
@@ -123,7 +127,8 @@ function this.Test()
         unitwind:expect(result.error).toBe(nil)
         unitwind:expect(result.response).toBe(sentData)
         unitwind:expect(result.response:match("HTTP/1%.1 200 OK")).toBe("HTTP/1.1 200 OK")
-        unitwind:expect(result.response:match("content%-type: text/event%-stream")).toBe("content-type: text/event-stream")
+        unitwind:expect(result.response:match("content%-type: text/event%-stream")).toBe(
+        "content-type: text/event-stream")
         unitwind:expect(result.response:match("cache%-control: no%-cache")).toBe("cache-control: no-cache")
         unitwind:expect(result.response:match("mcp%-session%-id: session%-1")).toBe("mcp-session-id: session-1")
     end)
@@ -167,11 +172,14 @@ function this.Test()
         unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", nil)).toBe(true)
         unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", "")).toBe(true)
         unitwind:expect(http.IsClosedBeforeRequest(nil, "timeout", nil)).toBe(false)
-        unitwind:expect(http.IsClosedBeforeRequest({ method = "GET", endpoint = "/", protocol = "HTTP/1.1", headers = {} }, "closed", nil)).toBe(false)
+        unitwind:expect(http.IsClosedBeforeRequest(
+        { method = "GET", endpoint = "/", protocol = "HTTP/1.1", headers = {} }, "closed", nil)).toBe(false)
         unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", "partial")).toBe(false)
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

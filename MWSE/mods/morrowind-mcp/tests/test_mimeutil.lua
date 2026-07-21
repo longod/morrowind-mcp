@@ -1,5 +1,6 @@
 local this = {}
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -33,18 +34,20 @@ function this.Test()
 
     unitwind:test("ResolveMimeTypeFromResourcePath uses extension extracted from path", function()
         unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_newgame.tga")).toBe(mcp.mimeType
-        .image_tga)
+            .image_tga)
         unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_continue.DDS")).toBe(mcp.mimeType
-        .image_dds)
+            .image_dds)
         unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("docs/readme.txt")).toBe(mcp.mimeType.text_plain)
     end)
 
     unitwind:test("ResolveMimeTypeFromResourcePath falls back when extension is missing", function()
         unitwind:expect(mimeutil.ResolveMimeTypeFromResourcePath("Textures/menu_continue")).toBe(mcp.mimeType
-        .application_octet_stream)
+            .application_octet_stream)
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

@@ -1,5 +1,6 @@
 local this = {}
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -162,7 +163,8 @@ function this.Test()
             end,
         }
         local module = imodule.new({ resource = resource, manager = fakeManager })
-        local descriptor = document.Descriptor("memory/visibility-state.json", "Visibility State", "Visibility state test.")
+        local descriptor = document.Descriptor("memory/visibility-state.json", "Visibility State",
+            "Visibility state test.")
         local entry = document.LiveEntry(descriptor, function()
             return document.Document(document.documentType.entity, document.dataType.playerSummary, "Visibility State")
         end)
@@ -249,8 +251,10 @@ function this.Test()
         local memory = manager.new({ resource = resource })
         local defaultModule = imodule.new({ resource = resource })
         local optInModule = imodule.new({ resource = resource, publishOnRegister = true })
-        local defaultDescriptor = document.Descriptor("memory/register-default.json", "Register Default", "Register default test.")
-        local optInDescriptor = document.Descriptor("memory/register-opt-in.json", "Register Opt In", "Register opt-in test.")
+        local defaultDescriptor = document.Descriptor("memory/register-default.json", "Register Default",
+            "Register default test.")
+        local optInDescriptor = document.Descriptor("memory/register-opt-in.json", "Register Opt In",
+            "Register opt-in test.")
         defaultModule.entries = { document.LiveEntry(defaultDescriptor, function()
             return document.Document(document.documentType.entity, document.dataType.playerSummary, "Register Default")
         end) }
@@ -352,9 +356,11 @@ function this.Test()
         local playerChildModule = imodule.new({ resource = resource, parentUri = playerUri })
         local rootDescriptor = document.Descriptor("memory/root-link.json", "Root Link", "Root link test.")
         local childDescriptor = document.Descriptor("memory/player/child-link.json", "Child Link", "Child link test.")
-        rootModule.links = { document.Link(document.linkRel.self, rootDescriptor.uri, rootDescriptor.title, rootDescriptor.description) }
+        rootModule.links = { document.Link(document.linkRel.self, rootDescriptor.uri, rootDescriptor.title,
+            rootDescriptor.description) }
         rootModule.published = true
-        playerChildModule.links = { document.Link(document.linkRel.journal, childDescriptor.uri, childDescriptor.title, childDescriptor.description) }
+        playerChildModule.links = { document.Link(document.linkRel.journal, childDescriptor.uri, childDescriptor.title,
+            childDescriptor.description) }
         playerChildModule.published = true
         memory.modules = { rootModule, playerChildModule }
 
@@ -507,12 +513,16 @@ function this.Test()
         unitwind:expect(rootLinks[1].uri).toBe("morrowind://memory/actors/index.json")
         unitwind:expect(table.size(actorLinks)).toBe(5)
         unitwind:expect(actorLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/index.json")
-        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=observed")
+        unitwind:expect(actorLinks[1].description).toBe(
+        "data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=observed")
         unitwind:expect(actorLinks[2].uri).toBe("morrowind://memory/actors/fargoth/index.json")
         unitwind:expect(actorLinks[3].uri).toBe("morrowind://memory/actors/rat/index.json")
-        unitwind:expect(actorLinks[3].description).toBe("data_type=creature_summary base_id=rat reference_id=rat00000004 identity_kind=generic interaction_state=observed")
-        unitwind:expect(actorLinks[4].description).toBe("data_type=npc_summary base_id=imperial guard reference_id=imperial guard identity_kind=generic interaction_state=observed")
-        unitwind:expect(actorLinks[5].description).toBe("data_type=npc_summary base_id=din reference_id=din identity_kind=unique interaction_state=observed")
+        unitwind:expect(actorLinks[3].description).toBe(
+        "data_type=creature_summary base_id=rat reference_id=rat00000004 identity_kind=generic interaction_state=observed")
+        unitwind:expect(actorLinks[4].description).toBe(
+        "data_type=npc_summary base_id=imperial guard reference_id=imperial guard identity_kind=generic interaction_state=observed")
+        unitwind:expect(actorLinks[5].description).toBe(
+        "data_type=npc_summary base_id=din reference_id=din identity_kind=unique interaction_state=observed")
         unitwind:expect(indexDocument.data.actor_count).toBe(5)
         unitwind:expect(indexDocument.data.actors == nil).toBe(true)
         unitwind:expect(table.size(indexDocument.links)).toBe(5)
@@ -608,9 +618,11 @@ function this.Test()
         unitwind:expect(actorLinks[2].uri).toBe("morrowind://memory/actors/fargoth/index.json")
         unitwind:expect(indexDocument.data.actor_count).toBe(2)
         unitwind:expect(module.observedActors["caius-cosades"] ~= nil).toBe(true)
-        unitwind:expect(module.observedActors["fargoth"].source_description).toBe("Observed actor reference from activationTargetChanged.")
+        unitwind:expect(module.observedActors["fargoth"].source_description).toBe(
+        "Observed actor reference from activationTargetChanged.")
         unitwind:expect(module.observedActors["fargoth"].data.interaction.state).toBe("targeted")
-        unitwind:expect(module.observedActors["fargoth"].data.interaction.source_kinds[1]).toBe("activation_target_changed")
+        unitwind:expect(module.observedActors["fargoth"].data.interaction.source_kinds[1]).toBe(
+        "activation_target_changed")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/fargoth/index.json")
 
         unitwind:unmock(tes3, "getActiveCells")
@@ -690,7 +702,8 @@ function this.Test()
         local debugActorDocument = module:BuildActorDocument("caius-cosades")
 
         unitwind:expect(table.size(actorLinks)).toBe(1)
-        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=activated")
+        unitwind:expect(actorLinks[1].description).toBe(
+        "data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=activated")
         unitwind:expect(observedActor.source_description).toBe("Observed actor reference from activate.")
         unitwind:expect(observedActor.data.interaction.state).toBe("activated")
         unitwind:expect(observedActor.data.interaction.activation_count).toBe(2)
@@ -743,7 +756,7 @@ function this.Test()
                 id = id,
                 name = name,
                 objectType = objectType,
-            class = actorClass,
+                class = actorClass,
                 attributes = {},
                 skills = {},
                 isValid = function(self)
@@ -807,7 +820,8 @@ function this.Test()
         local actorDocument = module:BuildActorDocument("caius-cosades")
 
         unitwind:expect(table.size(actorLinks)).toBe(1)
-        unitwind:expect(actorLinks[1].description).toBe("data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=conversed")
+        unitwind:expect(actorLinks[1].description).toBe(
+        "data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=conversed")
         unitwind:expect(observedActor.source_description).toBe("Observed actor reference from MenuDialog.")
         unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
         unitwind:expect(observedActor.data.interaction.activation_count).toBe(0)
@@ -898,6 +912,8 @@ function this.Test()
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

@@ -31,6 +31,7 @@ local function WithMocks(mockConfig, mockSettings, mockLogging, mockDebugGetInfo
     return result
 end
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -193,6 +194,8 @@ function this.Test()
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

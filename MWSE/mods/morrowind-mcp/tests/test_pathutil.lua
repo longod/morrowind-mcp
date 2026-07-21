@@ -1,5 +1,6 @@
 local this = {}
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -64,9 +65,9 @@ function this.Test()
         local rootDir = "X:\\root\\"
         unitwind:expect(pathutil.ToResourceFilePath("test.jpg", rootDir)).toBe("X:\\root\\test.jpg")
         unitwind:expect(pathutil.ToResourceFilePath("nested/folder/test.png", rootDir)).toBe(
-        "X:\\root\\nested\\folder\\test.png")
+            "X:\\root\\nested\\folder\\test.png")
         unitwind:expect(pathutil.ToResourceFilePath("nested\\folder\\test.png", rootDir)).toBe(
-        "X:\\root\\nested\\folder\\test.png")
+            "X:\\root\\nested\\folder\\test.png")
     end)
 
     unitwind:test("ToResourceFilePath rejects invalid paths", function()
@@ -81,9 +82,9 @@ function this.Test()
         local rootDir = "X:\\root\\"
         unitwind:expect(pathutil.FromResourceFilePath("X:\\root\\test.jpg", rootDir)).toBe("test.jpg")
         unitwind:expect(pathutil.FromResourceFilePath("X:/root/nested/folder/test.png", rootDir)).toBe(
-        "nested/folder/test.png")
+            "nested/folder/test.png")
         unitwind:expect(pathutil.FromResourceFilePath("X:\\root\\nested\\folder\\test.png", rootDir)).toBe(
-        "nested/folder/test.png")
+            "nested/folder/test.png")
     end)
 
     unitwind:test("FromResourceFilePath rejects paths outside root or invalid resource paths", function()
@@ -94,6 +95,8 @@ function this.Test()
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

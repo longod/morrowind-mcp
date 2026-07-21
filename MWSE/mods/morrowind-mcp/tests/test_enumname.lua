@@ -1,5 +1,6 @@
 local this = {}
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -103,10 +104,13 @@ function this.Test()
     end)
 
     unitwind:test("specializationName is an alias for specialization", function()
-        unitwind:expect(enumname.specializationName(tes3.specialization.combat)).toBe(enumname.specialization(tes3.specialization.combat))
+        unitwind:expect(enumname.specializationName(tes3.specialization.combat)).toBe(enumname.specialization(tes3
+        .specialization.combat))
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this

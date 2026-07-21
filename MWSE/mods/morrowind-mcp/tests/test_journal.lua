@@ -1,5 +1,6 @@
 local this = {}
 
+---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({
         enabled = true,
@@ -59,7 +60,7 @@ function this.Test()
 
     unitwind:test("ParseJournalEntries excludes date labels from topics", function()
         local content =
-            "<FONT COLOR=\"9F0000\">16 Theta Harvest (Day 1)</FONT><BR>I should @report# to @Caius Cosades#.<P>"
+        "<FONT COLOR=\"9F0000\">16 Theta Harvest (Day 1)</FONT><BR>I should @report# to @Caius Cosades#.<P>"
         local entries = journal.ParseJournalEntries(content, {
             thetaharvest = 8,
         })
@@ -116,6 +117,8 @@ function this.Test()
     end)
 
     unitwind:finish()
+
+    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
 end
 
 return this
