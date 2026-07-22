@@ -101,6 +101,7 @@
 ---@field dialogue_descriptor MCP.Resource? Resource descriptor for actor-local dialogue notes.
 ---@field dialogue_entry MCP.MemoryResourceEntry? Live resource entry for actor-local dialogue notes.
 ---@field dialogue_data MCP.AnyMap? Mutable actor-local dialogue notes payload.
+---@field dialogue_topic_index table<string, boolean>? Runtime-only case-insensitive lookup for actor-local dialogue topics.
 ---@field dialogue_observation_index table<string, MCP.AnyMap>? Runtime-only duplicate lookup for actor-local dialogue observations.
 
 --- Payload fields currently written by Actor Memory documents.

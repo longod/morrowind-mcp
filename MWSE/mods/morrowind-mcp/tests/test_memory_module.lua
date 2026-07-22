@@ -916,7 +916,7 @@ function this.Test()
                 claim = false,
                 reference = caius,
                 dialogue = { id = "Beds" },
-                info = { id = infoId, text = "Beds response text." },
+                info = { id = infoId, type = tes3.dialogueType.topic, text = "Beds response text." },
                 command = command,
             }
         end
@@ -942,9 +942,11 @@ function this.Test()
         unitwind:expect(actorDocument.links[1].uri).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
         unitwind:expect(dialogueDocument.data.actor_id).toBe("caius-cosades")
         unitwind:expect(dialogueDocument.data.response_count).toBe(2)
+        unitwind:expect(observedActor.dialogue_topic_index ~= nil).toBe(true)
         unitwind:expect(observedActor.dialogue_observation_index ~= nil).toBe(true)
+        unitwind:expect(dialogueDocument.data.dialogue_topic_index == nil).toBe(true)
         unitwind:expect(dialogueDocument.data.dialogue_observation_index == nil).toBe(true)
-        unitwind:expect(dialogueDocument.data.topics[1]).toBe("Beds")
+        unitwind:expect(dialogueDocument.data.topics[1]).toBe("beds")
         unitwind:expect(dialogueDocument.data.observations[1].event).toBe("info_response")
         unitwind:expect(dialogueDocument.data.observations[1].dialogue_id).toBe("Beds")
         unitwind:expect(dialogueDocument.data.observations[1].info_id).toBe("4325609943702902")
@@ -1023,17 +1025,19 @@ function this.Test()
             return { reference = caius }
         end)
         ---@param dialogueType tes3.dialogueType
+        ---@param dialogueId string?
+        ---@param infoId string?
         ---@return infoGetTextEventData
-        local function infoGetTextEvent(dialogueType)
+        local function infoGetTextEvent(dialogueType, dialogueId, infoId)
             ---@diagnostic disable-next-line: missing-fields
             return {
                 claim = false,
                 info = {
-                    id = "987654321",
+                    id = infoId or "987654321",
                     type = dialogueType,
                     actor = nil,
                     findDialogue = function(self)
-                        return { id = "Background" }
+                        return { id = dialogueId or "Background" }
                     end,
                 },
                 loadOriginalText = function(self)
@@ -1046,6 +1050,7 @@ function this.Test()
         module:Publish()
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.topic))
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.topic))
+        module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.greeting, "Greeting 5", "987654322"))
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.journal))
 
         local observedActor = module.observedActors["caius-cosades"]
@@ -1056,19 +1061,24 @@ function this.Test()
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
         ---@cast dialogueDocument MCP.MemoryDocument
         unitwind:expect(dialogueDocument.data.response_count).toBe(0)
-        unitwind:expect(dialogueDocument.data.text_count).toBe(1)
+        unitwind:expect(dialogueDocument.data.text_count).toBe(2)
+        unitwind:expect(observedActor.dialogue_topic_index ~= nil).toBe(true)
         unitwind:expect(observedActor.dialogue_observation_index ~= nil).toBe(true)
+        unitwind:expect(dialogueDocument.data.dialogue_topic_index == nil).toBe(true)
         unitwind:expect(dialogueDocument.data.dialogue_observation_index == nil).toBe(true)
-        unitwind:expect(dialogueDocument.data.topics[1]).toBe("Background")
-        unitwind:expect(dialogueDocument.data.topics[2]).toBe("Food")
+        unitwind:expect(dialogueDocument.data.topics[1]).toBe("background")
+        unitwind:expect(dialogueDocument.data.topics[2]).toBe("food")
+        unitwind:expect(dialogueDocument.data.topics[3]).toBe(nil)
         unitwind:expect(dialogueDocument.data.observations[1].event).toBe("info_get_text")
         unitwind:expect(dialogueDocument.data.observations[1].dialogue_id).toBe("Background")
         unitwind:expect(dialogueDocument.data.observations[1].info_id).toBe("987654321")
         unitwind:expect(dialogueDocument.data.observations[1].dialogue_type).toBe(tes3.dialogueType.topic)
         unitwind:expect(dialogueDocument.data.observations[1].text).toBe("I am Caius Cosades, Spymaster. Ask about Food.")
         unitwind:expect(dialogueDocument.data.observations[1].raw_text).toBe("I am %name, %class. Ask about @Food#.")
-        unitwind:expect(dialogueDocument.data.observations[1].linked_topics[1]).toBe("Food")
+        unitwind:expect(dialogueDocument.data.observations[1].linked_topics[1]).toBe("food")
         unitwind:expect(dialogueDocument.data.observations[1].repeat_count).toBe(2)
+        unitwind:expect(dialogueDocument.data.observations[2].dialogue_id).toBe("Greeting 5")
+        unitwind:expect(dialogueDocument.data.observations[2].repeat_count).toBe(1)
 
         unitwind:unmock(tes3ui, "getServiceActor")
         unitwind:unmock(tes3, "getActiveCells")
@@ -1139,9 +1149,11 @@ function this.Test()
         unitwind:unmock(event, "register")
     end)
 
+    local testsPassed = unitwind.testsPassed
+    local testsFailed = unitwind.testsFailed
     unitwind:finish()
 
-    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
+    return { testsPassed = testsPassed, testsFailed = testsFailed }
 end
 
 return this

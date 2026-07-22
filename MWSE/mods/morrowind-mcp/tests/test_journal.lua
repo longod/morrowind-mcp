@@ -71,7 +71,7 @@ function this.Test()
         unitwind:expect(entries[1].sequence).toBe(1)
         unitwind:expect(entries[1].text).toBe("I should report to Caius Cosades.")
         unitwind:expect(entries[1].topics[1]).toBe("report")
-        unitwind:expect(entries[1].topics[2]).toBe("Caius Cosades")
+        unitwind:expect(entries[1].topics[2]).toBe("caius cosades")
         unitwind:expect(entries[1].topics[3]).toBe(nil)
         unitwind:expect(entries[1].in_game_time.type).toBe("in-game time")
         unitwind:expect(entries[1].in_game_time.day_count).toBe(1)
@@ -116,9 +116,11 @@ function this.Test()
         end
     end)
 
+    local testsPassed = unitwind.testsPassed
+    local testsFailed = unitwind.testsFailed
     unitwind:finish()
 
-    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
+    return { testsPassed = testsPassed, testsFailed = testsFailed }
 end
 
 return this

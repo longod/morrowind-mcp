@@ -512,9 +512,11 @@ function this.Test()
         unitwind:expect(executedSeconds).toBe(1.0)
     end)
 
+    local testsPassed = unitwind.testsPassed
+    local testsFailed = unitwind.testsFailed
     unitwind:finish()
 
-    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
+    return { testsPassed = testsPassed, testsFailed = testsFailed }
 end
 
 return this

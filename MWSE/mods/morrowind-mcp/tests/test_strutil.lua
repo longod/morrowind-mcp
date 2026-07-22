@@ -29,9 +29,11 @@ function this.Test()
         unitwind:expect(strutil.splitext(nil)).toBe(nil) ---@diagnostic disable-line: param-type-mismatch
     end)
 
+    local testsPassed = unitwind.testsPassed
+    local testsFailed = unitwind.testsFailed
     unitwind:finish()
 
-    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
+    return { testsPassed = testsPassed, testsFailed = testsFailed }
 end
 
 return this

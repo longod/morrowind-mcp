@@ -69,7 +69,7 @@ function this.NormalizeDialogueText(value)
         -- Keep each topic only once, even if it appears multiple times or with different case.
         if keywordKey ~= "" and not topicsSeen[keywordKey] then
             topicsSeen[keywordKey] = true
-            table.insert(topics, keyword)
+            table.insert(topics, keywordKey)
         end
         return keyword
     end)

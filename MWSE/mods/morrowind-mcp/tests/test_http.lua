@@ -177,9 +177,11 @@ function this.Test()
         unitwind:expect(http.IsClosedBeforeRequest(nil, "closed", "partial")).toBe(false)
     end)
 
+    local testsPassed = unitwind.testsPassed
+    local testsFailed = unitwind.testsFailed
     unitwind:finish()
 
-    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
+    return { testsPassed = testsPassed, testsFailed = testsFailed }
 end
 
 return this

@@ -33,28 +33,61 @@ local function ParseChoiceCommand(command)
     return choices
 end
 
---- Add one topic id to dialogue data without duplicating it.
----@param dialogueData MCP.AnyMap
+--- Return the normalized key used for case-insensitive topic storage.
 ---@param topic string?
-local function AddTopic(dialogueData, topic)
-    if not topic or topic == "" then
-        return
+---@return string?
+local function TopicKey(topic)
+    if type(topic) ~= "string" or topic == "" then
+        return nil
     end
-    dialogueData.topics = dialogueData.topics or jsonrpc.array()
-    for _, existingTopic in ipairs(dialogueData.topics) do
-        if existingTopic == topic then
-            return
+    return topic:lower()
+end
+
+--- Build or return the runtime-only topic lookup while keeping the exported topics array ordered.
+---@param observedActor MCP.MemoryObservedActor
+---@return table<string, boolean>
+local function EnsureTopicIndex(observedActor)
+    if observedActor.dialogue_topic_index then
+        return observedActor.dialogue_topic_index
+    end
+
+    local index = {}
+    local dialogueData = observedActor.dialogue_data
+    for _, topic in ipairs((dialogueData and dialogueData.topics) or {}) do
+        local key = TopicKey(topic)
+        if key then
+            index[key] = true
         end
     end
-    table.insert(dialogueData.topics, topic)
+    observedActor.dialogue_topic_index = index
+    return index
+end
+
+--- Add one topic id to dialogue data using a runtime-only case-insensitive lookup.
+---@param observedActor MCP.MemoryObservedActor
+---@param dialogueData MCP.AnyMap
+---@param topic string?
+local function AddTopic(observedActor, dialogueData, topic)
+    local key = TopicKey(topic)
+    if not key then
+        return
+    end
+    local topicIndex = EnsureTopicIndex(observedActor)
+    if topicIndex[key] then
+        return
+    end
+    topicIndex[key] = true
+    dialogueData.topics = dialogueData.topics or jsonrpc.array()
+    table.insert(dialogueData.topics, key)
 end
 
 --- Add all topic ids from a normalized text parse result without duplicating them.
+---@param observedActor MCP.MemoryObservedActor
 ---@param dialogueData MCP.AnyMap
 ---@param topics string[]?
-local function AddTopics(dialogueData, topics)
+local function AddTopics(observedActor, dialogueData, topics)
     for _, topic in ipairs(topics or {}) do
-        AddTopic(dialogueData, topic)
+        AddTopic(observedActor, dialogueData, topic)
     end
 end
 
@@ -161,6 +194,7 @@ local function ResponseObservation(observedActor, eventName, eventData)
         event = eventName,
         dialogue_id = dialogueId,
         info_id = infoId and tostring(infoId) or nil,
+        dialogue_type = eventData.info and eventData.info.type,
         command = eventData.command,
         text = text,
         raw_text = rawText,
@@ -192,6 +226,13 @@ local function TextObservation(observedActor, eventName, eventData)
     })
 end
 
+--- Return true when the dialogue id represents a real topic rather than a greeting, voice, service, or journal page.
+---@param observation MCP.AnyMap
+---@return boolean
+local function IsTopicDialogueObservation(observation)
+    return observation.dialogue_id ~= nil and observation.dialogue_type == tes3.dialogueType.topic
+end
+
 --- Encode one key part with its byte length so adjacent fields cannot collide.
 ---@param value any
 ---@return string
@@ -204,19 +245,10 @@ end
 ---@param observation MCP.AnyMap
 ---@return string?
 local function ObservationKey(observation)
-    if observation.event == "info_get_text" then
+    if observation.event and observation.info_id then
         return table.concat({
             ObservationKeyPart(observation.event),
             ObservationKeyPart(observation.info_id),
-            ObservationKeyPart(observation.text),
-        }, "|")
-    end
-    if observation.event == "info_response" then
-        return table.concat({
-            ObservationKeyPart(observation.event),
-            ObservationKeyPart(observation.info_id),
-            ObservationKeyPart(observation.command),
-            ObservationKeyPart(observation.text),
         }, "|")
     end
     return nil
@@ -315,6 +347,7 @@ function this.EnsureEntry(module, observedActor)
 
     observedActor.dialogue_descriptor = descriptor
     observedActor.dialogue_entry = entry
+    observedActor.dialogue_topic_index = {}
     observedActor.dialogue_observation_index = {}
     observedActor.dialogue_data = jsonrpc.object({
         actor_id = observedActor.id,
@@ -368,8 +401,10 @@ function this.AddObservation(module, observedActor, eventName, eventData)
     end
     table.insert(dialogueData.observations, observation)
     RegisterObservation(observedActor, observation)
-    AddTopic(dialogueData, observation.dialogue_id)
-    AddTopics(dialogueData, observation.linked_topics)
+    if IsTopicDialogueObservation(observation) then
+        AddTopic(observedActor, dialogueData, observation.dialogue_id)
+    end
+    AddTopics(observedActor, dialogueData, observation.linked_topics)
     document.MarkDirty(observedActor.entry)
     document.MarkDirty(observedActor.dialogue_entry)
     return true

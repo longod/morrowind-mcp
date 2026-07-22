@@ -21,9 +21,9 @@ function this.Test()
         )
         unitwind:expect(getmetatable(topics).__jsontype).toBe("array")
         unitwind:expect(topics[1]).toBe("orders")
-        unitwind:expect(topics[2]).toBe("Balmora")
+        unitwind:expect(topics[2]).toBe("balmora")
         unitwind:expect(topics[3]).toBe("report")
-        unitwind:expect(topics[4]).toBe("Caius Cosades")
+        unitwind:expect(topics[4]).toBe("caius cosades")
         unitwind:expect(topics[5]).toBe(nil)
     end)
 
@@ -33,7 +33,7 @@ function this.Test()
         )
 
         unitwind:expect(getmetatable(topics).__jsontype).toBe("array")
-        unitwind:expect(topics[1]).toBe("Caius Cosades")
+        unitwind:expect(topics[1]).toBe("caius cosades")
         unitwind:expect(topics[2]).toBe("report")
         unitwind:expect(topics[3]).toBe(nil)
     end)
@@ -197,9 +197,11 @@ function this.Test()
         unitwind:expect(replaced).toBe(nil)
     end)
 
+    local testsPassed = unitwind.testsPassed
+    local testsFailed = unitwind.testsFailed
     unitwind:finish()
 
-    return { testsPassed = unitwind.testsPassed, testsFailed = unitwind.testsFailed }
+    return { testsPassed = testsPassed, testsFailed = testsFailed }
 end
 
 return this

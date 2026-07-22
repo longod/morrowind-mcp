@@ -92,7 +92,9 @@ function this.Run()
         local loggerFactory = require("morrowind-mcp.logger")
         loggerFactory.ApplyConfigToAll({ level = config.development.logLevel, logToConsole = config.development.logToConsole })
     end
+    local logger = require("morrowind-mcp.logger").Get({ moduleName = "unittest" })
 
+    local totalPassed = 0
     local totalFailed = 0
     local dir = settings.modDir .. "tests"
     for file in lfs.dir(dir) do
@@ -106,15 +108,29 @@ function this.Run()
                     if not ok then
                         -- Treat runtime errors in Test() as test failures.
                         totalFailed = totalFailed + 1
+                        logger:error("Unit test %s failed.", file)
                     elseif type(result) ~= "table" or type(result.testsFailed) ~= "number" then
                         -- Treat malformed Test() results as failures to keep CI signaling reliable.
                         totalFailed = totalFailed + 1
+                        logger:error("Unit test %s returned an invalid result.", file)
                     else
+                        totalPassed = totalPassed + result.testsPassed
                         totalFailed = totalFailed + result.testsFailed
+                        if result.testsFailed > 0 then
+                            logger:error("Unit test %s failed: tests_passed=%d tests_failed=%d", file, result.testsPassed, result.testsFailed)
+                        else
+                            logger:info("Unit test %s passed: tests_passed=%d tests_failed=%d", file, result.testsPassed, result.testsFailed)
+                        end
                     end
                 end
             end
         end
+    end
+
+    if totalFailed > 0 then
+        logger:error("Unit test suite completed: tests_passed=%d tests_failed=%d", totalPassed, totalFailed)
+    else
+        logger:info("Unit test suite completed: tests_passed=%d tests_failed=%d", totalPassed, totalFailed)
     end
 
     if hasTestSentinel then
