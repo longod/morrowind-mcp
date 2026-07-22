@@ -99,6 +99,7 @@ local dataType = {
     actorIndex = "actor_index",
     npcSummary = "npc_summary",
     creatureSummary = "creature_summary",
+    actorDialogueNotes = "actor_dialogue_notes",
     -- Expected future examples: inventory_items, dialogue_topics, container_items, reference_location.
 }
 this.dataType = dataType
@@ -112,6 +113,7 @@ local linkRel = {
     quests = "quests",
     actors = "actors",
     actor = "actor",
+    dialogue = "dialogue",
     -- Expected future examples: inventory, dialogue, container, reference, location.
 }
 this.linkRel = linkRel

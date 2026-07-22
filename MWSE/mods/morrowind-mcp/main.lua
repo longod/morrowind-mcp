@@ -142,7 +142,7 @@ require("morrowind-mcp.mcm")
 local maxInlineFields = 8
 
 ---@param value any
----@param field string
+---@param field any
 ---@return any
 local function SafeGetField(value, field)
     local ok, result = pcall(function()
@@ -244,6 +244,98 @@ end
 local function RegisterTestEvents()
     local logger = require("morrowind-mcp.logger").Get({ moduleName = "test_event" })
 
+    ---Formats the active AI package state without assuming the package subtype is valid for the player.
+    ---@param label string
+    ---@return string
+    local function FormatPlayerAIPlannerState(label)
+        local planner = tes3.mobilePlayer and tes3.mobilePlayer.aiPlanner
+        if not planner then
+            return string.format("%s planner=nil", label)
+        end
+
+        local packageIdOk, packageId = pcall(function()
+            return tes3.getCurrentAIPackageId({ reference = tes3.mobilePlayer })
+        end)
+
+        local packageSlots = {}
+        local packages = planner.packages
+        if packages then
+            for index = 0, 32 do
+                local packageInSlot = SafeGetField(packages, index)
+                if packageInSlot then
+                    packageSlots[table.size(packageSlots) + 1] = string.format("%s:{type=%s,dest=%s,target=%s}",
+                        tostring(index),
+                        tostring(SafeGetField(packageInSlot, "type")),
+                        tostring(SafeGetField(packageInSlot, "destination")),
+                        tostring(SafeGetField(packageInSlot, "targetPosition")))
+                end
+            end
+        end
+        local packageSlotsText = table.size(packageSlots) == 0 and "[]" or "[" .. table.concat(packageSlots, ", ") .. "]"
+
+        local processManager = tes3.worldController and tes3.worldController.mobManager and
+            tes3.worldController.mobManager.processManager
+        local plannerListText = "processManager=nil"
+        if processManager then
+            local allPlanners = processManager.allPlanners
+            local allMobileActors = processManager.allMobileActors
+            local hasPlayerPlanner = false
+            if allPlanners then
+                for _, listedPlanner in pairs(allPlanners) do
+                    if listedPlanner == planner or SafeGetField(listedPlanner, "mobile") == tes3.mobilePlayer then
+                        hasPlayerPlanner = true
+                        break
+                    end
+                end
+            end
+
+            local hasPlayerMobile = false
+            if allMobileActors then
+                for _, listedMobile in pairs(allMobileActors) do
+                    if listedMobile == tes3.mobilePlayer then
+                        hasPlayerMobile = true
+                        break
+                    end
+                end
+            end
+
+            plannerListText = string.format("allPlanners=%s hasPlayerPlanner=%s allMobileActors=%s hasPlayerMobile=%s",
+                tostring(allPlanners and table.size(allPlanners) or nil),
+                tostring(hasPlayerPlanner),
+                tostring(allMobileActors and table.size(allMobileActors) or nil),
+                tostring(hasPlayerMobile))
+        end
+
+        local package = planner:getActivePackage()
+        if not package then
+            return string.format("%s planner=%s current=%s next=%s packageId=%s package=nil slots=%s %s", label,
+                tostring(planner),
+                tostring(planner.currentPackageIndex),
+                tostring(planner.nextOpenPackageIndex),
+                packageIdOk and tostring(packageId) or "error",
+                packageSlotsText,
+                plannerListText)
+        end
+
+        return string.format(
+            "%s planner=%s current=%s next=%s packageId=%s package=%s type=%s started=%s moving=%s done=%s reset=%s destination=%s targetPosition=%s slots=%s %s",
+            label,
+            tostring(planner),
+            tostring(planner.currentPackageIndex),
+            tostring(planner.nextOpenPackageIndex),
+            packageIdOk and tostring(packageId) or "error",
+            tostring(package),
+            tostring(SafeGetField(package, "type")),
+            tostring(SafeGetField(package, "isStarted")),
+            tostring(SafeGetField(package, "isMoving")),
+            tostring(SafeGetField(package, "isDone")),
+            tostring(SafeGetField(package, "isReset")),
+            tostring(SafeGetField(package, "destination")),
+            tostring(SafeGetField(package, "targetPosition")),
+            packageSlotsText,
+            plannerListText)
+    end
+
     ---@param e addSoundEventData
     local function addSoundCallback(e)
         logger:trace("addSound %s", FormatEventData(e))
@@ -314,7 +406,34 @@ local function RegisterTestEvents()
     local function dialogueFilteredCallback(e)
         logger:trace("dialogueFiltered %s", FormatEventData(e))
     end
-    event.register(tes3.event.dialogueFiltered, dialogueFilteredCallback)
+    -- event.register(tes3.event.dialogueFiltered, dialogueFilteredCallback)
+
+    ---@param e infoFilterEventData
+    local function infoFilterCallback(e)
+        -- too mnay
+        logger:trace("infoFilter %s", FormatEventData(e))
+    end
+    -- event.register(tes3.event.infoFilter, infoFilterCallback)
+
+    ---@param e infoGetTextEventData
+    local function infoGetTextCallback(e)
+        -- too many
+        logger:trace("infoGetText %s", FormatEventData(e))
+        -- logger:trace("  '%s'", e:loadOriginalText())
+    end
+    -- event.register(tes3.event.infoGetText, infoGetTextCallback)
+
+    --- @param e infoResponseEventData
+    local function infoResponseCallback(e)
+        logger:trace("infoResponse %s", FormatEventData(e))
+    end
+    -- event.register(tes3.event.infoResponse, infoResponseCallback)
+
+    --- @param e postInfoResponseEventData
+    local function postInfoResponseCallback(e)
+        logger:trace("postInfoResponse %s", FormatEventData(e))
+    end
+    -- event.register(tes3.event.postInfoResponse, postInfoResponseCallback)
 
     ---@param e itemDroppedEventData
     local function itemDroppedCallback(e)
@@ -460,15 +579,13 @@ local function RegisterTestEvents()
             local destination = tes3.getCameraPosition() + tes3.getCameraVector() * distance
             -- Player mobiles are not driven by an AI planner, so AITravel can be accepted without moving them.
             if not tes3.mobilePlayer.aiPlanner then
-                tes3.messageBox("AI travel is not processed for the player. Destination was %s from %s", tostring(destination),
+                tes3.messageBox("AI travel is not processed for the player. Destination was %s from %s",
+                    tostring(destination),
                     tostring(tes3.player.position))
                 return
             end
-            local package = tes3.mobilePlayer.aiPlanner:getActivePackage()
-            if package then
-            end
-
-            tes3.setPlayerControlState({ enabled = false })
+            local beforeState = FormatPlayerAIPlannerState("before")
+            logger:info("AI travel diagnostics %s", beforeState)
 
             local ok, err = pcall(function()
                 tes3.setAITravel({
@@ -477,12 +594,19 @@ local function RegisterTestEvents()
                     reset = true,
                 })
             end)
+            local afterState = FormatPlayerAIPlannerState("after")
+            logger:info("AI travel diagnostics %s", afterState)
+
+            timer.frame.delayOneFrame(function()
+                logger:info("AI travel diagnostics %s", FormatPlayerAIPlannerState("nextFrame"))
+            end)
+
             if ok then
-                tes3.messageBox("AI travel started to %s from %s", tostring(destination), tostring(tes3.player.position))
+                tes3.messageBox("AI travel accepted. Destination: %s\n%s\n%s", tostring(destination), beforeState,
+                    afterState)
             else
-                tes3.setPlayerControlState({ enabled = true })
-                tes3.messageBox("AI travel failed to start to %s from %s: %s", tostring(destination),
-                    tostring(tes3.player.position), tostring(err))
+                tes3.messageBox("AI travel failed. Destination: %s\n%s\nError: %s", tostring(destination), beforeState,
+                    tostring(err))
             end
         end
     end

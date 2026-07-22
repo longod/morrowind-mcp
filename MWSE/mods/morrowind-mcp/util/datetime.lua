@@ -139,6 +139,20 @@ function this.ToISO8601(dateTime)
     return isoText
 end
 
+--- Format in-game time as short human-readable Tamriel text for compact observations.
+--- This intentionally drops seconds and simulation epoch details when exact chronology is unnecessary.
+---@param inGameTime MCP.DateTimeInGame?
+---@return string?
+function this.ToInGameShortText(inGameTime)
+    if not inGameTime or not inGameTime.year or not inGameTime.month or not inGameTime.day or not inGameTime.hour then
+        return nil
+    end
+
+    local hour = math.floor(inGameTime.hour)
+    local minute = math.floor((inGameTime.hour - hour) * 60)
+    return string.format("3E %d-%02d-%02d %02d:%02d", inGameTime.year, inGameTime.month, inGameTime.day, hour, minute)
+end
+
 ---@return MCP.DateTimeInGame?
 function this.InGameNow()
     if tes3.onMainMenu() then

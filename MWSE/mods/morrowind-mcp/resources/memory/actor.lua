@@ -1,6 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
+local actorDialogue = require("morrowind-mcp.resources.memory.actor_dialogue")
 local iter = require("morrowind-mcp.tes3.iterator")
 
 --- Memory module that owns one actor collection and many observed actor entries internally.
@@ -11,6 +12,8 @@ local iter = require("morrowind-mcp.tes3.iterator")
 ---@field activationTargetChangedCallback fun(e: activationTargetChangedEventData)?
 ---@field activateCallback fun(e: activateEventData)?
 ---@field dialogActivatedCallback fun(e: uiActivatedEventData)?
+---@field infoResponseCallback fun(e: infoResponseEventData)?
+---@field infoGetTextCallback fun(e: infoGetTextEventData)?
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -52,6 +55,8 @@ local observationSource = {
     activationTargetChanged = "activation_target_changed",
     activate = "activate",
     menuDialog = "menu_dialog",
+    infoResponse = "info_response",
+    infoGetText = "info_get_text",
 }
 
 --- Convert an in-game identifier to a conservative URI path segment.
@@ -93,6 +98,27 @@ end
 ---@return string
 local function ActorReferenceId(ref)
     return tostring(ref.id or (ref.object and ref.object.id) or "unknown")
+end
+
+--- Return the base object used for identity matching from dialogue info actor fields.
+---@param actor tes3actor|tes3creature|tes3creatureInstance|tes3npc|tes3npcInstance|nil
+---@return tes3creature|tes3npc|nil
+local function DialogueInfoBaseActor(actor)
+    if not actor then
+        return nil
+    end
+    if actor.isInstance then
+        return actor.baseObject or actor
+    end
+    return actor --[[@as tes3creature|tes3npc]]
+end
+
+--- Return the raw TES3 base actor id from a dialogue info actor field.
+---@param actor tes3actor|tes3creature|tes3creatureInstance|tes3npc|tes3npcInstance|nil
+---@return string?
+local function DialogueInfoBaseActorId(actor)
+    local baseActor = DialogueInfoBaseActor(actor)
+    return baseActor and tostring(baseActor.id) or nil
 end
 
 --- Return true when this actor respawns through its record or placed reference flags.
@@ -272,7 +298,7 @@ end
 ---@param source MCP.MemoryActorObservationSource
 ---@return MCP.MemoryActorInteractionState
 local function InteractionStateForSource(source)
-    if source == observationSource.menuDialog then
+    if source == observationSource.menuDialog or source == observationSource.infoResponse or source == observationSource.infoGetText then
         return interactionState.conversed
     end
     if source == observationSource.activate then
@@ -336,7 +362,7 @@ local function UpdateActorFacts(data, ref, source)
         data.facts.is_essential = actorObject.isEssential
     end
 
-    if source == observationSource.menuDialog and actorObject and actorObject.class then
+    if (source == observationSource.menuDialog or source == observationSource.infoResponse or source == observationSource.infoGetText) and actorObject and actorObject.class then
         data.facts.services = ClassServiceSummary(actorObject.class)
     end
 end
@@ -354,7 +380,7 @@ local function UpdateInteractionFacts(data, source)
         data.interaction.targeted = true
     elseif source == observationSource.activate then
         data.interaction.activated = true
-    elseif source == observationSource.menuDialog then
+    elseif source == observationSource.menuDialog or source == observationSource.infoResponse or source == observationSource.infoGetText then
         data.interaction.conversed = true
     end
 end
@@ -402,6 +428,12 @@ local function SourceDescriptionName(source)
     if source == observationSource.menuDialog then
         return "MenuDialog"
     end
+    if source == observationSource.infoResponse then
+        return "infoResponse"
+    end
+    if source == observationSource.infoGetText then
+        return "infoGetText"
+    end
     return source
 end
 
@@ -435,6 +467,27 @@ local function FindObservedActorId(observedActors, referenceId)
         end
     end
     return nil
+end
+
+--- Find an observed actor by base id only when the match is unambiguous.
+---@param observedActors table<string, MCP.MemoryObservedActor>
+---@param baseId string?
+---@return string?
+local function FindSingleObservedActorIdByBaseId(observedActors, baseId)
+    if not baseId then
+        return nil
+    end
+
+    local matchedActorId = nil
+    for actorId, observedActor in pairs(observedActors) do
+        if observedActor.data and observedActor.data.base_id == baseId then
+            if matchedActorId then
+                return nil
+            end
+            matchedActorId = actorId
+        end
+    end
+    return matchedActorId
 end
 
 --- Allocate a route-friendly id while preserving raw TES3 ids in actor data.
@@ -572,7 +625,7 @@ function this:ObserveReference(ref, source, publishIfVisible)
             observed = source == observationSource.activeCells,
             targeted = source == observationSource.activationTargetChanged,
             activated = source == observationSource.activate,
-            conversed = source == observationSource.menuDialog,
+            conversed = source == observationSource.menuDialog or source == observationSource.infoResponse or source == observationSource.infoGetText,
             activation_count = source == observationSource.activate and 1 or 0,
             conversation_count = source == observationSource.menuDialog and 1 or 0,
         }),
@@ -666,7 +719,7 @@ end
 --- Observe the actor attached to a newly opened dialogue menu.
 ---@param e uiActivatedEventData
 function this:OnMenuDialogActivated(e)
-    if not e or not e.newlyCreated then
+    if not e.newlyCreated then
         return
     end
 
@@ -675,6 +728,98 @@ function this:OnMenuDialogActivated(e)
     if self:ObserveReference(ref, observationSource.menuDialog) then
         self:MarkDirty()
         self.logger:debug("Memory actor conversation observed: total=%d", table.size(self.observedActors))
+    end
+end
+
+--- Record confirmed dialogue responses with actor references in actor-local dialogue memory.
+---@param e infoResponseEventData
+function this:OnInfoResponse(e)
+    if not e or not e.reference or not IsActorReference(e.reference) then
+        return
+    end
+
+    self:ObserveReference(e.reference, observationSource.infoResponse)
+    local actorId = FindObservedActorId(self.observedActors, ActorReferenceId(e.reference))
+    if not actorId then
+        return
+    end
+
+    local observedActor = self.observedActors[actorId]
+    if actorDialogue.AddObservation(self, observedActor, "info_response", e) then
+        self.logger:debug(
+            "Memory actor dialogue response observed: actor_id=%s responses=%d topic=%s",
+            actorId,
+            observedActor.dialogue_data and observedActor.dialogue_data.response_count or 0,
+            e.dialogue and e.dialogue.id or ""
+        )
+    end
+end
+
+--- Resolve an infoGetText event to a concrete service actor reference when possible.
+---@param e infoGetTextEventData
+---@return tes3reference?
+local function InfoGetTextServiceReference(e)
+    local serviceActor = tes3ui.getServiceActor()
+    local ref = ServiceActorReference(serviceActor)
+    if not IsActorReference(ref) then
+        return nil
+    end
+
+    local baseActorId = DialogueInfoBaseActorId(e.info and e.info.actor)
+    if not baseActorId or ActorBaseId(ref) == baseActorId then
+        return ref
+    end
+    return nil
+end
+
+--- Mark an already observed actor as conversed from an event that did not expose a concrete reference.
+---@param observedActor MCP.MemoryObservedActor
+---@param source MCP.MemoryActorObservationSource
+function this:UpdateObservedActorInteraction(observedActor, source)
+    local nextInteractionState = InteractionStateForSource(source)
+    local changed = AddSourceKind(observedActor.data.interaction.source_kinds, source)
+    UpdateInteractionFacts(observedActor.data, source)
+    if IsStrongerInteractionState(observedActor.data.interaction.state, nextInteractionState) then
+        observedActor.data.interaction.state = nextInteractionState
+        changed = true
+    end
+    if changed then
+        document.MarkDirty(observedActor.entry)
+        document.MarkDirty(self.indexEntry)
+        UpdateActorLink(self.actorLinks, observedActor)
+    end
+end
+
+--- Record dialogue text retrievals that identify a non-journal actor response.
+---@param e infoGetTextEventData
+function this:OnInfoGetText(e)
+    if not e or not e.info or e.info.type == tes3.dialogueType.journal then
+        return
+    end
+
+    local ref = InfoGetTextServiceReference(e)
+    local actorId = nil
+    if ref then
+        self:ObserveReference(ref, observationSource.infoGetText)
+        actorId = FindObservedActorId(self.observedActors, ActorReferenceId(ref))
+    else
+        actorId = FindSingleObservedActorIdByBaseId(self.observedActors, DialogueInfoBaseActorId(e.info.actor))
+        if actorId then
+            self:UpdateObservedActorInteraction(self.observedActors[actorId], observationSource.infoGetText)
+        end
+    end
+    if not actorId then
+        return
+    end
+
+    local observedActor = self.observedActors[actorId]
+    if actorDialogue.AddObservation(self, observedActor, "info_get_text", e) then
+        self.logger:debug(
+            "Memory actor dialogue text observed: actor_id=%s texts=%d info_id=%s",
+            actorId,
+            observedActor.dialogue_data and observedActor.dialogue_data.text_count or 0,
+            e.info and e.info.id or ""
+        )
     end
 end
 
@@ -697,18 +842,43 @@ function this:RegisterEvent()
         self.logger:debug("Memory actor activate handler registered")
     end
 
-    if self.dialogActivatedCallback then
-        return
+    if not self.dialogActivatedCallback then
+        self.dialogActivatedCallback = function(e)
+            self:OnMenuDialogActivated(e)
+        end
+        event.register(tes3.event.uiActivated, self.dialogActivatedCallback, { filter = "MenuDialog" })
+        self.logger:debug("Memory actor MenuDialog handler registered")
     end
-    self.dialogActivatedCallback = function(e)
-        self:OnMenuDialogActivated(e)
+
+    if not self.infoResponseCallback then
+        self.infoResponseCallback = function(e)
+            self:OnInfoResponse(e)
+        end
+        event.register(tes3.event.infoResponse, self.infoResponseCallback)
+        self.logger:debug("Memory actor infoResponse handler registered")
     end
-    event.register(tes3.event.uiActivated, self.dialogActivatedCallback, { filter = "MenuDialog" })
-    self.logger:debug("Memory actor MenuDialog handler registered")
+
+    if not self.infoGetTextCallback then
+        self.infoGetTextCallback = function(e)
+            self:OnInfoGetText(e)
+        end
+        event.register(tes3.event.infoGetText, self.infoGetTextCallback)
+        self.logger:debug("Memory actor infoGetText handler registered")
+    end
 end
 
 --- Unregister actor-specific target observation and base loaded refreshes.
 function this:UnregisterEvent()
+    if self.infoGetTextCallback then
+        event.unregister(tes3.event.infoGetText, self.infoGetTextCallback)
+        self.infoGetTextCallback = nil
+        self.logger:debug("Memory actor infoGetText handler unregistered")
+    end
+    if self.infoResponseCallback then
+        event.unregister(tes3.event.infoResponse, self.infoResponseCallback)
+        self.infoResponseCallback = nil
+        self.logger:debug("Memory actor infoResponse handler unregistered")
+    end
     if self.dialogActivatedCallback then
         event.unregister(tes3.event.uiActivated, self.dialogActivatedCallback)
         self.dialogActivatedCallback = nil
@@ -739,6 +909,11 @@ function this:GetLinksForParent(parentUri)
     end
     if parentUri == collectionDescriptor.uri then
         return self.actorLinks or jsonrpc.array()
+    end
+    for _, observedActor in pairs(self.observedActors or {}) do
+        if observedActor.descriptor and parentUri == observedActor.descriptor.uri then
+            return actorDialogue.BuildLinks(observedActor)
+        end
     end
     return jsonrpc.array()
 end
@@ -802,9 +977,17 @@ function this:BuildActorDocument(actorId)
         {
             subject = observedActor.subject,
             scope = self.manager:GetScope(),
+            links = actorDialogue.BuildLinks(observedActor),
             source = document.Source(document.sourceKind.liveState, nil, nil, observedActor.source_description),
         }
     )
+end
+
+--- Build one actor-local dialogue Memory document.
+---@param actorId string
+---@return MCP.MemoryDocument?
+function this:BuildActorDialogueDocument(actorId)
+    return actorDialogue.BuildDocument(self, actorId)
 end
 
 return this

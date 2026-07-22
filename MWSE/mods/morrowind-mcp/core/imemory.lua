@@ -98,6 +98,10 @@
 ---@field source_description string Source text describing how this actor was observed.
 ---@field data_type MCP.MemoryDataType Data type selected from the actor's TES3 object type.
 ---@field data MCP.AnyMap Serialized actor/reference data captured when the module refreshed.
+---@field dialogue_descriptor MCP.Resource? Resource descriptor for actor-local dialogue notes.
+---@field dialogue_entry MCP.MemoryResourceEntry? Live resource entry for actor-local dialogue notes.
+---@field dialogue_data MCP.AnyMap? Mutable actor-local dialogue notes payload.
+---@field dialogue_observation_index table<string, MCP.AnyMap>? Runtime-only duplicate lookup for actor-local dialogue observations.
 
 --- Payload fields currently written by Actor Memory documents.
 --- Raw ids preserve TES3 casing and spacing; only the resource URI segment is normalized.

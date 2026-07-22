@@ -847,6 +847,234 @@ function this.Test()
         unitwind:unmock(tes3, "onMainMenu")
     end)
 
+    testMemoryModule("Memory Actor module writes dialogue notes from infoResponse", function()
+        local published = {}
+        ---@type MCP.IResourceManager
+        local resource = {
+            Release = function(self)
+            end,
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(1)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local function object(id, name, objectType)
+            return {
+                id = id,
+                name = name,
+                objectType = objectType,
+                attributes = {},
+                skills = {},
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local function reference(object)
+            return {
+                id = object.id,
+                objectType = tes3.objectType.reference,
+                object = object,
+                baseObject = object,
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local caius = reference(object("caius cosades", "Caius Cosades", tes3.objectType.npc))
+        local activeCells = {
+            {
+                actors = {
+                    size = 1,
+                    head = caius,
+                },
+            },
+        }
+        unitwind:mock(tes3, "onMainMenu", function()
+            return false
+        end)
+        unitwind:mock(tes3, "getActiveCells", function()
+            return activeCells
+        end)
+        ---@param command string
+        ---@param infoId string
+        ---@return infoResponseEventData
+        local function infoResponseEvent(command, infoId)
+            ---@diagnostic disable-next-line: missing-fields
+            return {
+                block = false,
+                claim = false,
+                reference = caius,
+                dialogue = { id = "Beds" },
+                info = { id = infoId, text = "Beds response text." },
+                command = command,
+            }
+        end
+
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+        module:OnInfoResponse(infoResponseEvent("Choice, \"Yes\", 1, \"No\", 2", "4325609943702902"))
+        module:OnInfoResponse(infoResponseEvent("Choice, \"Yes\", 1, \"No\", 2", "4325609943702902"))
+        module:OnInfoResponse(infoResponseEvent("set rent to 1", "13139129622269431723"))
+
+        local observedActor = module.observedActors["caius-cosades"]
+        local actorDocument = module:BuildActorDocument("caius-cosades")
+        local dialogueDocument = module:BuildActorDialogueDocument("caius-cosades")
+        local actorChildLinks = module:GetLinksForParent("morrowind://memory/actors/caius-cosades/index.json")
+
+        unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
+        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("info_response")
+        unitwind:expect(published[#published]).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
+        unitwind:expect(actorChildLinks[1].rel).toBe("dialogue")
+        unitwind:expect(actorChildLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
+        ---@cast actorDocument MCP.MemoryDocument
+        ---@cast dialogueDocument MCP.MemoryDocument
+        unitwind:expect(actorDocument.links[1].uri).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
+        unitwind:expect(dialogueDocument.data.actor_id).toBe("caius-cosades")
+        unitwind:expect(dialogueDocument.data.response_count).toBe(2)
+        unitwind:expect(observedActor.dialogue_observation_index ~= nil).toBe(true)
+        unitwind:expect(dialogueDocument.data.dialogue_observation_index == nil).toBe(true)
+        unitwind:expect(dialogueDocument.data.topics[1]).toBe("Beds")
+        unitwind:expect(dialogueDocument.data.observations[1].event).toBe("info_response")
+        unitwind:expect(dialogueDocument.data.observations[1].dialogue_id).toBe("Beds")
+        unitwind:expect(dialogueDocument.data.observations[1].info_id).toBe("4325609943702902")
+        unitwind:expect(dialogueDocument.data.observations[1].choices[1].label).toBe("Yes")
+        unitwind:expect(dialogueDocument.data.observations[1].choices[1].value).toBe(1)
+        unitwind:expect(dialogueDocument.data.observations[1].choices[2].label).toBe("No")
+        unitwind:expect(dialogueDocument.data.observations[1].repeat_count).toBe(2)
+        unitwind:expect(dialogueDocument.data.observations[2].command).toBe("set rent to 1")
+
+        unitwind:unmock(tes3, "getActiveCells")
+        unitwind:unmock(tes3, "onMainMenu")
+    end)
+
+    testMemoryModule("Memory Actor module writes dialogue text from infoGetText", function()
+        local published = {}
+        ---@type MCP.IResourceManager
+        local resource = {
+            Release = function(self)
+            end,
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(1)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local function object(id, name, objectType)
+            return {
+                id = id,
+                name = name,
+                objectType = objectType,
+                attributes = {},
+                skills = {},
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local function reference(object)
+            return {
+                id = object.id,
+                objectType = tes3.objectType.reference,
+                object = object,
+                baseObject = object,
+                isValid = function(self)
+                    return true
+                end,
+            }
+        end
+        local caius = reference(object("caius cosades", "Caius Cosades", tes3.objectType.npc))
+        caius.object.class = { id = "spymaster", name = "Spymaster" }
+        caius.object.race = { id = "Imperial", name = "Imperial" }
+        local activeCells = {
+            {
+                actors = {
+                    size = 1,
+                    head = caius,
+                },
+            },
+        }
+        unitwind:mock(tes3, "onMainMenu", function()
+            return false
+        end)
+        unitwind:mock(tes3, "getActiveCells", function()
+            return activeCells
+        end)
+        unitwind:mock(tes3ui, "getServiceActor", function()
+            return { reference = caius }
+        end)
+        ---@param dialogueType tes3.dialogueType
+        ---@return infoGetTextEventData
+        local function infoGetTextEvent(dialogueType)
+            ---@diagnostic disable-next-line: missing-fields
+            return {
+                claim = false,
+                info = {
+                    id = "987654321",
+                    type = dialogueType,
+                    actor = nil,
+                    findDialogue = function(self)
+                        return { id = "Background" }
+                    end,
+                },
+                loadOriginalText = function(self)
+                    return "I am %name, %class. Ask about @Food#."
+                end,
+            }
+        end
+
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+        module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.topic))
+        module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.topic))
+        module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.journal))
+
+        local observedActor = module.observedActors["caius-cosades"]
+        local dialogueDocument = module:BuildActorDialogueDocument("caius-cosades")
+
+        unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
+        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("info_get_text")
+        unitwind:expect(published[#published]).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
+        ---@cast dialogueDocument MCP.MemoryDocument
+        unitwind:expect(dialogueDocument.data.response_count).toBe(0)
+        unitwind:expect(dialogueDocument.data.text_count).toBe(1)
+        unitwind:expect(observedActor.dialogue_observation_index ~= nil).toBe(true)
+        unitwind:expect(dialogueDocument.data.dialogue_observation_index == nil).toBe(true)
+        unitwind:expect(dialogueDocument.data.topics[1]).toBe("Background")
+        unitwind:expect(dialogueDocument.data.topics[2]).toBe("Food")
+        unitwind:expect(dialogueDocument.data.observations[1].event).toBe("info_get_text")
+        unitwind:expect(dialogueDocument.data.observations[1].dialogue_id).toBe("Background")
+        unitwind:expect(dialogueDocument.data.observations[1].info_id).toBe("987654321")
+        unitwind:expect(dialogueDocument.data.observations[1].dialogue_type).toBe(tes3.dialogueType.topic)
+        unitwind:expect(dialogueDocument.data.observations[1].text).toBe("I am Caius Cosades, Spymaster. Ask about Food.")
+        unitwind:expect(dialogueDocument.data.observations[1].raw_text).toBe("I am %name, %class. Ask about @Food#.")
+        unitwind:expect(dialogueDocument.data.observations[1].linked_topics[1]).toBe("Food")
+        unitwind:expect(dialogueDocument.data.observations[1].repeat_count).toBe(2)
+
+        unitwind:unmock(tes3ui, "getServiceActor")
+        unitwind:unmock(tes3, "getActiveCells")
+        unitwind:unmock(tes3, "onMainMenu")
+    end)
+
     testMemoryModule("Memory module hides links after unpublish", function()
         local unpublished = {}
         ---@type MCP.IResourceManager

@@ -208,6 +208,35 @@ function this.Test()
         unitwind:expect(isoText).toBe(nil)
     end)
 
+    unitwind:test("ToInGameShortText formats compact Tamriel time", function()
+        local shortText = datetime.ToInGameShortText({
+            type = "in-game time",
+            year = 427,
+            month = 8,
+            day = 16,
+            hour = 13.25,
+            day_count = 1,
+            epoch_time = 3746005,
+            time_zone = datetime.tamrielTimeZone,
+        })
+
+        unitwind:expect(shortText).toBe("3E 427-08-16 13:15")
+    end)
+
+    unitwind:test("ToInGameShortText returns nil for missing precision", function()
+        local shortText = datetime.ToInGameShortText({
+            type = "in-game time",
+            year = 427,
+            month = 8,
+            day = 16,
+            hour = nil, ---@diagnostic disable-line: assign-type-mismatch
+            day_count = 1,
+            time_zone = datetime.tamrielTimeZone,
+        })
+
+        unitwind:expect(shortText).toBe(nil)
+    end)
+
     unitwind:test("InGameNow returns nil on main menu", function()
         unitwind:mock(tes3, "onMainMenu", function()
             return true

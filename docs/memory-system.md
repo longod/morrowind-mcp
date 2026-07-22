@@ -65,6 +65,7 @@ Data type values currently used:
 - `actor_index`: observed actor collection index payload.
 - `npc_summary`: observed NPC Memory document payload.
 - `creature_summary`: observed creature Memory document payload.
+- `actor_dialogue_notes`: actor-local conversation notes observed from dialogue events.
 
 Link relation values currently used:
 
@@ -74,6 +75,7 @@ Link relation values currently used:
 - `quests`: quest Memory document or collection.
 - `actors`: actor collection index.
 - `actor`: one observed actor document.
+- `dialogue`: actor-local dialogue notes.
 
 Index documents should avoid duplicating links inside `data`. The canonical traversal list is `links`; `data` may contain counts or summary metadata such as `root_count` or `actor_count`.
 
@@ -161,7 +163,7 @@ Actor `facts` should be lightweight and human-oriented. They may include:
 Actor `interaction` includes:
 
 - `state`: strongest mechanical player interaction observed for this actor. Current values are `observed`, `targeted`, `activated`, and `conversed`.
-- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, and `menu_dialog`.
+- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, `menu_dialog`, `info_response`, and `info_get_text`.
 - `observed`, `targeted`, `activated`, and `conversed`: booleans for observed interaction categories.
 - `activation_count`: number of player `activate` events observed for this actor.
 - `conversation_count`: number of newly created `MenuDialog` events observed for this actor.
@@ -172,11 +174,19 @@ Normal actor Memory reads must not expose the full serialized TES3 reference by 
 - `activation_target_changed`: `activationTargetChanged` exposed the actor as the current activation target.
 - `activate`: the player activated the actor.
 - `menu_dialog`: a newly created `MenuDialog` exposed the service actor through `tes3ui.getServiceActor()`.
+- `info_response`: a dialogue response event exposed a concrete actor reference.
+- `info_get_text`: a non-journal dialogue text retrieval exposed a service actor or matched exactly one observed actor by base id.
 
-Dialogue-derived service facts are stored under `facts.services` only when the actor is observed from `menu_dialog` and the actor object has a class. The shape is compact:
+Dialogue-derived service facts are stored under `facts.services` only when the actor is observed from dialogue-related events and the actor object has a class. The shape is compact:
 
 - `facts.services.offers`: true-only service booleans such as `bartering`, `training`, `spells`, `spellmaking`, `enchanting`, and `repairs`.
 - `facts.services.barters`: true-only barter category booleans such as `ingredients`, `weapons`, `books`, `armor`, and related class barter fields.
+
+Service facts should stay on the actor Memory document instead of being hidden only inside a dialogue child document. A client should be able to revisit a merchant, trainer, spellmaker, or similar service actor by reading the actor index and actor facts without first traversing conversation notes.
+
+Dialogue and conversation notes should not be appended to `memory/actors/index.json`. The actor collection index remains a lightweight traversal list. Conversation details should live in a child resource owned by the actor module, initially shaped as one actor-local dialogue document such as `morrowind://memory/actors/{actor_id}/dialogue.json`. The actor document may link to that child when dialogue notes exist.
+
+Actor dialogue notes are currently written from reference-bearing `infoResponse` events and actor-resolvable non-journal `infoGetText` events. `infoResponse` captures the selected info record, command text, and parsed `Choice` command options. `infoGetText` captures the displayed response text; if the event text is not overridden, the module loads the original info text through MWSE. The child payload should keep `actor_id`, raw actor ids, a deduplicated `topics` list, unique `response_count`, unique `text_count`, and an ordered `observations` array. Dialogue text should resolve known percent/caret define tokens, normalize topic markup such as `@food#` into readable text, and expose those markers separately as `linked_topics`; `raw_text` may be kept when normalization changed the original text. Exact repeated observations should update `repeat_count` and `last_observed_at` instead of appending another observation, because subtitles and repeated topic selections can fire the same dialogue fact more than once. Duplicate lookup should be maintained in runtime-only module state, not serialized into `dialogue.json`, so the exported `observations` array stays traversal- and read-order friendly. Observation timestamps use compact in-game time strings inside the child payload to keep repeated dialogue notes readable; document-level `updated_at` still uses the normal structured timestamp envelope.
 
 Full serialized TES3 reference data stays out of Actor Memory. When raw active actor data is needed, clients should call `mw-actor-fetch`, which is the tool-level interface for full active-cell actor serialization. Current normal reads and debug dumps both use lightweight actor facts and interaction metadata only.
 
@@ -192,7 +202,7 @@ Actor interaction states are mechanical facts, not importance judgments:
 - `observed`: the actor was seen in active cells.
 - `targeted`: the actor was the player's current activation target.
 - `activated`: the actor was activated by the player.
-- `conversed`: the actor was returned by `tes3ui.getServiceActor()` when a newly created `MenuDialog` was activated.
+- `conversed`: dialogue events exposed the actor through `tes3ui.getServiceActor()`, `infoResponse`, or actor-resolvable `infoGetText`.
 
 Interaction state only moves to stronger states: `observed < targeted < activated < conversed`.
 

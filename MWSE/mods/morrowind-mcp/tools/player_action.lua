@@ -9,6 +9,18 @@ local defaultHoldSeconds = 1.0
 -- keybinding based action to player character. not menu.
 -- TODO command list or something for smooth controll. but need to task or own system like the coroutine.
 
+-- TODO rename much better name for this tool. player-action is not good. maybe player-control or player-command or player-input
+
+-- item control.. use?
+-- tes3.dropItem
+-- tes3.equip
+-- tes3.payMerchant
+-- tes3.persuade
+-- tes3.transferInventory
+-- tes3.transferItem
+
+
+
 ---@class MCP.Tools.PlayerAction: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
@@ -64,7 +76,7 @@ function this.new(params)
                         "quickLoad",
                         "escape",
                         -- "console",
-                        "screenshot",
+                        -- "screenshot",
                         "readyMagicMCP",
                     },
                     "Action",
