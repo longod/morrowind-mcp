@@ -6,4 +6,5 @@ return {
     require("morrowind-mcp.resources.memory.journal"),
     require("morrowind-mcp.resources.memory.quest"),
     require("morrowind-mcp.resources.memory.actor"),
+    require("morrowind-mcp.resources.memory.unattributed_dialogue"),
 }

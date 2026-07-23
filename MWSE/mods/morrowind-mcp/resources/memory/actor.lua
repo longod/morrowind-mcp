@@ -11,6 +11,9 @@ local iter = require("morrowind-mcp.tes3.iterator")
 ---@field actorLinks MCP.MemoryLink[]
 ---@field activationTargetChangedCallback fun(e: activationTargetChangedEventData)?
 ---@field activateCallback fun(e: activateEventData)?
+---@field combatStartedCallback fun(e: combatStartedEventData)?
+---@field addSoundCallback fun(e: addSoundEventData)?
+---@field addTempSoundCallback fun(e: addTempSoundEventData)?
 ---@field dialogActivatedCallback fun(e: uiActivatedEventData)?
 ---@field infoResponseCallback fun(e: infoResponseEventData)?
 ---@field infoGetTextCallback fun(e: infoGetTextEventData)?
@@ -42,9 +45,11 @@ local identityKind = {
 --- Player interaction strength for one observed actor.
 ---@enum MCP.MemoryActorInteractionState
 local interactionState = {
+    heard = "heard",
     observed = "observed",
     targeted = "targeted",
     activated = "activated",
+    combat = "combat",
     conversed = "conversed",
 }
 
@@ -54,9 +59,36 @@ local observationSource = {
     activeCells = "active_cells",
     activationTargetChanged = "activation_target_changed",
     activate = "activate",
+    combatStarted = "combat_started",
+    voiceoverSound = "voiceover_sound",
     menuDialog = "menu_dialog",
     infoResponse = "info_response",
     infoGetText = "info_get_text",
+}
+
+--- Gameplay-facing descriptions for stable mechanical observation source identifiers.
+---@type table<string, string>
+local sourceDescriptions = {
+    [observationSource.activeCells] = "Seen in the current area.",
+    [observationSource.activationTargetChanged] = "Player looked at this actor.",
+    [observationSource.activate] = "Player activated this actor.",
+    [observationSource.combatStarted] = "Entered combat with the player.",
+    [observationSource.voiceoverSound] = "Heard this actor's voice.",
+    [observationSource.menuDialog] = "Opened dialogue with this actor.",
+    [observationSource.infoResponse] = "Dialogue response identified this actor.",
+    [observationSource.infoGetText] = "Dialogue text identified this actor.",
+}
+
+--- Dialogue types that can surface spoken text through subtitle rendering.
+---@type table<integer, string>
+local dialogueSubtitleKinds = {
+    [tes3.dialogueType.voice] = "voice",
+}
+
+--- Sense counters keyed by stable subtitle category names.
+---@type table<string, string>
+local dialogueSubtitleCountFields = {
+    voice = "voice_subtitle_count",
 }
 
 --- Convert an in-game identifier to a conservative URI path segment.
@@ -177,6 +209,43 @@ local function CellSummary(cell)
     })
 end
 
+--- Return a compact description of a sound event without serializing the full sound object.
+---@param eventName string
+---@param e addSoundEventData|addTempSoundEventData
+---@return MCP.AnyMap
+local function SoundSummary(eventName, e)
+    return jsonrpc.object({
+        event = eventName,
+        sound_id = e.sound and e.sound.id,
+        filename = e.sound and e.sound.filename,
+        path = e.path,
+        volume = e.volume,
+    })
+end
+
+--- Return displayed dialogue text from an infoGetText event for actor summary senses.
+---@param eventData infoGetTextEventData
+---@return string?
+local function TextFromInfoGetText(eventData)
+    if type(eventData.text) == "string" and eventData.text ~= "" then
+        return eventData.text
+    end
+    if type(eventData.loadOriginalText) == "function" then
+        return eventData:loadOriginalText()
+    end
+    return eventData.info and eventData.info.text
+end
+
+--- Return the sensory category for dialogue text that can appear as spoken subtitles.
+---@param eventData infoGetTextEventData
+---@return string?
+local function DialogueSubtitleKind(eventData)
+    if not eventData or not eventData.info then
+        return nil
+    end
+    return dialogueSubtitleKinds[eventData.info.type]
+end
+
 --- Add a truthy field to a compact service map.
 ---@param target MCP.AnyMap
 ---@param key string
@@ -294,6 +363,26 @@ local function ServiceActorReference(serviceActor)
     return serviceActor.reference or serviceActor
 end
 
+--- Return the reference for a combat event participant, which MWSE exposes as a mobile actor.
+---@param participant tes3mobileActor|tes3mobileCreature|tes3mobileNPC|tes3mobilePlayer|tes3reference|nil
+---@return tes3reference?
+local function CombatParticipantReference(participant)
+    if not participant then
+        return nil
+    end
+    return participant.reference or participant
+end
+
+--- Return true when a combat event participant represents the player.
+---@param participant tes3mobileActor|tes3mobileCreature|tes3mobileNPC|tes3mobilePlayer|tes3reference|nil
+---@return boolean
+local function IsPlayerCombatParticipant(participant)
+    if participant == tes3.mobilePlayer or participant == tes3.player then
+        return true
+    end
+    return IsPlayerActivator(CombatParticipantReference(participant))
+end
+
 --- Map observation source to the strongest player interaction state it proves.
 ---@param source MCP.MemoryActorObservationSource
 ---@return MCP.MemoryActorInteractionState
@@ -304,8 +393,14 @@ local function InteractionStateForSource(source)
     if source == observationSource.activate then
         return interactionState.activated
     end
+    if source == observationSource.combatStarted then
+        return interactionState.combat
+    end
     if source == observationSource.activationTargetChanged then
         return interactionState.targeted
+    end
+    if source == observationSource.voiceoverSound then
+        return interactionState.heard
     end
     return interactionState.observed
 end
@@ -375,11 +470,14 @@ local function UpdateInteractionFacts(data, source)
     data.interaction.source_kinds = data.interaction.source_kinds or jsonrpc.array()
     AddSourceKind(data.interaction.source_kinds, source)
     data.interaction.state = data.interaction.state or interactionState.observed
+    data.interaction.heard = data.interaction.heard or source == observationSource.voiceoverSound
     data.interaction.observed = data.interaction.observed or source == observationSource.activeCells
     if source == observationSource.activationTargetChanged then
         data.interaction.targeted = true
     elseif source == observationSource.activate then
         data.interaction.activated = true
+    elseif source == observationSource.combatStarted then
+        data.interaction.combat = true
     elseif source == observationSource.menuDialog or source == observationSource.infoResponse or source == observationSource.infoGetText then
         data.interaction.conversed = true
     end
@@ -398,6 +496,8 @@ local function BuildActorData(observedActor)
         is_instance = sourceData.is_instance,
         facts = sourceData.facts,
         interaction = sourceData.interaction,
+        senses = sourceData.senses,
+        risk = sourceData.risk,
     })
 end
 
@@ -407,34 +507,21 @@ end
 ---@return boolean
 local function IsStrongerInteractionState(current, next)
     local order = {
-        [interactionState.observed] = 1,
-        [interactionState.targeted] = 2,
-        [interactionState.activated] = 3,
-        [interactionState.conversed] = 4,
+        [interactionState.heard] = 1,
+        [interactionState.observed] = 2,
+        [interactionState.targeted] = 3,
+        [interactionState.activated] = 4,
+        [interactionState.combat] = 5,
+        [interactionState.conversed] = 6,
     }
     return (order[next] or 0) > (order[current] or 0)
 end
 
---- Return the source label used in human-readable document provenance.
+--- Return the gameplay-facing source description used in document provenance.
 ---@param source MCP.MemoryActorObservationSource
 ---@return string
-local function SourceDescriptionName(source)
-    if source == observationSource.activationTargetChanged then
-        return "activationTargetChanged"
-    end
-    if source == observationSource.activeCells then
-        return "active cells"
-    end
-    if source == observationSource.menuDialog then
-        return "MenuDialog"
-    end
-    if source == observationSource.infoResponse then
-        return "infoResponse"
-    end
-    if source == observationSource.infoGetText then
-        return "infoGetText"
-    end
-    return source
+local function SourceDescription(source)
+    return sourceDescriptions[source] or string.format("Observed through %s.", source)
 end
 
 --- Build a compact link description from identity fields that help choose the next resource.
@@ -579,12 +666,20 @@ function this:ObserveReference(ref, source, publishIfVisible)
         end
         if source == observationSource.activate then
             observedActor.data.interaction.activation_count = (observedActor.data.interaction.activation_count or 0) + 1
-            observedActor.source_description = string.format("Observed actor reference from %s.", SourceDescriptionName(source))
+            observedActor.source_description = SourceDescription(source)
+            changed = true
+        end
+        if source == observationSource.combatStarted then
+            observedActor.source_description = SourceDescription(source)
+            changed = true
+        end
+        if source == observationSource.voiceoverSound then
+            observedActor.source_description = SourceDescription(source)
             changed = true
         end
         if source == observationSource.menuDialog then
             observedActor.data.interaction.conversation_count = (observedActor.data.interaction.conversation_count or 0) + 1
-            observedActor.source_description = string.format("Observed actor reference from %s.", SourceDescriptionName(source))
+            observedActor.source_description = SourceDescription(source)
             changed = true
         end
         if changed then
@@ -622,11 +717,16 @@ function this:ObserveReference(ref, source, publishIfVisible)
         interaction = jsonrpc.object({
             state = nextInteractionState,
             source_kinds = jsonrpc.array({ source }),
+            heard = source == observationSource.voiceoverSound,
             observed = source == observationSource.activeCells,
             targeted = source == observationSource.activationTargetChanged,
             activated = source == observationSource.activate,
+            combat = source == observationSource.combatStarted,
             conversed = source == observationSource.menuDialog or source == observationSource.infoResponse or source == observationSource.infoGetText,
             activation_count = source == observationSource.activate and 1 or 0,
+            combat_count = 0,
+            player_started_combat_count = 0,
+            actor_started_combat_count = 0,
             conversation_count = source == observationSource.menuDialog and 1 or 0,
         }),
     })
@@ -644,7 +744,7 @@ function this:ObserveReference(ref, source, publishIfVisible)
         descriptor = descriptor,
         entry = entry,
         subject = document.Subject(document.SubjectTypeFromObject(ref), actorId, title),
-        source_description = string.format("Observed actor reference from %s.", SourceDescriptionName(source)),
+        source_description = SourceDescription(source),
         data_type = dataType,
         data = observedActor,
     }
@@ -716,6 +816,122 @@ function this:OnActivate(e)
     end
 end
 
+--- Observe combat that starts between the player and one non-player actor, ignoring NPC-vs-NPC combat.
+---@param e combatStartedEventData
+function this:OnCombatStarted(e)
+    if not e or not e.actor or not e.target then
+        return
+    end
+
+    local actorIsPlayer = IsPlayerCombatParticipant(e.actor)
+    local targetIsPlayer = IsPlayerCombatParticipant(e.target)
+    if actorIsPlayer == targetIsPlayer then
+        return
+    end
+
+    local observedRef = actorIsPlayer and CombatParticipantReference(e.target) or CombatParticipantReference(e.actor)
+    if not self:ObserveReference(observedRef, observationSource.combatStarted) then
+        return
+    end
+
+    local actorId = FindObservedActorId(self.observedActors, ActorReferenceId(observedRef))
+    if not actorId then
+        return
+    end
+
+    local observedActor = self.observedActors[actorId]
+    observedActor.data.risk = observedActor.data.risk or jsonrpc.object()
+    observedActor.data.risk.present = true
+    observedActor.data.risk.combat = true
+    observedActor.data.risk.risk_count = (observedActor.data.risk.risk_count or 0) + 1
+    observedActor.data.risk.combat_risk_count = (observedActor.data.risk.combat_risk_count or 0) + 1
+    observedActor.data.risk.last_risk = jsonrpc.object({
+        kind = "combat_started",
+        direction = actorIsPlayer and "player_to_actor" or "actor_to_player",
+    })
+    observedActor.data.interaction.combat_count = (observedActor.data.interaction.combat_count or 0) + 1
+    if actorIsPlayer then
+        observedActor.data.interaction.player_started_combat_count = (observedActor.data.interaction.player_started_combat_count or 0) + 1
+    else
+        observedActor.data.interaction.actor_started_combat_count = (observedActor.data.interaction.actor_started_combat_count or 0) + 1
+    end
+    document.MarkDirty(observedActor.entry)
+    document.MarkDirty(self.indexEntry)
+    UpdateActorLink(self.actorLinks, observedActor)
+    self:MarkDirty()
+    self.logger:debug("Memory actor combat observed: actor_id=%s total=%d", actorId, table.size(self.observedActors))
+end
+
+--- Record actor voiceover sounds as weak sensory evidence when the emitting actor is known.
+---@param eventName string
+---@param e addSoundEventData|addTempSoundEventData
+function this:OnActorVoiceoverSound(eventName, e)
+    if not e or e.isVoiceover ~= true or not IsActorReference(e.reference) or IsPlayerActivator(e.reference) then
+        return
+    end
+
+    self:ObserveReference(e.reference, observationSource.voiceoverSound)
+    local actorId = FindObservedActorId(self.observedActors, ActorReferenceId(e.reference))
+    if not actorId then
+        return
+    end
+
+    local observedActor = self.observedActors[actorId]
+    observedActor.data.senses = observedActor.data.senses or jsonrpc.object()
+    observedActor.data.senses.heard = true
+    observedActor.data.senses.heard_voiceover = true
+    observedActor.data.senses.voiceover_count = (observedActor.data.senses.voiceover_count or 0) + 1
+    observedActor.data.senses.last_voiceover = SoundSummary(eventName, e)
+    document.MarkDirty(observedActor.entry)
+    document.MarkDirty(self.indexEntry)
+    UpdateActorLink(self.actorLinks, observedActor)
+    self:MarkDirty()
+    self.logger:debug("Memory actor voiceover sound observed: actor_id=%s event=%s", actorId, eventName)
+end
+
+--- Observe actor voiceover sounds that play from normal sound objects.
+---@param e addSoundEventData
+function this:OnAddSound(e)
+    self:OnActorVoiceoverSound("addSound", e)
+end
+
+--- Observe actor voiceover sounds that play from sound generators or explicit sound paths.
+---@param e addTempSoundEventData
+function this:OnAddTempSound(e)
+    self:OnActorVoiceoverSound("addTempSound", e)
+end
+
+--- Record voice/greeting subtitles as sensory evidence when actor resolution is already available.
+---@param observedActor MCP.MemoryObservedActor
+---@param e infoGetTextEventData
+---@return boolean
+function this:RecordInfoGetTextSense(observedActor, e)
+    local subtitleKind = DialogueSubtitleKind(e)
+    if not subtitleKind then
+        return false
+    end
+
+    observedActor.data.senses = observedActor.data.senses or jsonrpc.object()
+    observedActor.data.senses.heard = true
+    observedActor.data.senses.heard_voiceover = true
+    observedActor.data.senses.heard_dialogue_subtitle = true
+    observedActor.data.senses.dialogue_subtitle_count = (observedActor.data.senses.dialogue_subtitle_count or 0) + 1
+    local countField = dialogueSubtitleCountFields[subtitleKind]
+    if countField then
+        observedActor.data.senses[countField] = (observedActor.data.senses[countField] or 0) + 1
+    end
+    observedActor.data.senses.last_dialogue_subtitle = jsonrpc.object({
+        kind = subtitleKind,
+        dialogue_type = e.info and e.info.type,
+        info_id = e.info and e.info.id and tostring(e.info.id) or nil,
+        text = TextFromInfoGetText(e),
+    })
+    document.MarkDirty(observedActor.entry)
+    document.MarkDirty(self.indexEntry)
+    self:MarkDirty()
+    return true
+end
+
 --- Observe the actor attached to a newly opened dialogue menu.
 ---@param e uiActivatedEventData
 function this:OnMenuDialogActivated(e)
@@ -734,7 +950,7 @@ end
 --- Record confirmed dialogue responses with actor references in actor-local dialogue memory.
 ---@param e infoResponseEventData
 function this:OnInfoResponse(e)
-    if not e or not e.reference or not IsActorReference(e.reference) then
+    if not e.reference or not IsActorReference(e.reference) then
         return
     end
 
@@ -813,6 +1029,7 @@ function this:OnInfoGetText(e)
     end
 
     local observedActor = self.observedActors[actorId]
+    self:RecordInfoGetTextSense(observedActor, e)
     if actorDialogue.AddObservation(self, observedActor, "info_get_text", e) then
         self.logger:debug(
             "Memory actor dialogue text observed: actor_id=%s texts=%d info_id=%s",
@@ -840,6 +1057,30 @@ function this:RegisterEvent()
         end
         event.register(tes3.event.activate, self.activateCallback)
         self.logger:debug("Memory actor activate handler registered")
+    end
+
+    if not self.combatStartedCallback then
+        self.combatStartedCallback = function(e)
+            self:OnCombatStarted(e)
+        end
+        event.register(tes3.event.combatStarted, self.combatStartedCallback)
+        self.logger:debug("Memory actor combatStarted handler registered")
+    end
+
+    if not self.addSoundCallback then
+        self.addSoundCallback = function(e)
+            self:OnAddSound(e)
+        end
+        event.register(tes3.event.addSound, self.addSoundCallback)
+        self.logger:debug("Memory actor addSound handler registered")
+    end
+
+    if not self.addTempSoundCallback then
+        self.addTempSoundCallback = function(e)
+            self:OnAddTempSound(e)
+        end
+        event.register(tes3.event.addTempSound, self.addTempSoundCallback)
+        self.logger:debug("Memory actor addTempSound handler registered")
     end
 
     if not self.dialogActivatedCallback then
@@ -883,6 +1124,21 @@ function this:UnregisterEvent()
         event.unregister(tes3.event.uiActivated, self.dialogActivatedCallback)
         self.dialogActivatedCallback = nil
         self.logger:debug("Memory actor MenuDialog handler unregistered")
+    end
+    if self.combatStartedCallback then
+        event.unregister(tes3.event.combatStarted, self.combatStartedCallback)
+        self.combatStartedCallback = nil
+        self.logger:debug("Memory actor combatStarted handler unregistered")
+    end
+    if self.addTempSoundCallback then
+        event.unregister(tes3.event.addTempSound, self.addTempSoundCallback)
+        self.addTempSoundCallback = nil
+        self.logger:debug("Memory actor addTempSound handler unregistered")
+    end
+    if self.addSoundCallback then
+        event.unregister(tes3.event.addSound, self.addSoundCallback)
+        self.addSoundCallback = nil
+        self.logger:debug("Memory actor addSound handler unregistered")
     end
     if self.activateCallback then
         event.unregister(tes3.event.activate, self.activateCallback)

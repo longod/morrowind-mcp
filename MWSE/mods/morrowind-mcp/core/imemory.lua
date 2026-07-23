@@ -115,6 +115,12 @@
 ---@field facts MCP.AnyMap Lightweight blackboard facts currently known about the actor.
 ---@field interaction MCP.AnyMap Mechanical player interaction state, counters, and observation sources.
 
+--- Runtime payload for dialogue text that is intentionally not assigned to an actor.
+---@class MCP.MemoryUnattributedDialogueData
+---@field topics string[] Lower-case topics linked from unattributed text.
+---@field text_count integer Unique text observations in this loaded-game scope.
+---@field observations MCP.AnyMap[] Ordered unattributed dialogue observations.
+
 --- File written by a debug-only Memory dump operation.
 ---@class MCP.MemoryDebugSaveResult
 ---@field uri MCP.ResourceUri Source Memory resource URI.

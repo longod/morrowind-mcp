@@ -162,17 +162,28 @@ Actor `facts` should be lightweight and human-oriented. They may include:
 
 Actor `interaction` includes:
 
-- `state`: strongest mechanical player interaction observed for this actor. Current values are `observed`, `targeted`, `activated`, and `conversed`.
-- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, `menu_dialog`, `info_response`, and `info_get_text`.
-- `observed`, `targeted`, `activated`, and `conversed`: booleans for observed interaction categories.
+- `state`: strongest mechanical player interaction observed for this actor. Current values are `heard`, `observed`, `targeted`, `activated`, `combat`, and `conversed`.
+- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, `combat_started`, `voiceover_sound`, `menu_dialog`, `info_response`, and `info_get_text`.
+- `heard`, `observed`, `targeted`, `activated`, `combat`, and `conversed`: booleans for observed interaction categories.
 - `activation_count`: number of player `activate` events observed for this actor.
+- `combat_count`: number of `combatStarted` events observed between the player and this actor.
+- `player_started_combat_count`: number of player-initiated `combatStarted` events observed against this actor.
+- `actor_started_combat_count`: number of actor-initiated `combatStarted` events observed against the player.
 - `conversation_count`: number of newly created `MenuDialog` events observed for this actor.
+
+Actor `senses` stores weak sensory evidence when the actor source is known. The initial sound-backed case is `addSound`/`addTempSound` with `isVoiceover == true` and an actor `reference`. This writes `heard`, `heard_voiceover`, `voiceover_count`, and a compact `last_voiceover` object. Sounds without a source actor, non-voiceover sounds, and ambiguous environmental sounds should not be attached to Actor Memory. `infoGetText` can also expose subtitle text for `tes3.dialogueType.voice`; when actor resolution is directly available, those events should update `heard_dialogue_subtitle`, `dialogue_subtitle_count`, optional per-kind counts, and `last_dialogue_subtitle`. Actor-unresolved voice subtitles are intentionally not attached to Actor Memory because nearby actors can speak unsolicited voice lines. `tes3.dialogueType.greeting` text is kept in actor dialogue notes when actor-resolvable, but it is not duplicated into `senses` because greeting lines already represent ordinary dialogue content. This subtitle record is sensory evidence only and should not imply a direct relationship to a sound event.
+
+Actor-unresolved voice subtitles are stored separately at `morrowind://memory/unattributed/dialogue.json`. This document records `infoGetText` events for `tes3.dialogueType.voice` only when neither `tes3ui.getServiceActor()` nor `info.actor` exposes a direct actor source. The payload uses the same compact dialogue observation style as actor dialogue notes: lower-case linked `topics`, unique `text_count`, ordered `observations`, compact observation timestamps, and runtime-only duplicate aggregation by `event + info_id`. `tes3.dialogueType.greeting` is not stored here because greetings are ordinary dialogue content when actor-resolvable, and actor-unresolved greetings are too ambiguous to keep by default. Actor-unresolved sound events are also ignored for now because sound identity alone has low memory value.
+
+Actor `risk` stores danger-oriented evidence separately from social or sensory evidence. `combatStarted` sets `risk.present`, `risk.combat`, `risk_count`, `combat_risk_count`, and `last_risk`. More ambiguous risks such as projectiles near the player should only be attached to an actor when the source actor is known.
 
 Normal actor Memory reads must not expose the full serialized TES3 reference by default. Actor documents should update the blackboard from each mechanical source:
 
 - `active_cells`: active-cell refresh saw the actor.
 - `activation_target_changed`: `activationTargetChanged` exposed the actor as the current activation target.
 - `activate`: the player activated the actor.
+- `combat_started`: `combatStarted` exposed combat between the player and the actor. Combat between non-player actors is ignored.
+- `voiceover_sound`: `addSound` or `addTempSound` exposed an actor reference for a voiceover sound.
 - `menu_dialog`: a newly created `MenuDialog` exposed the service actor through `tes3ui.getServiceActor()`.
 - `info_response`: a dialogue response event exposed a concrete actor reference.
 - `info_get_text`: a non-journal dialogue text retrieval exposed a service actor or matched exactly one observed actor by base id.
@@ -197,14 +208,18 @@ Actor `data_type` values:
 
 Actor link descriptions should include enough identity and interaction fields to decide which actor link to follow without first reading every child document. Include at least `data_type`, `base_id`, `reference_id`, `identity_kind`, and `interaction_state`.
 
+Actor document `source.description` should use gameplay-facing prose such as `Seen in the current area.`, `Heard this actor's voice.`, or `Entered combat with the player.` The stable machine-readable source identifiers stay in `interaction.source_kinds`.
+
 Actor interaction states are mechanical facts, not importance judgments:
 
+- `heard`: a weak sensory event identified the actor, currently actor voiceover sound.
 - `observed`: the actor was seen in active cells.
 - `targeted`: the actor was the player's current activation target.
 - `activated`: the actor was activated by the player.
+- `combat`: combat started between the player and the actor.
 - `conversed`: dialogue events exposed the actor through `tes3ui.getServiceActor()`, `infoResponse`, or actor-resolvable `infoGetText`.
 
-Interaction state only moves to stronger states: `observed < targeted < activated < conversed`.
+Interaction state only moves to stronger states: `heard < observed < targeted < activated < combat < conversed`.
 
 ## Actor Identity Classification
 
