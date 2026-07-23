@@ -495,6 +495,23 @@ local function RegisterTestEvents()
     end
     event.register(tes3.event.weatherTransitionFinished, weatherTransitionFinishedCallback)
 
+    --- @param e menuEnterEventData
+    local function menuEnterCallback(e)
+        logger:trace("menuEnter %s", FormatEventData(e))
+    end
+    event.register(tes3.event.menuEnter, menuEnterCallback)
+    --- @param e menuExitEventData
+    local function menuExitCallback(e)
+        logger:trace("menuExit %s", FormatEventData(e))
+    end
+    event.register(tes3.event.menuExit, menuExitCallback)
+
+    --- @param e containerClosedEventData
+    local function containerClosedCallback(e)
+            logger:trace("containerClosed %s", FormatEventData(e))
+    end
+    event.register(tes3.event.containerClosed, containerClosedCallback)
+
     --- @param e enterFrameEventData
     local function enterFrameCallback(e)
         local wc = tes3.worldController

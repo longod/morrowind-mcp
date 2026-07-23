@@ -25,7 +25,7 @@ function this.new(params)
             {
                 playerTarget = jsonrpc.JsonObjectSchema(), -- cant set description?
                 helpLayerMenu = jsonrpc.JsonObjectSchema(),
-                inventryTile = jsonrpc.JsonObjectSchema(),
+                inventoryTile = jsonrpc.JsonObjectSchema(),
                 serviceActor = jsonrpc.JsonObjectSchema(),
             }
         ),
@@ -45,14 +45,14 @@ end
 function this:Execute(arguments, context)
     local playerTarget = tes3.getPlayerTarget() -- not include non-activatable objects.
     local helpLayerMenu = tes3ui.getCursor() -- on item picking and dragging.
-    local inventryTile = tes3ui.getCursorTile() -- on item picking and dragging.
+    local inventoryTile = tes3ui.getCursorTile() -- on item picking and dragging.
     local serviceActor = tes3ui.getServiceActor() -- service or talking actor
     -- TODO pointing 3d object in menu?
 
-    self.logger:debug("playerTarget: %s, helpLayerMenu: %s, inventryTile: %s, serviceActor: %s",
+    self.logger:debug("playerTarget: %s, helpLayerMenu: %s, inventoryTile: %s, serviceActor: %s",
         playerTarget and playerTarget.id or "nil",
         helpLayerMenu and helpLayerMenu.name or "nil",
-        inventryTile and tostring(inventryTile.type) or "nil",
+        inventoryTile and tostring(inventoryTile.type) or "nil",
         serviceActor and tostring(serviceActor.actorType) or "nil"
     )
 
@@ -103,7 +103,7 @@ function this:Execute(arguments, context)
     local structuredContent = jsonrpc.object({
         playerTarget = obj.tes3reference(playerTarget),
         helpLayerMenu = ui.tes3uiElement(helpLayerMenu),
-        inventryTile = obj.tes3inventoryTile(inventryTile),
+        inventoryTile = obj.tes3inventoryTile(inventoryTile),
         serviceActor = obj.tes3anyObject(serviceActor),
      })
     return jsonrpc.CallToolResult(nil, structuredContent)
