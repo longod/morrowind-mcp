@@ -72,13 +72,89 @@ function Set-WindowForegroundBestEffort {
     return $false
 }
 
-function Test-RequiresForegroundActivation {
+function Invoke-ClientClickForMouseCapture {
     param(
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
+        [string]$ProcessName
     )
 
-    return $Arguments -contains "mw-player-action"
+    if (-not ("MorrowindMcpUser32" -as [type])) {
+        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class MorrowindMcpUser32 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetCursorPos(int X, int Y);
+
+    [DllImport("user32.dll")]
+    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+}
+"@
+    }
+
+    $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowHandle -ne 0 } |
+        Select-Object -First 1
+    if (-not $proc) {
+        Write-Host "[WARN] Failed to find $ProcessName window for capture click." -ForegroundColor Yellow
+        return $false
+    }
+
+    $clientRect = [MorrowindMcpUser32+RECT]::new()
+    if (-not [MorrowindMcpUser32]::GetClientRect($proc.MainWindowHandle, [ref]$clientRect)) {
+        Write-Host "[WARN] Failed to get $ProcessName client rectangle for capture click." -ForegroundColor Yellow
+        return $false
+    }
+
+    $clientCenter = [MorrowindMcpUser32+POINT]::new()
+    $clientCenter.X = [int](($clientRect.Right - $clientRect.Left) / 2)
+    $clientCenter.Y = [int](($clientRect.Bottom - $clientRect.Top) / 2)
+    if (-not [MorrowindMcpUser32]::ClientToScreen($proc.MainWindowHandle, [ref]$clientCenter)) {
+        Write-Host "[WARN] Failed to resolve $ProcessName client coordinates for capture click." -ForegroundColor Yellow
+        return $false
+    }
+
+    $originalCursor = [MorrowindMcpUser32+POINT]::new()
+    $restoreCursor = [MorrowindMcpUser32]::GetCursorPos([ref]$originalCursor)
+    if (-not [MorrowindMcpUser32]::SetCursorPos($clientCenter.X, $clientCenter.Y)) {
+        Write-Host "[WARN] Failed to move cursor to $ProcessName client area for capture click." -ForegroundColor Yellow
+        return $false
+    }
+
+    $leftDown = 0x0002
+    $leftUp = 0x0004
+    [MorrowindMcpUser32]::mouse_event($leftDown, 0, 0, 0, [UIntPtr]::Zero)
+    [MorrowindMcpUser32]::mouse_event($leftUp, 0, 0, 0, [UIntPtr]::Zero)
+    if ($restoreCursor) {
+        [MorrowindMcpUser32]::SetCursorPos($originalCursor.X, $originalCursor.Y) | Out-Null
+    }
+
+    Write-Host "[INFO] Sent client click to $ProcessName to request mouse capture." -ForegroundColor Green
+    return $true
 }
 
 try {
@@ -481,6 +557,7 @@ try {
 
     if (-not $NoForeground) {
         Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
+        Invoke-ClientClickForMouseCapture -ProcessName "Morrowind" | Out-Null
     }
     else {
         Write-Host "[INFO] Skipping foreground activation (-NoForeground)." -ForegroundColor DarkCyan
@@ -501,11 +578,14 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-activator-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-actor-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-fetch"),
+        # Toggle menu mode around player input to exercise menu open and close through the public tool.
+        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=menuMode", "--tool-arg", "how=tap"),
+        @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
+        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=menuMode", "--tool-arg", "how=tap"),
         @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=activate", "--tool-arg", "how=tap"),
-        @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
         @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
         @("--method", "resources/list"),
@@ -526,9 +606,6 @@ try {
 
     $TestResult = 0
     foreach ($Test in $TestCases) {
-        if (-not $NoForeground -and (Test-RequiresForegroundActivation -Arguments $Test)) {
-            Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
-        }
         $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
     }
     $TestResult = $TestResult -bor (Invoke-MemoryTraversalTest -EndpointUrl $Config.Connection.url)
