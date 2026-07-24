@@ -115,6 +115,28 @@
 ---@field facts MCP.AnyMap Lightweight blackboard facts currently known about the actor.
 ---@field interaction MCP.AnyMap Mechanical player interaction state, counters, and observation sources.
 
+--- One player inventory stack captured by Inventory Memory.
+--- Item identity and mutable stack-state fields are captured during refresh, so the snapshot holds no MWSE userdata.
+---@class MCP.MemoryInventoryStack
+---@field itemId string Raw TES3 item id used only by the runtime index.
+---@field itemDataKey string Serialized minimal item-data fingerprint used only by the runtime index.
+---@field item MCP.AnyMap Serialized `{ id, name }` item identity.
+---@field itemData MCP.AnyMap? Serialized mutable stack state: charge, condition, timeLeft, scriptId, soulId.
+---@field count integer
+---@field snapshotIndex integer Runtime-only position in the collection array for constant-time removal.
+
+--- Runtime-only lookup index for player inventory stacks.
+--- The first key is the raw item id; the second is a serialized item-data fingerprint.
+---@class MCP.MemoryInventoryStackIndex
+
+--- Payload written by the player Inventory Memory document.
+---@class MCP.MemoryInventoryData
+---@field available boolean Whether player inventory could be captured from the current loaded game.
+---@field is_current boolean Whether all known mutations have been applied to the captured snapshot.
+---@field gold integer Aggregated player gold, kept separate from item stacks.
+---@field item_count integer Number of distinct serialized inventory stacks.
+---@field items MCP.AnyMap[] Serialized player inventory stacks.
+
 --- Runtime payload for dialogue text that is intentionally not assigned to an actor.
 ---@class MCP.MemoryUnattributedDialogueData
 ---@field topics string[] Lower-case topics linked from unattributed text.
@@ -143,6 +165,5 @@ function this.new(params)
     setmetatable(instance, { __index = this })
     return instance
 end
-
 
 return this

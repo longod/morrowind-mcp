@@ -778,6 +778,54 @@ function this.tes3globalVariable(i, o)
     -- return o
 end
 
+---@param i tes3effect
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3effect(i, o)
+    if i == nil then
+        return nil
+    end
+    if type(i.id) == "number" and i.id < 0 then -- empty?
+        return nil
+    end
+    o = o or jsonrpc.object()
+
+    o.attribute = enumname.attribute(i.attribute)
+    -- o.cost = i.cost -- FIXME game_calcSingleEffectCost broken?
+    o.duration = i.duration
+    o.id = enumname.effect(i.id) or i.id
+    o.max = i.max
+    o.min = i.min
+    o.object = this.tes3magicEffect(i.object)
+    o.radius = i.radius
+    o.rangeType = enumname.effectRange(i.rangeType)
+    o.skill = enumname.skill(i.skill)
+
+    local _ = ValidateType(o)
+    return o
+end
+
+---@param i tes3soulGemData
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3soulGemData(i, o)
+    if i == nil then
+        return nil
+    end
+    o = o or jsonrpc.object()
+
+    o.capacity = i.capacity
+    o.id = i.id
+    -- o.item = i.item -- reference back to item
+    o.mesh = i.mesh
+    o.name = i.name
+    o.texture = i.texture
+    o.value = i.value
+    o.weight = i.weight
+
+    local _ = ValidateType(o)
+    return o
+end
 
 -- https://mwse.github.io/MWSE/references/object-types/
 
@@ -820,7 +868,7 @@ function this.tes3alchemy(i, o)
     end
 
     -- o.autoCalc = i.autoCalc
-    -- o.effects = iter.ForEach(i.effects, this.tes3effect) -- TODO
+    o.effects = iter.ForEachObject(i.effects, this.tes3effect)
     -- o.flags = i.flags
     o.script = this.tes3script(i.script)
     o.value = i.value
@@ -866,13 +914,15 @@ function this.tes3armor(i, o)
 
     o.armorRating = i.armorRating
     o.armorScalar = i.armorScalar
-    o.enchantCapacity = i.enchantCapacity
+    if i.enchantCapacity > 0 then
+        o.enchantCapacity = i.enchantCapacity
+    end
     o.enchantment = this.tes3enchantment(i.enchantment)
     o.isClosedHelmet = i.isClosedHelmet
     o.isLeftPart = i.isLeftPart
     o.isUsableByBeasts = i.isUsableByBeasts
     o.maxCondition = i.maxCondition
-    -- o.parts = iter.ForEach(i.parts, ) -- TODO
+    -- o.parts = iter.ForEachObject(i.parts, ) -- TODO
     o.script = this.tes3script(i.script)
     o.slot = enumname.armorSlot(i.slot) -- same as slotName?
     o.slotName = i.slotName
@@ -946,7 +996,9 @@ function this.tes3book(i, o)
         return nil
     end
 
-    o.enchantCapacity = i.enchantCapacity
+    if i.enchantCapacity > 0 then
+        o.enchantCapacity = i.enchantCapacity
+    end
     o.enchantment = this.tes3enchantment(i.enchantment)
     o.script = this.tes3script(i.script)
     o.skill = enumname.skill(i.skill)
@@ -1097,7 +1149,9 @@ function this.tes3clothing(i, o)
         return nil
     end
 
-    o.enchantCapacity = i.enchantCapacity
+    if i.enchantCapacity > 0 then
+        o.enchantCapacity = i.enchantCapacity
+    end
     o.enchantment =  this.tes3enchantment(i.enchantment)
     o.isLeftPart = i.isLeftPart
     o.isUsableByBeasts = i.isUsableByBeasts
@@ -1309,7 +1363,7 @@ function this.tes3enchantment(i, o)
     o.autoCalc = i.autoCalc
     o.castType = enumname.enchantmentType(i.castType)
     o.chargeCost = i.chargeCost
-    -- o.effects = iter.ForEach(i.effects, this.tes3effect) -- TODO
+    o.effects = iter.ForEachObject(i.effects, this.tes3effect)
     -- o.flags = i.flags -- flags mean?
     o.maxCharge = i.maxCharge
 
@@ -1377,9 +1431,15 @@ function this.tes3ingredient(i, o)
         return nil
     end
 
-    o.effectAttributeIds = jsonrpc.array(i.effectAttributeIds)
-    -- o.effects = i.effects -- TODO
-    o.effectSkillIds = jsonrpc.array(i.effectSkillIds)
+    o.effectAttributeIds = iter.ForEachObject(i.effectAttributeIds, function(value)
+        return enumname.attribute(value) or nil
+    end)
+    o.effects = iter.ForEachObject(i.effects, function(value)
+        return enumname.effect(value) or nil
+    end)
+    o.effectSkillIds = iter.ForEachObject(i.effectSkillIds, function(value)
+        return enumname.skill(value) or nil
+    end)
     o.script = this.tes3script(i.script)
     o.value = i.value
     o.weight = i.weight
@@ -1619,7 +1679,7 @@ function this.tes3misc(i, o)
     if i.isSoulGem then
         o.isSoulGem = i.isSoulGem
         o.soulGemCapacity = i.soulGemCapacity
-        -- o.soulGemData = i.soulGemData -- TODO
+        o.soulGemData = this.tes3soulGemData(i.soulGemData)
     end
     o.script = this.tes3script(i.script)
     o.value = i.value
@@ -1784,7 +1844,7 @@ function this.tes3mobileCreature(i, o)
     -- o.moveSpeed = i.moveSpeed -- FIXME it crashes in ActorAnimController::calcActorMoveSpeed on loaded. it seems to uninitialized yet.
     o.object = this.tes3creature(i.object)
     -- o.runSpeed = i.runSpeed
-    -- o.skills = iter.ForEach(i.skills, this.tes3statistic) -- TODO represent key=value
+    -- o.skills = iter.ForEachObject(i.skills, this.tes3statistic) -- TODO represent key=value
     o.stealth = this.tes3statistic(i.stealth)
     -- o.swimRunSpeed = i.swimRunSpeed
     -- o.swimSpeed = i.swimSpeed
@@ -2404,10 +2464,15 @@ function this.tes3weapon(i, o)
 
     o.chopMax = i.chopMax
     o.chopMin = i.chopMin
-    o.enchantCapacity = i.enchantCapacity
+    if i.enchantCapacity > 0 then
+        o.enchantCapacity = i.enchantCapacity
+    end
     o.enchantment = this.tes3enchantment(i.enchantment)
     -- o.flags = i.flags
-    o.hasDurability = i.hasDurability
+    if i.hasDurability then
+        -- o.hasDurability = i.hasDurability
+        o.maxCondition = i.maxCondition
+    end
     o.ignoresNormalWeaponResistance = i.ignoresNormalWeaponResistance
     o.isAmmo = i.isAmmo
     o.isMelee = i.isMelee
@@ -2416,7 +2481,7 @@ function this.tes3weapon(i, o)
     o.isRanged = i.isRanged
     o.isSilver = i.isSilver
     o.isTwoHanded = i.isTwoHanded
-    o.maxCondition = i.maxCondition
+    -- o.maxCondition = i.maxCondition
     o.reach = i.reach
     o.script = this.tes3script(i.script)
     o.skill = this.tes3skill(i.skill)

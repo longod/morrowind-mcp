@@ -94,6 +94,7 @@ this.sourceKind = sourceKind
 local dataType = {
     memoryRoots = "memory_roots",
     playerSummary = "player_summary",
+    inventoryItems = "inventory_items",
     journalEntries = "journal_entries",
     questEntries = "quest_entries",
     actorIndex = "actor_index",
@@ -110,6 +111,7 @@ this.dataType = dataType
 local linkRel = {
     self = "self",
     player = "player",
+    inventory = "inventory",
     journal = "journal",
     quests = "quests",
     actors = "actors",
@@ -410,3 +412,4 @@ function this.SaveEntry(entry, rootDir)
 end
 
 return this
+

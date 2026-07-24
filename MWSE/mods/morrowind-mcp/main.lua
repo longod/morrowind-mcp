@@ -508,9 +508,15 @@ local function RegisterTestEvents()
 
     --- @param e containerClosedEventData
     local function containerClosedCallback(e)
-            logger:trace("containerClosed %s", FormatEventData(e))
+        logger:trace("containerClosed %s", FormatEventData(e))
     end
     event.register(tes3.event.containerClosed, containerClosedCallback)
+
+    --- @param e itemDroppedEventData
+    local function itemDroppedCallback(e)
+        logger:trace("itemDropped %s", FormatEventData(e))
+    end
+    event.register(tes3.event.itemDropped, itemDroppedCallback)
 
     --- @param e enterFrameEventData
     local function enterFrameCallback(e)

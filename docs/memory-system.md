@@ -60,6 +60,7 @@ Data type values currently used:
 
 - `memory_roots`: root Memory index payload.
 - `player_summary`: player Memory document payload.
+- `inventory_items`: current player inventory snapshot payload.
 - `journal_entries`: journal Memory document payload.
 - `quest_entries`: quest Memory document payload.
 - `actor_index`: observed actor collection index payload.
@@ -71,6 +72,7 @@ Link relation values currently used:
 
 - `self`: canonical link to the current document.
 - `player`: player Memory document.
+- `inventory`: player inventory Memory collection.
 - `journal`: journal Memory document.
 - `quests`: quest Memory document or collection.
 - `actors`: actor collection index.
@@ -119,6 +121,18 @@ Loaded behavior:
 - The Memory manager loaded handler should run early enough to update scope before module loaded callbacks run.
 - The current implementation uses loaded event priority `100` for the manager.
 - Base module loaded handling must not assume every module should publish on load. Dynamic modules can opt in or manage refreshes themselves.
+
+## Player Inventory Memory
+
+Player inventory is published at `morrowind://memory/player/inventory.json` as a child link of `morrowind://memory/player/index.json`. It is a `memory.collection` document with `data_type` `inventory_items` and the conceptual Player subject.
+
+The payload contains `available`, `is_current`, aggregated numeric `gold`, `item_count`, and `items`. Gold is excluded from `items` so barter value deltas update one scalar balance. Each remaining item contains only `item.id`, `item.name`, optional mutable `itemData` fields (`charge`, `condition`, `timeLeft`, `scriptId`, `soulId`), and `count`; static object definitions and arbitrary mod data are not copied. Runtime snapshots retain these minimal tables, raw item ids, and serialized item-data fingerprints instead of MWSE userdata, so stale item-data handles cannot outlive an inventory mutation. The id and fingerprint index keeps custom and ordinary stacks separate for barter deltas.
+
+Inventory Memory takes a full snapshot on `loaded`. It refreshes again when `MenuInventory` is visible after `uiActivated` or `menuEnter`, and after an observed visible-to-invisible transition at `menuExit`. The module registers `MenuInventory` once with `tes3ui.registerID` and uses the numeric ID for lookup and event comparison.
+
+Successful `barterOffer` events apply `buying`, `selling`, and `value` gold deltas to the current snapshot. Gold transfers update the aggregated `gold` value directly. If a selling stack cannot be reconciled or a gold delta would make the balance negative, `is_current` becomes false rather than inventing item state; the next full refresh restores it. Failed barter offers make no change.
+
+`containerClosed` and `itemTileUpdated` are intentionally not registered. Runtime logs show `containerClosed` arriving for batches of unrelated containers, while `itemTileUpdated` repeats the entire tile population for both `MenuInventory` and `MenuBarter`. Equipment changes, enchanting-charge use, and potion brewing are not inventory-memory triggers in the current phase.
 
 ## Actor Memory
 
