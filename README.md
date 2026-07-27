@@ -6,7 +6,9 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 
 **This mod contains source code generated or assisted by AI. and all code has been manually reviewed, refactored and verified by a senior software engineer.**
 
-![Morrowind MCP](./morrowind-mcp.png)
+<p align="center">
+  <img src="./morrowind-mcp.png">
+</p>
 
 ## How to use
 
@@ -27,7 +29,7 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 
 ## MCP Configuration
 
-### Copilot with VS Code
+### VS Code
 
 **.vscode/mcp.json**
 
@@ -42,6 +44,7 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 }
 ```
 
+VSCode only
 https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
 ### ChatGPT Codex
@@ -111,6 +114,7 @@ https://antigravity.google/docs/mcp
 ```
 
 https://code.claude.com/docs/en/mcp-quickstart
+https://docs.github.com/ja/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers
 
 ## Features
 

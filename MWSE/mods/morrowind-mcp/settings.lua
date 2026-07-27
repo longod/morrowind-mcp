@@ -30,6 +30,7 @@ this.defaultConfig = {
 
     autoplay = {
         skipMainMenu = false,
+        -- ok modal dialog
     },
 
     development = {

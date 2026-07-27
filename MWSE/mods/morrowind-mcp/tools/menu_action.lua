@@ -32,6 +32,7 @@ function this.new(params)
                     minMenuNameLength,
                     maxMenuNameLength
                 ),
+                -- TODO menu path, because menu name and menu id are not unique, but menu path is unique. json path is not good, because menu name can contain dot.
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
                     {
                         -- empty is inspect how to use this menu element?
