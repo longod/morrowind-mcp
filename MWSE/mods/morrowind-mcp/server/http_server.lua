@@ -46,6 +46,30 @@ local function FormatJsonRpcError(error)
     return string.format("%s:%s", tostring(error.code), tostring(error.message))
 end
 
+
+local function spairs(t, order)
+    local keys = table.new(table.size(t), 0)
+    for k in pairs(t) do
+        keys[#keys + 1] = k
+    end
+
+    if order then
+        table.sort(keys, function(a, b) return order(t, a, b) end)
+    else
+        table.sort(keys)
+    end
+
+    -- use coroutine?
+    local i = 0
+    return function()
+        i = i + 1
+        if keys[i] then
+            return keys[i], t[keys[i]]
+        end
+    end
+end
+
+
 ---@class MCP.ClientRequest
 ---@field client Socket.TcpClient?
 ---@field http_request Http.Request
@@ -120,7 +144,8 @@ function this.new(params)
     instance.sessions = {}
     instance.nextSessionIndex = 0
     instance.lastPollingPromptsInterval = 0
-    instance.lastPollingToolsInterval = pollingIntervalSeconds / 2.0 -- cycle prompts and tools polling to avoid simultaneous polling
+    instance.lastPollingToolsInterval = pollingIntervalSeconds /
+    2.0                                                              -- cycle prompts and tools polling to avoid simultaneous polling
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
         [http.method.GET] = instance.OnGET,
@@ -783,7 +808,7 @@ function this:OnPromptsList(params)
     ---@type MCP.ListPromptsResult
     local result = jsonrpc.ListPromptsResult(table.size(self.prompts))
 
-    for name, prompt in pairs(self.prompts) do
+    for name, prompt in spairs(self.prompts) do
         local can = prompt:CanExecute({})
         if can then
             table.insert(result.prompts, prompt.definition)
@@ -883,7 +908,7 @@ function this:OnToolsList(params)
     ---@type MCP.ListToolsResult
     local result = jsonrpc.ListToolsResult(table.size(self.tools))
 
-    for name, tool in pairs(self.tools) do
+    for name, tool in spairs(self.tools) do
         local can = tool:CanExecute({})
         if can then
             table.insert(result.tools, tool.definition)
@@ -1124,7 +1149,8 @@ function this:OnPOST(request)
     end
 
     if result.error or http.IsFailureHttpStatus(result.http_response) then
-        self.logger:warn("Method returned failure: %s (httpStatus=%s, jsonError=%s, requestId=%s, notification=%s, session=%s)",
+        self.logger:warn(
+            "Method returned failure: %s (httpStatus=%s, jsonError=%s, requestId=%s, notification=%s, session=%s)",
             tostring(request.json_request.method), tostring(result.http_response and result.http_response.code),
             FormatJsonRpcError(result.error), tostring(request.json_request.id), tostring(isNotification),
             tostring(self:GetSessionId(request.http_request)))
@@ -1517,7 +1543,8 @@ function this:PollPrimitiveCondition(e)
         if self:CanExecuteAllPrompts() then
             self:NotifyPromptListChanged()
         end
-        self.logger:trace("Polling prompts for executable changes (interval=%f seconds)", self.lastPollingPromptsInterval)
+        self.logger:trace("Polling prompts for executable changes (interval=%f seconds)", self
+        .lastPollingPromptsInterval)
         self.lastPollingPromptsInterval = 0
     end
 
@@ -1534,7 +1561,6 @@ function this:PollPrimitiveCondition(e)
         end
         self.resource:ResetUpdatedResources()
     end
-
 end
 
 ---@param e keyDownEventData
@@ -1656,4 +1682,3 @@ function this:Shutdown()
 end
 
 return this
-

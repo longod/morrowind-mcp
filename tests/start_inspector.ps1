@@ -9,5 +9,5 @@ catch {
     exit 1
 }
 
-& npx.cmd --yes @modelcontextprotocol/inspector@latest $config.Connection.url --transport http
+& npx.cmd @modelcontextprotocol/inspector@latest $config.Connection.url --transport http
 exit [int]$LASTEXITCODE
