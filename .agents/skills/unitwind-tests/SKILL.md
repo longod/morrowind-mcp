@@ -45,12 +45,14 @@ applyTo:
 
 ## Mock 方針（UnitWind）
 - MUST: 依存の差し替えは対象テーブルのメンバーに対して `unitwind:mock(table, member, value_or_fn)` を使う。
-- MUST: すべての mock は同一テスト内で `unitwind:unmock(table, member)` まで行う。
+- MUST NOT: `unitwind:unmock()` を呼び出さない。現在使用している UnitWind は、関数モックを自動で spy 化した後、`unmock()` が実関数を復元してから spy を解除する。その結果、spy が保持していたモック関数を再設定し、実関数が復元されない。
+- MUST: テストごとの復元が必要な場合は `afterEach` で `clearSpies()` を先に、`clearMocks()` を後に呼び出す。スイート終了時は `unitwind:finish()` が同じ順序で復元する。
+- MUST NOT: 同一テスト内で同じ `table.member` を再度 `mock()` しない。2回目の `mock()` が1回目のモックを元値として保存するため、`clearMocks()` でも実装本来の値へ復元できなくなる。挙動を切り替える必要がある場合は、単一のモック関数が参照する状態変数を変更するか、テストを分割する。
 - NEVER: 初手で `_G` 全体差し替えを選ばない。
 - `_G` 差し替えは最終手段。メンバー単位 mock が不可能な場合のみ許可する。
 - 手動代入・手動復元（`tes3 = ...` / `tes3 = originalTes3`）は使わない。
 
 ### 実装前チェック（必須）
 - メンバー単位 mock で実現できるか確認した。
-- 追加するすべての mock に対応する unmock を書いた。
+- `unmock()` を書かず、必要に応じて `afterEach` の `clearSpies()` / `clearMocks()` で復元する構成にした。
 - `_G` 差し替えが必要な場合は理由をテストコメントに1行で残した。

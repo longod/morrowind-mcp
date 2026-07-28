@@ -28,6 +28,10 @@ this.defaultConfig = {
         port = 33427, -- 3E427
     },
 
+    indicator = {
+        toolsCall = true,
+    },
+
     autoplay = {
         skipMainMenu = false,
         -- ok modal dialog

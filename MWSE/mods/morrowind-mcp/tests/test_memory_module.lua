@@ -6,6 +6,11 @@ function this.Test()
         enabled = true,
         highlight = false,
     })
+    -- Restore function spies before mocks so UnitWind does not reapply a mocked function.
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
 
     local imodule = require("morrowind-mcp.resources.memory.imodule")
     local manager = require("morrowind-mcp.resources.memory.manager")
@@ -26,8 +31,6 @@ function this.Test()
             end)
 
             callback()
-
-            unitwind:unmock(datetime, "InGameNow")
         end)
     end
 
@@ -335,8 +338,6 @@ function this.Test()
         unitwind:expect(savedCalls[1].uri).toBe("morrowind://memory/debug/first.json")
         unitwind:expect(savedCalls[1].rootDir).toBe("debug\\")
         unitwind:expect(savedCalls[2].uri).toBe("morrowind://memory/debug/second.json")
-
-        unitwind:unmock(document, "SaveEntry")
     end)
 
     testMemoryModule("Memory manager groups links by parent", function()
@@ -463,8 +464,9 @@ function this.Test()
             }
         end
 
+        local serviceActor = nil
         unitwind:mock(tes3ui, "getServiceActor", function()
-            return nil
+            return serviceActor
         end)
 
         local module = unattributedDialogue.new({ resource = resource, manager = fakeManager })
@@ -474,10 +476,7 @@ function this.Test()
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.voice, "102", nil))
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.voice, "102", nil))
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.voice, "103", { id = "caius cosades" }))
-        unitwind:unmock(tes3ui, "getServiceActor")
-        unitwind:mock(tes3ui, "getServiceActor", function()
-            return { reference = {} }
-        end)
+        serviceActor = { reference = {} }
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.voice, "104", nil))
 
         local rootLinks = module:GetLinksForParent(nil)
@@ -499,8 +498,6 @@ function this.Test()
         unitwind:expect(memoryDocument.data.observations[1].linked_topics[1]).toBe("food")
         unitwind:expect(memoryDocument.data.observations[1].repeat_count).toBe(2)
         unitwind:expect(memoryDocument.data.observations[2] == nil).toBe(true)
-
-        unitwind:unmock(tes3ui, "getServiceActor")
     end)
 
     testMemoryModule("Memory Actor module manages observed actor instances internally", function()
@@ -623,9 +620,6 @@ function this.Test()
         unitwind:expect(module.observedActors["rat"].data.identity_kind).toBe("generic")
         unitwind:expect(module.observedActors["imperial-guard"].data.identity_kind).toBe("generic")
         unitwind:expect(module.observedActors["din"].data.identity_kind).toBe("unique")
-
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module adds activation target without clearing loaded actors", function()
@@ -708,9 +702,6 @@ function this.Test()
         unitwind:expect(module.observedActors["fargoth"].data.interaction.source_kinds[1]).toBe(
         "activation_target_changed")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/fargoth/index.json")
-
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module marks player-activated actors", function()
@@ -809,9 +800,6 @@ function this.Test()
         unitwind:expect(actorData.interaction.state).toBe("activated")
         unitwind:expect(actorData.interaction.activated).toBe(true)
         unitwind:expect(debugActorData.debug == nil).toBe(true)
-
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module observes player combat only", function()
@@ -919,9 +907,6 @@ function this.Test()
         unitwind:expect(fargothActor.data.interaction.actor_started_combat_count).toBe(1)
         unitwind:expect(fargothActor.data.risk.last_risk.direction).toBe("actor_to_player")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/fargoth/index.json")
-
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module observes actor voiceover sounds", function()
@@ -1046,9 +1031,6 @@ function this.Test()
         unitwind:expect(fargothActor.data.senses.last_voiceover.event).toBe("addTempSound")
         unitwind:expect(fargothActor.data.senses.last_voiceover.path).toBe("Vo\\fargoth.wav")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/fargoth/index.json")
-
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module marks dialog service actors as conversed", function()
@@ -1162,10 +1144,6 @@ function this.Test()
         unitwind:expect(actorData.facts.services.barters.ingredients).toBe(true)
         unitwind:expect(actorData.facts.services.barters.weapons).toBe(true)
         unitwind:expect(actorData.debug == nil).toBe(true)
-
-        unitwind:unmock(tes3ui, "getServiceActor")
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module writes dialogue notes from infoResponse", function()
@@ -1276,9 +1254,6 @@ function this.Test()
         unitwind:expect(dialogueDocument.data.observations[1].choices[2].label).toBe("No")
         unitwind:expect(dialogueDocument.data.observations[1].repeat_count).toBe(2)
         unitwind:expect(dialogueDocument.data.observations[2].command).toBe("set rent to 1")
-
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory Actor module writes dialogue text from infoGetText", function()
@@ -1413,10 +1388,6 @@ function this.Test()
         unitwind:expect(dialogueDocument.data.observations[3].dialogue_id).toBe("Voice")
         unitwind:expect(dialogueDocument.data.observations[3].repeat_count).toBe(1)
         unitwind:expect(dialogueDocument.data.observations[4] == nil).toBe(true)
-
-        unitwind:unmock(tes3ui, "getServiceActor")
-        unitwind:unmock(tes3, "getActiveCells")
-        unitwind:unmock(tes3, "onMainMenu")
     end)
 
     testMemoryModule("Memory module hides links after unpublish", function()
@@ -1479,8 +1450,6 @@ function this.Test()
         unitwind:expect(registered[1].options.priority).toBe(100)
 
         memory:UnregisterEvent()
-        unitwind:unmock(event, "unregister")
-        unitwind:unmock(event, "register")
     end)
 
     local testsPassed = unitwind.testsPassed

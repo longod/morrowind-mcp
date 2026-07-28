@@ -69,6 +69,21 @@ local function OnModConfigReady(e)
     end
 
     do
+        local indicator = page:createCategory({
+            label = "Indicator",
+            description = "Settings for visual indicators when features are invoked.",
+        })
+        indicator:createOnOffButton({
+            label = "Tools Called",
+            description = "Show a notification when a tool is called.",
+            variable = mwse.mcm.createTableVariable({
+                id = "toolsCall",
+                table = config.indicator,
+            }),
+        })
+    end
+
+    do
         local autoplay = page:createCategory({
             label = "Autoplay",
             description = "Settings for autoplay features.",

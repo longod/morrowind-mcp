@@ -565,8 +565,14 @@ try {
 
     # TODO 成功を期待するテストのみなので、失敗を期待するテストも欲しい。無効な引数などで通信は成功するが、内容がエラーになることを確認する。
     # TODO luaからテストケースをある程度自動生成したい
+
+    # what is this:
+    # npm warn ERESOLVE overriding peer dependency
+    # npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+    # npm warn deprecated @modelcontextprotocol/server-legacy@2.0.0-beta.5: This package is a frozen copy of v1's SSE transport and OAuth Authorization Server helpers for migration purposes only. Use StreamableHTTP from @modelcontextprotocol/server and a dedicated OAuth server in production. Will not receive new features.
+
     $TestCases = @(
-        @("--method", "logging/setLevel", "--log-level", "trace"),
+        @("--method", "logging/setLevel", "--log-level", "debug"),
         @("--method", "tools/list"),
         @("--method", "resources/list"),
         @("--method", "prompts/list"),

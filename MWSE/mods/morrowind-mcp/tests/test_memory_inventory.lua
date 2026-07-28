@@ -6,6 +6,11 @@ function this.Test()
         enabled = false, -- FIXME mock break tes3ui menu when test fails.
         highlight = false,
     })
+    -- Restore function spies before mocks so UnitWind does not reapply a mocked function.
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
     local inventory = require("morrowind-mcp.resources.memory.inventory")
     local document = require("morrowind-mcp.resources.memory.document")
     local datetime = require("morrowind-mcp.util.datetime")
@@ -74,9 +79,6 @@ function this.Test()
         unitwind:expect(memoryDocument.data.items[2].count).toBe(1)
         unitwind:expect(module.snapshot[1].item == potion).toBe(false)
         unitwind:expect(module.snapshot[1].itemData == customPotion).toBe(false)
-
-        unitwind:unmock(datetime, "InGameNow")
-        unitwind:unmock(tes3, "onMainMenu")
         tes3.mobilePlayer = nil
     end)
 
@@ -104,8 +106,6 @@ function this.Test()
         ---@diagnostic disable-next-line: missing-fields
         module:OnBarterOffer({ success = true, buying = {}, selling = { { item = bread, count = 2 } }, value = 0 })
         unitwind:expect(module.snapshotCurrent).toBe(false)
-
-        unitwind:unmock(tes3, "onMainMenu")
         tes3.mobilePlayer = nil
     end)
 
@@ -126,8 +126,6 @@ function this.Test()
         unitwind:expect(table.size(module.snapshotByItemId[potion.id])).toBe(1)
         unitwind:expect(module.snapshot[1].itemData == nil).toBe(true)
         unitwind:expect(module.snapshot[1].snapshotIndex).toBe(1)
-
-        unitwind:unmock(tes3, "onMainMenu")
         tes3.mobilePlayer = nil
     end)
 
@@ -162,9 +160,6 @@ function this.Test()
         module:OnMenuExit({})
         unitwind:expect(module.gold).toBe(15)
         unitwind:expect(module.inventoryMenuWasVisible).toBe(false)
-
-        unitwind:unmock(tes3ui, "findMenu")
-        unitwind:unmock(tes3, "onMainMenu")
         tes3.mobilePlayer = nil
     end)
 
@@ -193,9 +188,6 @@ function this.Test()
         ---@diagnostic disable-next-line: missing-fields
         module:OnMenuExit({})
         unitwind:expect(refreshCount).toBe(1)
-
-        unitwind:unmock(tes3ui, "findMenu")
-        unitwind:unmock(tes3, "onMainMenu")
         tes3.mobilePlayer = nil
     end)
 
@@ -222,9 +214,6 @@ function this.Test()
         unitwind:expect(registered[tes3.event.containerClosed] == true).toBe(false)
         unitwind:expect(unregistered[tes3.event.barterOffer]).toBe(true)
         unitwind:expect(unregistered[tes3.event.menuExit]).toBe(true)
-
-        unitwind:unmock(event, "unregister")
-        unitwind:unmock(event, "register")
     end)
 
     local testsPassed = unitwind.testsPassed

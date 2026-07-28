@@ -6,6 +6,11 @@ function this.Test()
         enabled = true,
         highlight = false,
     })
+    -- Restore function spies before mocks so UnitWind does not reapply a mocked function.
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
 
     local inputAction = require("morrowind-mcp.util.input_action")
 
@@ -97,8 +102,6 @@ function this.Test()
             code = 32,
         })
 
-        unitwind:unmock(tes3, "tapKey")
-
         unitwind:expect(ok).toBe(true)
         unitwind:expect(tappedCode).toBe(32)
     end)
@@ -150,8 +153,6 @@ function this.Test()
         end
 
         timer = originalTimer
-        unitwind:unmock(tes3, "pushKey")
-        unitwind:unmock(tes3, "releaseKey")
 
         unitwind:expect(releasedCode).toBe(17)
         unitwind:expect(inputAction.GetActiveTimedCount()).toBe(0)
@@ -230,8 +231,6 @@ function this.Test()
         }, 0.25)
 
         timer = originalTimer
-        unitwind:unmock(tes3, "pushKey")
-        unitwind:unmock(tes3, "releaseKey")
 
         unitwind:expect(ok).toBe(nil)
         unitwind:expect(pushedCode).toBe(18)
@@ -267,8 +266,6 @@ function this.Test()
         local secondOk = inputAction.Push({ device = 0, code = 19 }, 0.2)
 
         timer = originalTimer
-        unitwind:unmock(tes3, "pushKey")
-        unitwind:unmock(tes3, "releaseKey")
 
         unitwind:expect(firstOk).toBe(true)
         unitwind:expect(secondOk).toBe(true)
@@ -304,8 +301,6 @@ function this.Test()
         local cancelOk = inputAction.CancelPush({ device = 0, code = 20 })
 
         timer = originalTimer
-        unitwind:unmock(tes3, "pushKey")
-        unitwind:unmock(tes3, "releaseKey")
 
         unitwind:expect(pushOk).toBe(true)
         unitwind:expect(cancelOk).toBe(true)
@@ -343,8 +338,6 @@ function this.Test()
         end
 
         timer = originalTimer
-        unitwind:unmock(inputAction, "MouseHammer")
-        unitwind:unmock(inputAction, "MouseUnhammer")
 
         unitwind:expect(ok).toBe(true)
         unitwind:expect(unhammerCount).toBe(1)
@@ -364,8 +357,6 @@ function this.Test()
             device = 1,
             code = 2,
         }, 0.4)
-
-        unitwind:unmock(inputAction, "MouseHammerTimed")
 
         unitwind:expect(ok).toBe(true)
         unitwind:expect(calledButton).toBe(2)
@@ -391,9 +382,6 @@ function this.Test()
         ---@diagnostic disable-next-line: missing-fields, assign-type-mismatch
         inputAction.ProcessMouseHammerSimulate({ delta = 0.02 })
         local unhammerOk = inputAction.MouseUnhammer(0)
-
-        unitwind:unmock(inputAction, "MousePush")
-        unitwind:unmock(inputAction, "MouseRelease")
 
         unitwind:expect(hammerOk).toBe(true)
         unitwind:expect(unhammerOk).toBe(true)
@@ -422,9 +410,6 @@ function this.Test()
         ---@diagnostic disable-next-line: missing-fields, assign-type-mismatch
         inputAction.ProcessMouseHammerSimulate({ delta = 0.5 })
         local unhammerOk = inputAction.MouseUnhammer(1)
-
-        unitwind:unmock(inputAction, "MousePush")
-        unitwind:unmock(inputAction, "MouseRelease")
 
         unitwind:expect(hammerOk).toBe(true)
         unitwind:expect(unhammerOk).toBe(true)

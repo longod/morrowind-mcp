@@ -919,6 +919,8 @@ function this:OnToolsCall(params, request)
             error = jsonrpc.error_code.method_not_found,
         }
     end
+
+
     if not tool:CanExecute(params) then
         ---@type MCP.MethodResult
         return {
@@ -950,6 +952,16 @@ function this:OnToolsCall(params, request)
             return self:NotifyProgress(sessionId, progressToken, progress, total, message)
         end,
     }
+
+    -- FIXME I dont want to called tools in unit test, because it is unexpected!
+    if config.indicator.toolsCall and tes3.isInitialized() then
+        -- Insert clear visual indicators when tools are invoked
+        local notify = string.format("%s is running %s", settings.modName, params.name)
+        for key, value in pairs(params.arguments) do
+            notify = notify .. string.format("\n%s=%s", key, tostring(value))
+        end
+        tes3ui.showNotifyMenu(notify)
+    end
 
     -- Tools only receive normalized arguments; request-level metadata is exposed through the execution context.
     local result = tool:Execute(params.arguments, context)
@@ -1509,20 +1521,18 @@ function this:PollPrimitiveCondition(e)
         self.lastPollingPromptsInterval = 0
     end
 
-    -- FIXME dont touch private field in this. PoC
     -- no polling time?
-    if self.resource.changed > 0 then
+    if self.resource:IsChangedResourceList() then
         self:NotifyResourceListChanged()
-        self.logger:debug("resource list changed, changed=%d total=%d", self.resource.changed, table.size(self.resource.resources))
-        self.resource.changed = 0
+        self.resource:ResetChangedResourceList()
     end
     -- publish subscription
-    if table.size(self.resource.updated) > 0 then
-        for uri, _ in pairs(self.resource.updated) do
+    local updated = self.resource:GetUpdatedResources()
+    if updated and table.size(updated) > 0 then
+        for uri, _ in pairs(updated) do
             self:NotifyResourceUpdated(uri)
         end
-        self.logger:debug("resource updated, updated=%d total=%d", table.size(self.resource.updated), table.size(self.resource.resources))
-        table.clear(self.resource.updated)
+        self.resource:ResetUpdatedResources()
     end
 
 end

@@ -6,6 +6,11 @@ function this.Test()
         enabled = true,
         highlight = false,
     })
+    -- Restore function spies before mocks so UnitWind does not reapply a mocked function.
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
 
     local datetime = require("morrowind-mcp.util.datetime")
 
@@ -56,9 +61,6 @@ function this.Test()
 
         local now = datetime.Now()
 
-        unitwind:unmock(os, "date")
-        unitwind:unmock(os, "time")
-
         unitwind:expect(now.time_zone).toBe("+0900")
         unitwind:expect(now.minute).toBe(34)
         unitwind:expect(now.second).toBe(56)
@@ -92,9 +94,6 @@ function this.Test()
 
         local now = datetime.Now()
 
-        unitwind:unmock(os, "date")
-        unitwind:unmock(os, "time")
-
         unitwind:expect(now.time_zone).toBe("JST")
     end)
 
@@ -124,9 +123,6 @@ function this.Test()
         end)
 
         local now = datetime.Now()
-
-        unitwind:unmock(os, "date")
-        unitwind:unmock(os, "time")
 
         unitwind:expect(now.time_zone).toBe("local")
     end)
@@ -244,8 +240,6 @@ function this.Test()
 
         local inGameNow = datetime.InGameNow()
 
-        unitwind:unmock(tes3, "onMainMenu")
-
         unitwind:expect(inGameNow).toBe(nil)
     end)
 
@@ -256,9 +250,6 @@ function this.Test()
         unitwind:mock(tes3, "worldController", nil)
 
         local inGameNow = datetime.InGameNow()
-
-        unitwind:unmock(tes3, "worldController")
-        unitwind:unmock(tes3, "onMainMenu")
 
         unitwind:expect(inGameNow).toBe(nil)
     end)
@@ -279,10 +270,6 @@ function this.Test()
         end)
 
         local inGameNow = datetime.InGameNow()
-
-        unitwind:unmock(tes3, "getSimulationTimestamp")
-        unitwind:unmock(tes3, "worldController")
-        unitwind:unmock(tes3, "onMainMenu")
 
         unitwind:expect(inGameNow).NOT.toBe(nil)
         if inGameNow then

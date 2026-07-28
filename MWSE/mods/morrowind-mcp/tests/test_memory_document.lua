@@ -6,6 +6,11 @@ function this.Test()
         enabled = true,
         highlight = false,
     })
+    -- Restore function spies before mocks so UnitWind does not reapply a mocked function.
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
 
     local document = require("morrowind-mcp.resources.memory.document")
     local datetime = require("morrowind-mcp.util.datetime")
@@ -54,8 +59,6 @@ function this.Test()
         unitwind:expect(memoryDocument.scope.generation).toBe(3)
         unitwind:expect(memoryDocument.links[1].rel).toBe("self")
         unitwind:expect(memoryDocument.data.quests ~= nil).toBe(true)
-
-        unitwind:unmock(datetime, "InGameNow")
     end)
 
     unitwind:test("Document updated_at includes current in-game time when available", function()
@@ -82,8 +85,6 @@ function this.Test()
 
         unitwind:expect(memoryDocument.updated_at.system_time ~= nil).toBe(true)
         unitwind:expect(memoryDocument.updated_at.in_game_time).toBe(inGameTime)
-
-        unitwind:unmock(datetime, "InGameNow")
     end)
 
     unitwind:test("Subject type resolves from objectType and reference base object", function()
@@ -122,8 +123,6 @@ function this.Test()
         document.MarkDirty(entry)
         entry.handler(descriptor)
         unitwind:expect(buildCount).toBe(2)
-
-        unitwind:unmock(datetime, "InGameNow")
     end)
 
     unitwind:test("SaveEntry writes a Memory resource entry as debug JSON", function()
@@ -175,11 +174,6 @@ function this.Test()
         unitwind:expect(result.bytes).toBe(string.len(writes[1]))
         unitwind:expect(string.find(writes[1], '"schema_version":1') ~= nil).toBe(true)
         unitwind:expect(closed).toBe(true)
-
-        unitwind:unmock(io, "open")
-        unitwind:unmock(lfs, "mkdir")
-        unitwind:unmock(lfs, "attributes")
-        unitwind:unmock(datetime, "InGameNow")
     end)
 
     local testsPassed = unitwind.testsPassed

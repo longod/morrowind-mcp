@@ -6,6 +6,11 @@ function this.Test()
         enabled = true,
         highlight = false,
     })
+    -- Restore function spies before mocks so UnitWind does not reapply a mocked function.
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
 
     local datetime = require("morrowind-mcp.util.datetime")
     local journal = require("morrowind-mcp.resources.journal")
@@ -33,7 +38,6 @@ function this.Test()
         end)
 
         local monthIndexByName, err = journal.BuildMonthIndexByName()
-        unitwind:unmock(tes3, "findGMST")
 
         unitwind:expect(err).toBe(nil)
         unitwind:expect(monthIndexByName).NOT.toBe(nil)

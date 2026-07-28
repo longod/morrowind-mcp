@@ -245,13 +245,11 @@ function this:OnResourcesRead(params)
     }
 end
 
-
 ---@param e loadedEventData
 function this:OnLoaded(e)
     -- reset resource cache state on game load.
     -- keeping no IGT resources?
 end
-
 
 -- register path for tools
 -- hook tools response then manage tools's resource. save and cache
@@ -272,17 +270,18 @@ function this:PublishResource(resource)
         self.logger:debug("Updated a resource: %s  total=%d", resource.descriptor.uri, table.size(self.resources))
     else
         self.changed = self.changed + 1
-        self.logger:debug("Published a new resource: %s changed=%d total=%d", resource.descriptor.uri, self.changed, table.size(self.resources))
+        self.logger:debug("Published a new resource: %s changed=%d total=%d", resource.descriptor.uri, self.changed,
+            table.size(self.resources))
     end
     self.resources[resource.descriptor.uri] = resource -- copy is better?
     entry = self.resources[resource.descriptor.uri]
     -- update modified datetime
-    entry.descriptor.annotations = jsonrpc.Annotations(entry.descriptor.annotations.audience, entry.descriptor.annotations.priority,  datetime.UTCNow())
+    entry.descriptor.annotations = jsonrpc.Annotations(entry.descriptor.annotations.audience,
+        entry.descriptor.annotations.priority, datetime.UTCNow())
     return resource.descriptor.uri
 end
 
 function this:UnpublishResource(uri)
-
     if not self.resources[uri] then
         return false
     end
@@ -291,6 +290,24 @@ function this:UnpublishResource(uri)
     -- need updated list for subscription?
     self.logger:debug("Unpublished a resource: %s changed=%d", uri, self.changed)
     return true
+end
+
+function this:IsChangedResourceList()
+    return self.changed > 0
+end
+
+function this:ResetChangedResourceList()
+    self.logger:debug("resource list changed, changed=%d total=%d", self.changed, table.size(self.resources))
+    self.changed = 0
+end
+
+function this:GetUpdatedResources()
+    return self.updated
+end
+
+function this:ResetUpdatedResources()
+    self.logger:debug("resource updated, updated=%d total=%d", table.size(self.updated), table.size(self.resources))
+    table.clear(self.updated)
 end
 
 return this
