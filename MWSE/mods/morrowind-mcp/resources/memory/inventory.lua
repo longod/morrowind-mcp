@@ -5,6 +5,10 @@ local iter = require("morrowind-mcp.tes3.iterator")
 local obj = require("morrowind-mcp.tes3.object")
 local enumname = require("morrowind-mcp.tes3.enumname")
 
+-- and item consumeing events... but it seems they are triggered too many events. and noisy including magic effects.
+-- repair, lockPick (including magic), trapDisarm (including magic)
+-- convertReferenceToItem? spellCasted? spellCastedFailure? (scroll)
+
 --- Memory module for the current player's inventory snapshot.
 ---@class MCP.Resources.Memory.Inventory: MCP.Resources.MemoryModule
 ---@field inventoryEntry MCP.MemoryResourceEntry
@@ -18,6 +22,17 @@ local enumname = require("morrowind-mcp.tes3.enumname")
 ---@field uiActivatedCallback fun(e: uiActivatedEventData)?
 ---@field menuEnterCallback fun(e: menuEnterEventData)?
 ---@field menuExitCallback fun(e: menuExitEventData)?
+---@field activateCallback fun(e: activateEventData)?
+---@field enchantChargeUseCallback fun(e: enchantChargeUseEventData)?
+---@field enchantedItemCreateFailed fun(e: enchantedItemCreateFailedEventData)?
+---@field enchantedItemCreatedCallback fun(e: enchantedItemCreatedEventData)?
+---@field itemDroppedCallback fun(e: itemDroppedEventData)?
+---@field pickpocketCallback fun(e: pickpocketEventData)?
+---@field potionBrewFailedCallback fun(e: potionBrewFailedEventData)?
+---@field potionBrewedCallback fun(e: potionBrewedEventData)?
+---@field lockPickCallback fun(e: lockPickEventData)?
+---@field repairCallback fun(e: repairEventData)?
+---@field trapDisarmCallback fun(e: trapDisarmEventData)?
 local this = {}
 setmetatable(this, { __index = base })
 

@@ -1,8 +1,9 @@
 local base = require("morrowind-mcp.core.iprompt")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local mcp = require("morrowind-mcp.core.mcp")
-local journal = require("morrowind-mcp.resources.journal")
-local quest = require("morrowind-mcp.resources.quest")
+local journal = require("morrowind-mcp.resources.memory.journal")
+local quest = require("morrowind-mcp.resources.memory.quest")
+local document = require("morrowind-mcp.resources.memory.document")
 
 ---@class MCP.Prompts.Todo : MCP.IPrompt
 ---@field logger mwseLogger
@@ -52,16 +53,16 @@ function this:Execute(params, context)
         {
             jsonrpc.PromptMessage(
                 mcp.role.user,
-                jsonrpc.TextContent("Tell me what to do next. read journal and active_quest resources")
+                jsonrpc.TextContent("Tell me what to do next. read journal and quests resources.")
             ),
             -- depends on client implementation?
             jsonrpc.PromptMessage(
                 mcp.role.user,
-                journal.link
+                document.ToResourceLink(journal.link)
             ),
             jsonrpc.PromptMessage(
                 mcp.role.user,
-                quest.active_link
+                document.ToResourceLink(quest.link)
             ),
         },
         nil

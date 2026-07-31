@@ -411,5 +411,12 @@ function this.SaveEntry(entry, rootDir)
     })
 end
 
+--- Convert MemoryLink to ResourceLink for MCP.
+---@param link MCP.MemoryLink
+---@return MCP.ResourceLink
+function this.ToResourceLink(link)
+    return jsonrpc.ResourceLink(link.rel, link.uri, link.title, link.description)
+end
+
 return this
 

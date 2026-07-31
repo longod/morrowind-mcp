@@ -11,3 +11,4 @@
 -- level 3. autonomous AI agent. within the limits of human player information and game rules.
 -- level 4. fully autonomous AI agent. using all meta data.
 
+-- how to use resources.

@@ -137,6 +137,8 @@ function this:RegisterEvent()
         event.register(tes3.event.loaded, self.loadedCallback, { priority = loadedEventPriority })
     end
 
+    -- TODO regiter simulate for a raycast. provides a way to see what the player sees. and also for pathfinding collision detection.
+
     for _, module in ipairs(self.modules) do
         module:RegisterEvent()
     end

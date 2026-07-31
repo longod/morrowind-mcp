@@ -4,6 +4,9 @@ local document = require("morrowind-mcp.resources.memory.document")
 local actorDialogue = require("morrowind-mcp.resources.memory.actor_dialogue")
 local iter = require("morrowind-mcp.tes3.iterator")
 
+-- event:
+-- death, damaged, disposition, crimeWitnessed, damagedHandToHand, detectSneak?, determinedAction, pickpocket
+
 --- Memory module that owns one actor collection and many observed actor entries internally.
 ---@class MCP.Resources.Memory.Actor: MCP.Resources.MemoryModule
 ---@field indexEntry MCP.MemoryResourceEntry

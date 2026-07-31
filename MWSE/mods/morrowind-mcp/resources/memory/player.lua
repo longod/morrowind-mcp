@@ -3,6 +3,11 @@ local base = require("morrowind-mcp.resources.memory.imodule")
 local obj = require("morrowind-mcp.tes3.object")
 local document = require("morrowind-mcp.resources.memory.document")
 
+-- event:
+-- damaged, damagedHandToHand, death, levelUp, powerRecharged
+-- equipped, exerciseSkill (skillRaised?), jump, skillRaised
+-- restInterrupt, spellCreated
+
 --- Memory module for the single current player entity.
 ---@class MCP.Resources.Memory.Player: MCP.Resources.MemoryModule
 ---@field playerEntry MCP.MemoryResourceEntry
