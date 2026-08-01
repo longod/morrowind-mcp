@@ -498,6 +498,11 @@ function this.Test()
         unitwind:expect(memoryDocument.data.observations[1].linked_topics[1]).toBe("food")
         unitwind:expect(memoryDocument.data.observations[1].repeat_count).toBe(2)
         unitwind:expect(memoryDocument.data.observations[2] == nil).toBe(true)
+        unitwind:expect(module.entry.cache.read_policy).toBe(document.readPolicy.snapshot)
+        local snapshotJson = module.entry.handler(module.entry.descriptor)[1].text
+        module.data.text_count = 99
+        unitwind:expect(module.entry.handler(module.entry.descriptor)[1].text).toBe(snapshotJson)
+        unitwind:expect(string.find(snapshotJson, '"text_count":1') ~= nil).toBe(true)
     end)
 
     testMemoryModule("Memory Actor module manages observed actor instances internally", function()
@@ -607,6 +612,8 @@ function this.Test()
         unitwind:expect(indexDocument.data.actor_count).toBe(5)
         unitwind:expect(indexDocument.data.actors == nil).toBe(true)
         unitwind:expect(table.size(indexDocument.links)).toBe(5)
+        unitwind:expect(module.indexEntry.cache.read_policy).toBe(document.readPolicy.live)
+        unitwind:expect(module.observedActors["caius-cosades"].entry.cache.read_policy).toBe(document.readPolicy.snapshot)
         unitwind:expect(module.observedActors["caius-cosades"].subject.tes3_type).toBe("tes3npc")
         unitwind:expect(module.observedActors["caius-cosades"].data_type).toBe("npc_summary")
         unitwind:expect(module.observedActors["caius-cosades"].data.interaction.state).toBe("observed")
@@ -1254,6 +1261,12 @@ function this.Test()
         unitwind:expect(dialogueDocument.data.observations[1].choices[2].label).toBe("No")
         unitwind:expect(dialogueDocument.data.observations[1].repeat_count).toBe(2)
         unitwind:expect(dialogueDocument.data.observations[2].command).toBe("set rent to 1")
+        unitwind:expect(observedActor.entry.cache.read_policy).toBe(document.readPolicy.snapshot)
+        unitwind:expect(observedActor.dialogue_entry.cache.read_policy).toBe(document.readPolicy.snapshot)
+        local dialogueSnapshotJson = observedActor.dialogue_entry.handler(observedActor.dialogue_descriptor)[1].text
+        observedActor.dialogue_data.response_count = 99
+        unitwind:expect(observedActor.dialogue_entry.handler(observedActor.dialogue_descriptor)[1].text).toBe(dialogueSnapshotJson)
+        unitwind:expect(string.find(dialogueSnapshotJson, '"response_count":2') ~= nil).toBe(true)
     end)
 
     testMemoryModule("Memory Actor module writes dialogue text from infoGetText", function()

@@ -78,10 +78,10 @@
 ---@field updated_at MCP.MemoryTimestamp? Explicit document update timestamp.
 ---@field in_game_time MCP.DateTimeInGame? In-game time used when generating the default update timestamp.
 
---- Per-resource live cache used to avoid rebuilding JSON until a Memory module marks it dirty.
+--- Per-resource cache for either lazy live documents or eagerly serialized snapshots.
 ---@class MCP.MemoryCacheState
 ---@field read_policy MCP.MemoryReadPolicy
----@field dirty boolean
+---@field dirty boolean Live entries rebuild on the next read when true; snapshot entries remain false.
 ---@field scope_generation integer?
 ---@field source_version string|number?
 ---@field cached_document MCP.MemoryDocument?
@@ -93,13 +93,13 @@
 ---@field id string Stable memory id for the observed actor entry.
 ---@field title string Display label for the actor.
 ---@field descriptor MCP.Resource Resource descriptor for the actor memory entry.
----@field entry MCP.MemoryResourceEntry Live resource entry for the actor memory document.
+---@field entry MCP.MemoryResourceEntry? Snapshot entry assigned before the observed actor is published.
 ---@field subject MCP.MemorySubject Subject identity for the actor.
 ---@field source_description string Source text describing how this actor was observed.
 ---@field data_type MCP.MemoryDataType Data type selected from the actor's TES3 object type.
 ---@field data MCP.AnyMap Serialized actor/reference data captured when the module refreshed.
 ---@field dialogue_descriptor MCP.Resource? Resource descriptor for actor-local dialogue notes.
----@field dialogue_entry MCP.MemoryResourceEntry? Live resource entry for actor-local dialogue notes.
+---@field dialogue_entry MCP.MemoryResourceEntry? Snapshot resource entry for actor-local dialogue notes.
 ---@field dialogue_data MCP.AnyMap? Mutable actor-local dialogue notes payload.
 ---@field dialogue_topic_index table<string, boolean>? Runtime-only case-insensitive lookup for actor-local dialogue topics.
 ---@field dialogue_observation_index table<string, MCP.AnyMap>? Runtime-only duplicate lookup for actor-local dialogue observations.

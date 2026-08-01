@@ -552,9 +552,6 @@ local function IsGoldItem(item)
     return item ~= nil and item.isGold == true
 end
 
--- TODO read_policy snapshot entry is not exists.
--- event driven update should be snapshot? inventory, actor...
-
 --- Create the player inventory module and its one linked collection resource.
 ---@param params MCP.Resources.MemoryModuleParams
 ---@return MCP.Resources.Memory.Inventory

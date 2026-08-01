@@ -615,7 +615,7 @@ local function UpdateActorLink(actorLinks, observedActor)
     end
 end
 
---- Create an actor collection module; individual actor resource entries are rebuilt on refresh.
+--- Create an actor collection module with a live index and captured actor snapshots.
 ---@param params MCP.Resources.MemoryModuleParams
 ---@return MCP.Resources.Memory.Actor
 function this.new(params)
@@ -640,6 +640,13 @@ function this:ClearObservedActors()
     self.actorLinks = jsonrpc.array()
     self.entries = jsonrpc.array({ self.indexEntry })
     self.logger:debug("Memory actor entries cleared: previous_count=%d", previousCount)
+end
+
+--- Capture the current compact state of one observed actor into its snapshot entry.
+---@param observedActor MCP.MemoryObservedActor
+---@return boolean captured
+function this:CaptureActorSnapshot(observedActor)
+    return document.CaptureSnapshot(observedActor.entry, self:BuildActorDocument(observedActor.id))
 end
 
 --- Add one actor reference to the dynamic registry without clearing existing actor memory entries.
@@ -686,9 +693,9 @@ function this:ObserveReference(ref, source, publishIfVisible)
             changed = true
         end
         if changed then
-            document.MarkDirty(observedActor.entry)
-            document.MarkDirty(self.indexEntry)
             UpdateActorLink(self.actorLinks, observedActor)
+            self:CaptureActorSnapshot(observedActor)
+            document.MarkDirty(self.indexEntry)
         end
         self.logger:trace(
             "Memory actor observation updated: source=%s actor_id=%s base_id=%s reference_id=%s interaction_state=%s changed=%s",
@@ -710,7 +717,7 @@ function this:ObserveReference(ref, source, publishIfVisible)
         string.format("Observed actor memory for %s.", title)
     )
     local actorIdentityKind = ActorIdentityKind(ref, baseId)
-    local observedActor = jsonrpc.object({
+    local actorData = jsonrpc.object({
         id = actorId,
         base_id = baseId,
         reference_id = referenceId,
@@ -733,30 +740,24 @@ function this:ObserveReference(ref, source, publishIfVisible)
             conversation_count = source == observationSource.menuDialog and 1 or 0,
         }),
     })
-    UpdateActorFacts(observedActor, ref, source)
-    local entry = document.LiveEntry(descriptor, function()
-        return self:BuildActorDocument(actorId)
-    end)
-    entry.debugHandler = function(desc)
-        local memoryDocument = self:BuildActorDocument(actorId)
-        return { jsonrpc.TextResourceContents(desc.uri, json.encode(memoryDocument, { indent = true }), desc.mimeType) }
-    end
-    self.observedActors[actorId] = {
+    UpdateActorFacts(actorData, ref, source)
+    local observedActor = {
         id = actorId,
         title = title,
         descriptor = descriptor,
-        entry = entry,
         subject = document.Subject(document.SubjectTypeFromObject(ref), actorId, title),
         source_description = SourceDescription(source),
         data_type = dataType,
-        data = observedActor,
-    }
+        data = actorData,
+    } --[[@as MCP.MemoryObservedActor]]
+    self.observedActors[actorId] = observedActor
+    observedActor.entry = document.SnapshotEntry(descriptor, assert(self:BuildActorDocument(actorId)))
     table.insert(self.actorLinks, document.Link(document.linkRel.actor, descriptor.uri, title, ActorLinkDescription(dataType, baseId, referenceId, actorIdentityKind, nextInteractionState)))
-    table.insert(self.entries, entry)
+    table.insert(self.entries, observedActor.entry)
     document.MarkDirty(self.indexEntry)
 
     if publishIfVisible ~= false and self.published then
-        self.resource:PublishResource(entry)
+        self.resource:PublishResource(observedActor.entry)
     end
     self.logger:trace(
         "Memory actor observed: source=%s actor_id=%s data_type=%s base_id=%s reference_id=%s identity_kind=%s interaction_state=%s published_now=%s",
@@ -858,9 +859,9 @@ function this:OnCombatStarted(e)
     else
         observedActor.data.interaction.actor_started_combat_count = (observedActor.data.interaction.actor_started_combat_count or 0) + 1
     end
-    document.MarkDirty(observedActor.entry)
-    document.MarkDirty(self.indexEntry)
     UpdateActorLink(self.actorLinks, observedActor)
+    self:CaptureActorSnapshot(observedActor)
+    document.MarkDirty(self.indexEntry)
     self:MarkDirty()
     self.logger:debug("Memory actor combat observed: actor_id=%s total=%d", actorId, table.size(self.observedActors))
 end
@@ -885,9 +886,9 @@ function this:OnActorVoiceoverSound(eventName, e)
     observedActor.data.senses.heard_voiceover = true
     observedActor.data.senses.voiceover_count = (observedActor.data.senses.voiceover_count or 0) + 1
     observedActor.data.senses.last_voiceover = SoundSummary(eventName, e)
-    document.MarkDirty(observedActor.entry)
-    document.MarkDirty(self.indexEntry)
     UpdateActorLink(self.actorLinks, observedActor)
+    self:CaptureActorSnapshot(observedActor)
+    document.MarkDirty(self.indexEntry)
     self:MarkDirty()
     self.logger:debug("Memory actor voiceover sound observed: actor_id=%s event=%s", actorId, eventName)
 end
@@ -929,7 +930,7 @@ function this:RecordInfoGetTextSense(observedActor, e)
         info_id = e.info and e.info.id and tostring(e.info.id) or nil,
         text = TextFromInfoGetText(e),
     })
-    document.MarkDirty(observedActor.entry)
+    self:CaptureActorSnapshot(observedActor)
     document.MarkDirty(self.indexEntry)
     self:MarkDirty()
     return true
@@ -1003,9 +1004,9 @@ function this:UpdateObservedActorInteraction(observedActor, source)
         changed = true
     end
     if changed then
-        document.MarkDirty(observedActor.entry)
-        document.MarkDirty(self.indexEntry)
         UpdateActorLink(self.actorLinks, observedActor)
+        self:CaptureActorSnapshot(observedActor)
+        document.MarkDirty(self.indexEntry)
     end
 end
 

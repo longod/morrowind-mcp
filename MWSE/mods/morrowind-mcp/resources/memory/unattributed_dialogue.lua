@@ -221,13 +221,17 @@ function this.new(params)
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_unattributed_dialogue" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.UnattributedDialogue
-    instance.entry = document.LiveEntry(descriptor, function()
-        return instance:BuildDocument()
-    end)
+    instance:ClearData()
+    instance.entry = document.SnapshotEntry(descriptor, instance:BuildDocument())
     instance.entries = jsonrpc.array({ instance.entry })
     instance.links = jsonrpc.array({ rootLink })
-    instance:ClearData()
     return instance
+end
+
+--- Capture the current unattributed dialogue observations immediately.
+---@return boolean captured
+function this:CaptureSnapshot()
+    return document.CaptureSnapshot(self.entry, self:BuildDocument())
 end
 
 --- Clear runtime dialogue observations for a newly loaded game scope.
@@ -239,7 +243,9 @@ function this:ClearData()
         text_count = 0,
         observations = jsonrpc.array(),
     })
-    document.MarkDirty(self.entry)
+    if self.entry then
+        self:CaptureSnapshot()
+    end
 end
 
 --- Append one actor-unresolved voice observation, aggregating exact repeated info records.
@@ -251,7 +257,7 @@ function this:AddObservation(eventData)
     if duplicateObservation then
         duplicateObservation.repeat_count = (duplicateObservation.repeat_count or 1) + 1
         duplicateObservation.last_observed_at = observation.observed_at
-        document.MarkDirty(self.entry)
+        self:CaptureSnapshot()
         return false
     end
 
@@ -259,7 +265,7 @@ function this:AddObservation(eventData)
     table.insert(self.data.observations, observation)
     RegisterObservation(self, observation)
     AddTopics(self, observation.linked_topics)
-    document.MarkDirty(self.entry)
+    self:CaptureSnapshot()
     return true
 end
 

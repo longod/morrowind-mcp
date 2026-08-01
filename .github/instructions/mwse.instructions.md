@@ -72,6 +72,8 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 
 ## Tests
 
+- 単体テストやサーバーテストが必要な場合は、原則として Morrowind MCP Test Runner に委任して実行する。
+- 親エージェントや通常の作業エージェントは、テスト実行が必要だと判断した時点でこの子エージェントを呼び出す。
 - 単体テスト対象になっているファイルのコードの変更後は、[tests/unit_test.ps1](../../tests/unit_test.ps1) を実行して、正しく動作することを確認する（スキル /unittest_run）。必要なら引数で対象ファイルを指定できる。
 - MCP Server の公開 surface や runtime 統合に影響する変更後は、[tests/server_test.ps1](../../tests/server_test.ps1) を実行する（/servertest_run）。対象例: `resources/list` / `resources/read` に出る resource の追加・削除・URI 変更、`prompts/list` / `tools/list` / `tools/call` の公開内容変更、`server/**` の protocol / HTTP / routing 変更、Memory module の登録・公開 entry・debug dump 出力変更、`settings` / `config` / path 解決の変更。
 - [tests/server_test.ps1](../../tests/server_test.ps1) は重いので、純粋な内部 helper、局所的な Lua 単体ロジック、既存 resource 内の表示文言だけの変更、ドキュメント・テストだけの変更では必須にしない。迷う場合は、変更が MCP client から観測できる公開 resource / prompt / tool / server 挙動を変えるかで判断する。

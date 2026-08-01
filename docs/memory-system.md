@@ -42,8 +42,14 @@ Document type values:
 
 Read policy values:
 
-- `live`: rebuild only when the owning module marks the entry dirty.
-- `snapshot`: fixed content for the lifetime of the entry.
+- `live`: mark the entry dirty when its source may have changed, then rebuild and serialize it on the next read. Later reads reuse that JSON until the entry is marked dirty again.
+- `snapshot`: build and serialize the document immediately at an explicit capture point. Reads return that fixed JSON until the owning module explicitly captures another document.
+
+Current read policies:
+
+- Root, player, journal, quest, inventory, and actor collection indexes are `live` entries.
+- Actor entity, actor-local dialogue, and unattributed dialogue documents are `snapshot` entries.
+- Snapshot capture timing belongs to the feature module. The generic document helper only stores a completed `MCP.MemoryDocument`; it does not know actor ids, observation events, or feature-specific update boundaries.
 
 Scope kind values:
 
@@ -115,6 +121,7 @@ Dirty behavior:
 - Visibility changes should dirty only indexes related to the changed module or parent URI.
 - Avoid global invalidation when one module publishes or unpublishes.
 - Do not make player, journal, quest, or actor entries dirty just because an unrelated module changed visibility.
+- Dirty marking affects only `live` entries. A snapshot changes only through an explicit capture after its owning module finishes updating the captured state.
 
 Loaded behavior:
 
@@ -235,6 +242,8 @@ Actor interaction states are mechanical facts, not importance judgments:
 
 Interaction state only moves to stronger states: `heard < observed < targeted < activated < combat < conversed`.
 
+Actor entity and dialogue entries are snapshots. Actor event handlers first copy relevant MWSE values into compact Lua data, finish any event-specific interaction, sense, risk, or dialogue updates, and then capture the completed document. Reading an actor snapshot does not rebuild it from mutable runtime data. The actor collection index remains live because it is derived from current publication and link visibility.
+
 ## Actor Identity Classification
 
 Actor identity is a classification, not a persistence guarantee.
@@ -266,6 +275,7 @@ Memory manager debug dumping saves the current live Memory documents to JSON fil
 
 - Save each current resource URI at most once per dump operation.
 - Preserve the same document envelope used by live resources.
+- For snapshot entries, save the same cached JSON returned by normal resource reads; debug dumping must not rebuild a newer document from mutable runtime state.
 - Keep debug output outside the normal resource root.
 - Debug dumps are for inspection and tests, not long-term persistence.
 

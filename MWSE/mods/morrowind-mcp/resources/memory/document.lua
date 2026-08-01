@@ -324,7 +324,7 @@ function this.Descriptor(relativePath, title, description)
     }
 end
 
---- Resource entry whose handler lazily builds and caches one Memory document.
+--- Resource entry whose handler returns either a lazily built live document or an eagerly captured snapshot.
 ---@class MCP.MemoryResourceEntry: MCP.ResourceEntry
 ---@field cache MCP.MemoryCacheState
 ---@field debugHandler (fun(desc: MCP.Resource): table[])? Optional handler used only when writing debug dump files.
@@ -360,10 +360,50 @@ function this.LiveEntry(descriptor, buildDocument)
     return entry
 end
 
+--- Replace the serialized content of a snapshot entry immediately.
+--- The cached JSON is authoritative so later mutations to the source document do not affect reads.
+---@param entry MCP.MemoryResourceEntry?
+---@param memoryDocument MCP.MemoryDocument?
+---@return boolean captured
+function this.CaptureSnapshot(entry, memoryDocument)
+    if not entry or not entry.cache or entry.cache.read_policy ~= this.readPolicy.snapshot or not memoryDocument then
+        return false
+    end
+
+    entry.cache.cached_document = memoryDocument
+    entry.cache.cached_json = json.encode(memoryDocument, { indent = config.development.debug })
+    entry.cache.dirty = false
+    entry.cache.built_at = this.TimestampNow()
+    return true
+end
+
+--- Create a snapshot Memory resource entry whose JSON is fixed at construction time.
+---@param descriptor MCP.Resource
+---@param memoryDocument MCP.MemoryDocument
+---@return MCP.MemoryResourceEntry
+function this.SnapshotEntry(descriptor, memoryDocument)
+    ---@type MCP.MemoryCacheState
+    local cache = {
+        read_policy = this.readPolicy.snapshot,
+        dirty = false,
+    }
+
+    ---@type MCP.MemoryResourceEntry
+    local entry = {
+        descriptor = descriptor,
+        handler = function(desc)
+            return { jsonrpc.TextResourceContents(desc.uri, cache.cached_json, desc.mimeType) }
+        end,
+        cache = cache,
+    }
+    assert(this.CaptureSnapshot(entry, memoryDocument), "Snapshot entry requires an initial Memory document.")
+    return entry
+end
+
 --- Invalidate a live Memory entry so the next read rebuilds its JSON document.
 ---@param entry MCP.MemoryResourceEntry?
 function this.MarkDirty(entry)
-    if entry and entry.cache then
+    if entry and entry.cache and entry.cache.read_policy == this.readPolicy.live then
         entry.cache.dirty = true
     end
 end

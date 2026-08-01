@@ -323,6 +323,14 @@ function this.BuildLinks(observedActor)
     return links
 end
 
+--- Capture the current actor-local dialogue document after its mutable observation data changes.
+---@param module MCP.Resources.Memory.Actor
+---@param observedActor MCP.MemoryObservedActor
+---@return boolean captured
+function this.CaptureSnapshot(module, observedActor)
+    return document.CaptureSnapshot(observedActor.dialogue_entry, this.BuildDocument(module, observedActor.id))
+end
+
 --- Ensure the actor has an owned dialogue child resource and return its mutable data.
 ---@param module MCP.Resources.Memory.Actor
 ---@param observedActor MCP.MemoryObservedActor
@@ -337,16 +345,7 @@ function this.EnsureEntry(module, observedActor)
         string.format("%s Dialogue Memory", observedActor.title),
         string.format("Conversation notes observed with %s.", observedActor.title)
     )
-    local entry = document.LiveEntry(descriptor, function()
-        return this.BuildDocument(module, observedActor.id)
-    end)
-    entry.debugHandler = function(desc)
-        local memoryDocument = this.BuildDocument(module, observedActor.id)
-        return { jsonrpc.TextResourceContents(desc.uri, json.encode(memoryDocument, { indent = true }), desc.mimeType) }
-    end
-
     observedActor.dialogue_descriptor = descriptor
-    observedActor.dialogue_entry = entry
     observedActor.dialogue_topic_index = {}
     observedActor.dialogue_observation_index = {}
     observedActor.dialogue_data = jsonrpc.object({
@@ -358,12 +357,16 @@ function this.EnsureEntry(module, observedActor)
         text_count = 0,
         observations = jsonrpc.array(),
     })
-    table.insert(module.entries, entry)
+    observedActor.dialogue_entry = document.SnapshotEntry(
+        descriptor,
+        assert(this.BuildDocument(module, observedActor.id))
+    )
+    table.insert(module.entries, observedActor.dialogue_entry)
 
     if module.published then
-        module.resource:PublishResource(entry)
+        module.resource:PublishResource(observedActor.dialogue_entry)
     end
-    document.MarkDirty(observedActor.entry)
+    module:CaptureActorSnapshot(observedActor)
     return observedActor.dialogue_data
 end
 
@@ -382,8 +385,8 @@ function this.AddObservation(module, observedActor, eventName, eventData)
         if duplicateObservation then
             duplicateObservation.repeat_count = (duplicateObservation.repeat_count or 1) + 1
             duplicateObservation.last_observed_at = observation.observed_at
-            document.MarkDirty(observedActor.entry)
-            document.MarkDirty(observedActor.dialogue_entry)
+            this.CaptureSnapshot(module, observedActor)
+            module:CaptureActorSnapshot(observedActor)
             return false
         end
         dialogueData.text_count = (dialogueData.text_count or 0) + 1
@@ -393,8 +396,8 @@ function this.AddObservation(module, observedActor, eventName, eventData)
         if duplicateObservation then
             duplicateObservation.repeat_count = (duplicateObservation.repeat_count or 1) + 1
             duplicateObservation.last_observed_at = observation.observed_at
-            document.MarkDirty(observedActor.entry)
-            document.MarkDirty(observedActor.dialogue_entry)
+            this.CaptureSnapshot(module, observedActor)
+            module:CaptureActorSnapshot(observedActor)
             return false
         end
         dialogueData.response_count = (dialogueData.response_count or 0) + 1
@@ -405,8 +408,8 @@ function this.AddObservation(module, observedActor, eventName, eventData)
         AddTopic(observedActor, dialogueData, observation.dialogue_id)
     end
     AddTopics(observedActor, dialogueData, observation.linked_topics)
-    document.MarkDirty(observedActor.entry)
-    document.MarkDirty(observedActor.dialogue_entry)
+    this.CaptureSnapshot(module, observedActor)
+    module:CaptureActorSnapshot(observedActor)
     return true
 end
 

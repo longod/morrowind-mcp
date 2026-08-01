@@ -125,6 +125,42 @@ function this.Test()
         unitwind:expect(buildCount).toBe(2)
     end)
 
+    unitwind:test("SnapshotEntry changes only when explicitly captured", function()
+        MockNoInGameTime()
+
+        local descriptor = document.Descriptor("memory/snapshot.json", "Snapshot Memory", "Snapshot test.")
+        local data = { count = 1 }
+        local firstDocument = document.Document(
+            document.documentType.entity,
+            document.dataType.playerSummary,
+            "Snapshot Memory",
+            data
+        )
+        local entry = document.SnapshotEntry(descriptor, firstDocument)
+        local firstJson = entry.handler(descriptor)[1].text
+
+        data.count = 2
+        document.MarkDirty(entry)
+        local unchangedJson = entry.handler(descriptor)[1].text
+
+        unitwind:expect(entry.cache.read_policy).toBe(document.readPolicy.snapshot)
+        unitwind:expect(entry.cache.dirty).toBe(false)
+        unitwind:expect(entry.cache.built_at ~= nil).toBe(true)
+        unitwind:expect(unchangedJson).toBe(firstJson)
+        unitwind:expect(string.find(unchangedJson, '"count":1') ~= nil).toBe(true)
+
+        local secondDocument = document.Document(
+            document.documentType.entity,
+            document.dataType.playerSummary,
+            "Snapshot Memory",
+            { count = 2 }
+        )
+        unitwind:expect(document.CaptureSnapshot(entry, secondDocument)).toBe(true)
+        local secondJson = entry.handler(descriptor)[1].text
+        unitwind:expect(secondJson == firstJson).toBe(false)
+        unitwind:expect(string.find(secondJson, '"count":2') ~= nil).toBe(true)
+    end)
+
     unitwind:test("SaveEntry writes a Memory resource entry as debug JSON", function()
         MockNoInGameTime()
 
