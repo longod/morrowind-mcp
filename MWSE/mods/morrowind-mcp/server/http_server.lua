@@ -4,6 +4,8 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local mcp = require("morrowind-mcp.core.mcp")
 local pathutil = require("morrowind-mcp.core.pathutil")
 local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local toolvalidator = require("morrowind-mcp.core.toolvalidator")
+local promptvalidator = require("morrowind-mcp.core.promptvalidator")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.manager")
@@ -955,7 +957,7 @@ function this:OnToolsCall(params, request)
         }
     end
 
-    params.arguments = inputvalidator.NormalizeArguments(params.arguments, tool.definition.inputSchema)
+    params.arguments = toolvalidator.NormalizeArguments(params.arguments, tool.definition.inputSchema)
     -- tools/call validation failures are returned as CallToolResult errors because the JSON-RPC envelope is valid.
     local validationResult = tool:Validate(params)
     if not validationResult.valid then
@@ -1015,7 +1017,7 @@ function this:OnPromptsGet(params)
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.method_not_found,
+            error = jsonrpc.error_code.invalid_params,
         }
     end
     if not prompt:CanExecute(params) then
@@ -1026,8 +1028,21 @@ function this:OnPromptsGet(params)
         }
     end
 
+    params.arguments = promptvalidator.NormalizeArguments(params.arguments)
+    -- prompts/get has string-only arguments, so reject malformed values before prompt templates interpolate them.
+    local validationResult = prompt:Validate(params)
+    if not validationResult.valid then
+        local message = inputvalidator.FormatErrors(validationResult)
+        self.logger:warn("Rejected prompt arguments for %s: %s", tostring(params.name), message)
+        ---@type MCP.MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.error_code.invalid_params,
+        }
+    end
+
     -- TODO maybe need more context table (world, player, etc...)
-    local result = prompt:Execute(params)
+    local result = prompt:Execute(params.arguments)
 
     ---@type MCP.MethodResult
     return {

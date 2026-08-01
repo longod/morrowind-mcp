@@ -43,7 +43,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
     if tes3.onMainMenu() then
         return nil -- error
     end

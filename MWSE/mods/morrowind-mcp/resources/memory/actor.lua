@@ -1237,7 +1237,6 @@ function this:RegisterEvent()
             self:OnActivationTargetChanged(e)
         end
         event.register(tes3.event.activationTargetChanged, self.activationTargetChangedCallback)
-        self.logger:debug("Memory actor activation target handler registered")
     end
 
     if not self.activateCallback then
@@ -1245,7 +1244,6 @@ function this:RegisterEvent()
             self:OnActivate(e)
         end
         event.register(tes3.event.activate, self.activateCallback)
-        self.logger:debug("Memory actor activate handler registered")
     end
 
     if not self.combatStartedCallback then
@@ -1253,7 +1251,6 @@ function this:RegisterEvent()
             self:OnCombatStarted(e)
         end
         event.register(tes3.event.combatStarted, self.combatStartedCallback)
-        self.logger:debug("Memory actor combatStarted handler registered")
     end
 
     if not self.addSoundCallback then
@@ -1261,7 +1258,6 @@ function this:RegisterEvent()
             self:OnAddSound(e)
         end
         event.register(tes3.event.addSound, self.addSoundCallback)
-        self.logger:debug("Memory actor addSound handler registered")
     end
 
     if not self.addTempSoundCallback then
@@ -1269,7 +1265,6 @@ function this:RegisterEvent()
             self:OnAddTempSound(e)
         end
         event.register(tes3.event.addTempSound, self.addTempSoundCallback)
-        self.logger:debug("Memory actor addTempSound handler registered")
     end
 
     if not self.dialogActivatedCallback then
@@ -1277,7 +1272,6 @@ function this:RegisterEvent()
             self:OnMenuDialogActivated(e)
         end
         event.register(tes3.event.uiActivated, self.dialogActivatedCallback, { filter = "MenuDialog" })
-        self.logger:debug("Memory actor MenuDialog handler registered")
     end
 
     if not self.contentsActivatedCallback then
@@ -1285,7 +1279,6 @@ function this:RegisterEvent()
             self:OnMenuContentsActivated(e)
         end
         event.register(tes3.event.uiActivated, self.contentsActivatedCallback, { filter = "MenuContents" })
-        self.logger:debug("Memory actor MenuContents handler registered")
     end
 
     if not self.barterActivatedCallback then
@@ -1293,7 +1286,6 @@ function this:RegisterEvent()
             self:OnMenuBarterActivated(e)
         end
         event.register(tes3.event.uiActivated, self.barterActivatedCallback, { filter = "MenuBarter" })
-        self.logger:debug("Memory actor MenuBarter handler registered")
     end
 
     if not self.containerClosedCallback then
@@ -1301,7 +1293,6 @@ function this:RegisterEvent()
             self:OnContainerClosed(e)
         end
         event.register(tes3.event.containerClosed, self.containerClosedCallback)
-        self.logger:debug("Memory actor containerClosed handler registered")
     end
 
     if not self.barterOfferCallback then
@@ -1309,7 +1300,6 @@ function this:RegisterEvent()
             self:OnBarterOffer(e)
         end
         event.register(tes3.event.barterOffer, self.barterOfferCallback)
-        self.logger:debug("Memory actor barterOffer handler registered")
     end
 
     if not self.pickpocketCallback then
@@ -1317,7 +1307,6 @@ function this:RegisterEvent()
             self:OnPickpocket(e)
         end
         event.register(tes3.event.pickpocket, self.pickpocketCallback)
-        self.logger:debug("Memory actor pickpocket handler registered")
     end
 
     if not self.filterBarterMenuCallback then
@@ -1325,7 +1314,6 @@ function this:RegisterEvent()
             self:OnFilterBarterMenu(e)
         end
         event.register(tes3.event.filterBarterMenu, self.filterBarterMenuCallback)
-        self.logger:debug("Memory actor filterBarterMenu comparison handler registered")
     end
 
     if not self.infoResponseCallback then
@@ -1333,7 +1321,6 @@ function this:RegisterEvent()
             self:OnInfoResponse(e)
         end
         event.register(tes3.event.infoResponse, self.infoResponseCallback)
-        self.logger:debug("Memory actor infoResponse handler registered")
     end
 
     if not self.infoGetTextCallback then
@@ -1341,7 +1328,6 @@ function this:RegisterEvent()
             self:OnInfoGetText(e)
         end
         event.register(tes3.event.infoGetText, self.infoGetTextCallback)
-        self.logger:debug("Memory actor infoGetText handler registered")
     end
 end
 
@@ -1351,72 +1337,58 @@ function this:UnregisterEvent()
         event.unregister(tes3.event.filterBarterMenu, self.filterBarterMenuCallback)
         self.filterBarterMenuCallback = nil
         self.barterFilterCounts = nil
-        self.logger:debug("Memory actor filterBarterMenu comparison handler unregistered")
     end
     if self.pickpocketCallback then
         event.unregister(tes3.event.pickpocket, self.pickpocketCallback)
         self.pickpocketCallback = nil
-        self.logger:debug("Memory actor pickpocket handler unregistered")
     end
     if self.barterOfferCallback then
         event.unregister(tes3.event.barterOffer, self.barterOfferCallback)
         self.barterOfferCallback = nil
-        self.logger:debug("Memory actor barterOffer handler unregistered")
     end
     if self.containerClosedCallback then
         event.unregister(tes3.event.containerClosed, self.containerClosedCallback)
         self.containerClosedCallback = nil
-        self.logger:debug("Memory actor containerClosed handler unregistered")
     end
     if self.barterActivatedCallback then
         event.unregister(tes3.event.uiActivated, self.barterActivatedCallback)
         self.barterActivatedCallback = nil
-        self.logger:debug("Memory actor MenuBarter handler unregistered")
     end
     if self.contentsActivatedCallback then
         event.unregister(tes3.event.uiActivated, self.contentsActivatedCallback)
         self.contentsActivatedCallback = nil
-        self.logger:debug("Memory actor MenuContents handler unregistered")
     end
     if self.infoGetTextCallback then
         event.unregister(tes3.event.infoGetText, self.infoGetTextCallback)
         self.infoGetTextCallback = nil
-        self.logger:debug("Memory actor infoGetText handler unregistered")
     end
     if self.infoResponseCallback then
         event.unregister(tes3.event.infoResponse, self.infoResponseCallback)
         self.infoResponseCallback = nil
-        self.logger:debug("Memory actor infoResponse handler unregistered")
     end
     if self.dialogActivatedCallback then
         event.unregister(tes3.event.uiActivated, self.dialogActivatedCallback)
         self.dialogActivatedCallback = nil
-        self.logger:debug("Memory actor MenuDialog handler unregistered")
     end
     if self.combatStartedCallback then
         event.unregister(tes3.event.combatStarted, self.combatStartedCallback)
         self.combatStartedCallback = nil
-        self.logger:debug("Memory actor combatStarted handler unregistered")
     end
     if self.addTempSoundCallback then
         event.unregister(tes3.event.addTempSound, self.addTempSoundCallback)
         self.addTempSoundCallback = nil
-        self.logger:debug("Memory actor addTempSound handler unregistered")
     end
     if self.addSoundCallback then
         event.unregister(tes3.event.addSound, self.addSoundCallback)
         self.addSoundCallback = nil
-        self.logger:debug("Memory actor addSound handler unregistered")
     end
     if self.activateCallback then
         event.unregister(tes3.event.activate, self.activateCallback)
         self.activateCallback = nil
-        self.logger:debug("Memory actor activate handler unregistered")
     end
     if self.activationTargetChangedCallback then
         event.unregister(tes3.event.activationTargetChanged, self.activationTargetChangedCallback)
         self.activationTargetChangedCallback = nil
-        self.logger:debug("Memory actor activation target handler unregistered")
     end
     base.UnregisterEvent(self)
 end

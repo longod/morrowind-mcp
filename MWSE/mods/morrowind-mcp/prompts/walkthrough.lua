@@ -32,7 +32,7 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params, context)
+function this:Execute(arguments, context)
     -- add quest name, id.
     return jsonrpc.GetPromptResult(
         {

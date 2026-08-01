@@ -1,4 +1,4 @@
-local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local toolvalidator = require("morrowind-mcp.core.toolvalidator")
 
 ---@class MCP.ITool
 ---@field definition MCP.Tool
@@ -38,7 +38,7 @@ end
 ---@return InputValidator.Result
 function this:Validate(params)
     -- Subclasses should call this first, then append checks that depend on a specific tool sink.
-    return inputvalidator.ValidateArguments(params and params.arguments or nil, self.definition.inputSchema)
+    return toolvalidator.ValidateArguments(params and params.arguments or nil, self.definition.inputSchema)
 end
 
 ---@public

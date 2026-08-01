@@ -2,8 +2,85 @@ local base = require("morrowind-mcp.core.iprompt")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local mcp = require("morrowind-mcp.core.mcp")
 
+local maxLanguageTagLength = 12
 
----@return string? launguage
+--- Parse a language tag without regex so the accepted BCP 47 subset remains explicit and bounded.
+---@param value string
+---@return boolean
+local function IsAsciiLetters(value)
+    local index = 1
+    while index <= #value do
+        local byte = string.byte(value, index)
+        local isLetter =
+            (byte >= string.byte("A") and byte <= string.byte("Z")) or
+            (byte >= string.byte("a") and byte <= string.byte("z"))
+        if not isLetter then
+            return false
+        end
+        index = index + 1
+    end
+    return true
+end
+
+---@param value string
+---@return boolean
+local function IsAsciiDigits(value)
+    local index = 1
+    while index <= #value do
+        local byte = string.byte(value, index)
+        if byte < string.byte("0") or byte > string.byte("9") then
+            return false
+        end
+        index = index + 1
+    end
+    return true
+end
+
+--- Accept only language[-script][-region], which is sufficient for translation targets and cannot carry free-form instructions.
+---@param value string
+---@return boolean
+local function IsLanguageTag(value)
+    if value == "" or #value > maxLanguageTagLength then
+        return false
+    end
+
+    local subtags = {}
+    local segmentStart = 1
+    while segmentStart <= #value do
+        local separatorIndex = string.find(value, "-", segmentStart, true)
+        local segmentEnd = separatorIndex and separatorIndex - 1 or #value
+        local subtag = string.sub(value, segmentStart, segmentEnd)
+        if subtag == "" then
+            return false
+        end
+        table.insert(subtags, subtag)
+        if not separatorIndex then
+            break
+        end
+        segmentStart = separatorIndex + 1
+    end
+
+    local subtagCount = table.size(subtags)
+    local primaryLanguage = subtags[1]
+    if #primaryLanguage < 2 or #primaryLanguage > 3 or not IsAsciiLetters(primaryLanguage) then
+        return false
+    end
+
+    local nextIndex = 2
+    local script = subtags[nextIndex]
+    if script and #script == 4 and IsAsciiLetters(script) then
+        nextIndex = nextIndex + 1
+    end
+
+    local region = subtags[nextIndex]
+    if region and ((#region == 2 and IsAsciiLetters(region)) or (#region == 3 and IsAsciiDigits(region))) then
+        nextIndex = nextIndex + 1
+    end
+
+    return nextIndex > subtagCount
+end
+
+---@return string? language
 ---@return string? region
 ---@return string? codepage
 local function GetLocale()
@@ -46,8 +123,8 @@ function this.new(params)
         arguments =  {
             jsonrpc.PromptArgument(
                 "language",
-                "Launguage",
-                "The name of any language you want to use. If not specified, the system locale will be used.",
+                "Language",
+                "BCP 47 language tag for translation, such as en, ja, en-US, or zh-Hant-TW. If omitted, the system locale is used.",
                 false
             ),
         },
@@ -62,10 +139,31 @@ function this:CanExecute(params)
     return true
 end
 
-function this:Execute(params, context)
-    -- TODO need arguments validatior.
+---@param params MCP.GetPromptRequestParams
+---@return InputValidator.Result
+function this:Validate(params)
+    local result = base.Validate(self, params)
+    if not result.valid then
+        return result
+    end
 
     local arguments = params.arguments or {}
+    local language = arguments["language"]
+    if language ~= nil and not IsLanguageTag(language) then
+        -- The language tag is interpolated into an instruction, so accept only a bounded structured identifier.
+        table.insert(result.errors, {
+            path = "language",
+            message = "Expected a BCP 47 language tag with optional script and region subtags.",
+        })
+        result.valid = false
+    end
+    return result
+end
+
+---@param arguments table<string, string>
+---@param context table?
+---@return MCP.GetPromptResult
+function this:Execute(arguments, context)
     local language = arguments["language"]
     if not language then
         local lang, _, _ = GetLocale()
