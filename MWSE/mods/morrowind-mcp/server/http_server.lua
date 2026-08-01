@@ -7,6 +7,7 @@ local inputvalidator = require("morrowind-mcp.core.inputvalidator")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.manager")
+local target = require("morrowind-mcp.util.target")
 
 -- TODO split implementations, such as session manager?
 
@@ -1622,6 +1623,9 @@ function this:Start()
         self.logger:warn("MCP server is already running")
         return false
     end
+
+    target:RegisterEvent()
+
     self.server = socket.bind(self.hostname, self.port)
     if not self.server then
         self.logger:error("Failed to start MCP server on %s:%d", self.hostname, self.port)
@@ -1674,6 +1678,8 @@ function this:Shutdown()
     self:ReleaseTools()
     self.resource:Release()
     self.resource = nil
+
+    target:UnregisterEvent()
 
     self.server:close()
     self.server = nil

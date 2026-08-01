@@ -103,6 +103,14 @@
 ---@field dialogue_data MCP.AnyMap? Mutable actor-local dialogue notes payload.
 ---@field dialogue_topic_index table<string, boolean>? Runtime-only case-insensitive lookup for actor-local dialogue topics.
 ---@field dialogue_observation_index table<string, MCP.AnyMap>? Runtime-only duplicate lookup for actor-local dialogue observations.
+---@field inventory_descriptor MCP.Resource? Resource descriptor for actor actual-inventory memory.
+---@field inventory_entry MCP.MemoryResourceEntry? Snapshot resource entry for actor actual-inventory memory.
+---@field inventory_data MCP.AnyMap? Captured actor actual-inventory payload.
+---@field inventory_source MCP.MemorySource? Provenance for the captured actual inventory.
+---@field barter_descriptor MCP.Resource? Resource descriptor for actor barter-inventory memory.
+---@field barter_entry MCP.MemoryResourceEntry? Snapshot resource entry for actor barter-inventory memory.
+---@field barter_data MCP.AnyMap? Captured merchant trade-eligible inventory payload.
+---@field barter_source MCP.MemorySource? Provenance for the captured barter inventory.
 
 --- Payload fields currently written by Actor Memory documents.
 --- Raw ids preserve TES3 casing and spacing; only the resource URI segment is normalized.

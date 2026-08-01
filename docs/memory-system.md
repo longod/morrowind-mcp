@@ -48,7 +48,7 @@ Read policy values:
 Current read policies:
 
 - Root, player, journal, quest, inventory, and actor collection indexes are `live` entries.
-- Actor entity, actor-local dialogue, and unattributed dialogue documents are `snapshot` entries.
+- Actor entity, actor-local dialogue, actor inventory, actor barter inventory, and unattributed dialogue documents are `snapshot` entries.
 - Snapshot capture timing belongs to the feature module. The generic document helper only stores a completed `MCP.MemoryDocument`; it does not know actor ids, observation events, or feature-specific update boundaries.
 
 Scope kind values:
@@ -72,6 +72,8 @@ Data type values currently used:
 - `actor_index`: observed actor collection index payload.
 - `npc_summary`: observed NPC Memory document payload.
 - `creature_summary`: observed creature Memory document payload.
+- `actor_inventory_items`: actual inventory observed directly from one actor.
+- `actor_barter_items`: merchant inventory filtered by its item-record trade eligibility.
 - `actor_dialogue_notes`: actor-local conversation notes observed from dialogue events.
 
 Link relation values currently used:
@@ -83,6 +85,7 @@ Link relation values currently used:
 - `quests`: quest Memory document or collection.
 - `actors`: actor collection index.
 - `actor`: one observed actor document.
+- `barter`: one observed actor merchant barter-inventory snapshot.
 - `dialogue`: actor-local dialogue notes.
 
 Index documents should avoid duplicating links inside `data`. The canonical traversal list is `links`; `data` may contain counts or summary metadata such as `root_count` or `actor_count`.
@@ -140,6 +143,8 @@ Inventory Memory is a `live` entry. `resources/read` enumerates and serializes t
 Mutation events only invalidate and republish the entry. Repeated events while the entry is already dirty do not republish or re-enumerate. Successful `barterOffer`, the player `activate` event, player `itemDropped`, potion brewing completion, pickpocket-window close, and player enchantment creation attempts invalidate the entry. `enchantChargeUse` requires a player cast and a matching item currently in player inventory. `lockPick` and `trapDisarm` require the player, a physical `lockpick` or `probe`, and matching player inventory item data, excluding magic methods. `repair` requires a successful player roll with both the repaired item and repair tool in player inventory.
 
 `menuEnter` remains as an eventual-consistency fallback only when `MenuInventory` is visible. `uiActivated` and `menuExit` are not used because opening or closing a menu does not by itself change inventory state. `containerClosed` and `itemTileUpdated` are intentionally not registered: runtime logs show unrelated container batches and repeated UI tile population. `convertReferenceToItem` fires before transfer, while spell, equipment, leveled-item, and power-recharge events do not reliably change fields represented by this document.
+
+These exclusions apply to the player's live Inventory Memory only. Actor inventory snapshots use different capture boundaries because their meaning is what the player has directly observed.
 
 ## Actor Memory
 
@@ -243,6 +248,21 @@ Actor interaction states are mechanical facts, not importance judgments:
 Interaction state only moves to stronger states: `heard < observed < targeted < activated < combat < conversed`.
 
 Actor entity and dialogue entries are snapshots. Actor event handlers first copy relevant MWSE values into compact Lua data, finish any event-specific interaction, sense, risk, or dialogue updates, and then capture the completed document. Reading an actor snapshot does not rebuild it from mutable runtime data. The actor collection index remains live because it is derived from current publication and link visibility.
+
+### Actor Inventory Snapshots
+
+Actor inventory is exposed only after the player has directly opened an actor-backed inventory UI. It is not a live read and is not inferred for every actor in an active cell.
+
+- `morrowind://memory/actors/{actor_id}/inventory.json` is an `actor_inventory_items` snapshot of the actor's actual `reference.object.inventory`.
+- `morrowind://memory/actors/{actor_id}/barter.json` is an `actor_barter_items` snapshot for a merchant. It is separate from actual inventory because the barter view is an eligibility-filtered subset.
+- Both documents use the same `gold`, `item_count`, and `items` stack payload shape as Player Inventory Memory, wrapped under `data.inventory` with actor identity fields.
+- An actor document links its observed snapshots using `inventory` and `barter` relations. The child resources are created only after a successful capture.
+
+Actual actor inventory capture occurs when `uiActivated` exposes a visible `MenuContents` and its `MenuContents_ObjectRefr` property resolves to an NPC or creature reference. Ordinary containers remain outside Actor Memory. `containerClosed.reference` recaptures the same actor after looting or companion inventory changes; the pickpocket close event (`item == nil`) recaptures the pickpocket target after transfers complete.
+
+Merchant barter capture occurs after visible `MenuBarter` activation using `tes3ui.getServiceActor().reference`. Every stack whose base item passes `tes3.checkMerchantTradesItem({ reference = merchantReference, item = item })` is included. The public API does not accept `itemData`, so Memory does not apply additional stack-level exclusions for equipped state, initial clothing, ownership, charge, condition, or other mutable state. A successful `barterOffer` refreshes both merchant snapshots. `menuExit` is intentionally not used because it does not identify the actor whose inventory changed.
+
+During development, `filterBarterMenu` may be registered only as a diagnostic comparison against the API-derived merchant snapshot. Remove it after real-game validation confirms equivalence; retain it as an authoritative source only if that validation demonstrates a persistent mismatch.
 
 ## Actor Identity Classification
 

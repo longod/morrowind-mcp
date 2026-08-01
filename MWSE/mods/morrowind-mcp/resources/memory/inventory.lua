@@ -3,6 +3,7 @@ local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
 local iter = require("morrowind-mcp.tes3.iterator")
 local enumname = require("morrowind-mcp.tes3.enumname")
+local inventoryutil = require("morrowind-mcp.util.inventory")
 
 --- Memory module for the current player's live inventory collection.
 ---@class MCP.Resources.Memory.Inventory: MCP.Resources.MemoryModule
@@ -452,7 +453,7 @@ end
 --- Capture the serialized item definition used by an inventory entry.
 ---@param item tes3alchemy|tes3apparatus|tes3armor|tes3book|tes3clothing|tes3ingredient|tes3item|tes3light|tes3lockpick|tes3misc|tes3probe|tes3repairTool|tes3weapon
 ---@return MCP.AnyMap
-local function SerializeItem(item)
+function this.SerializeItem(item)
     return this.tes3item(item)
 end
 
@@ -461,7 +462,7 @@ end
 ---@param itemData tes3itemData?
 ---@param item tes3alchemy|tes3apparatus|tes3armor|tes3book|tes3clothing|tes3ingredient|tes3item|tes3light|tes3lockpick|tes3misc|tes3probe|tes3repairTool|tes3weapon
 ---@return MCP.AnyMap?
-local function SerializeItemData(itemData, item)
+function this.SerializeItemData(itemData, item)
     if not itemData then
         return nil
     end
@@ -535,34 +536,14 @@ end
 --- Read and serialize the complete current player inventory for a live document build.
 ---@return MCP.AnyMap
 function this:ReadInventoryData()
-    local items = jsonrpc.array()
-    local gold = 0
     if tes3.onMainMenu() or not tes3.mobilePlayer or not tes3.mobilePlayer.inventory then
         self.logger:debug("Memory inventory live read skipped: reason=no_player")
-        return jsonrpc.object({
-            gold = gold,
-            item_count = table.size(items),
-            items = items,
-        })
+        return inventoryutil.ReadInventory(nil, this.SerializeItem, this.SerializeItemData)
     end
 
-    for item, count, itemData in iter.ForEachInventory(tes3.mobilePlayer.inventory) do
-        if IsGoldItem(item) then
-            gold = gold + count
-        else
-            table.insert(items, jsonrpc.object({
-                item = SerializeItem(item),
-                itemData = SerializeItemData(itemData, item),
-                count = count,
-            }))
-        end
-    end
-    self.logger:debug("Memory inventory live read: gold=%d stacks=%d", gold, table.size(items))
-    return jsonrpc.object({
-        gold = gold,
-        item_count = table.size(items),
-        items = items,
-    })
+    local data = inventoryutil.ReadInventory(tes3.mobilePlayer.inventory, this.SerializeItem, this.SerializeItemData)
+    self.logger:debug("Memory inventory live read: gold=%d stacks=%d", data.gold, data.item_count)
+    return data
 end
 
 --- Publish one dirty notification for a burst of inventory mutations.

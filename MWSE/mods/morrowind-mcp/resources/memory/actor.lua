@@ -2,6 +2,7 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
 local actorDialogue = require("morrowind-mcp.resources.memory.actor_dialogue")
+local actorInventory = require("morrowind-mcp.resources.memory.actor_inventory")
 local iter = require("morrowind-mcp.tes3.iterator")
 
 -- event:
@@ -18,6 +19,13 @@ local iter = require("morrowind-mcp.tes3.iterator")
 ---@field addSoundCallback fun(e: addSoundEventData)?
 ---@field addTempSoundCallback fun(e: addTempSoundEventData)?
 ---@field dialogActivatedCallback fun(e: uiActivatedEventData)?
+---@field contentsActivatedCallback fun(e: uiActivatedEventData)?
+---@field barterActivatedCallback fun(e: uiActivatedEventData)?
+---@field containerClosedCallback fun(e: containerClosedEventData)?
+---@field barterOfferCallback fun(e: barterOfferEventData)?
+---@field pickpocketCallback fun(e: pickpocketEventData)?
+---@field filterBarterMenuCallback fun(e: filterBarterMenuEventData)?
+---@field barterFilterCounts table<string, integer>?
 ---@field infoResponseCallback fun(e: infoResponseEventData)?
 ---@field infoGetTextCallback fun(e: infoGetTextEventData)?
 local this = {}
@@ -65,6 +73,8 @@ local observationSource = {
     combatStarted = "combat_started",
     voiceoverSound = "voiceover_sound",
     menuDialog = "menu_dialog",
+    inventoryViewed = "inventory_viewed",
+    barterViewed = "barter_viewed",
     infoResponse = "info_response",
     infoGetText = "info_get_text",
 }
@@ -78,6 +88,8 @@ local sourceDescriptions = {
     [observationSource.combatStarted] = "Entered combat with the player.",
     [observationSource.voiceoverSound] = "Heard this actor's voice.",
     [observationSource.menuDialog] = "Opened dialogue with this actor.",
+    [observationSource.inventoryViewed] = "Viewed this actor's inventory.",
+    [observationSource.barterViewed] = "Viewed this merchant's barter inventory.",
     [observationSource.infoResponse] = "Dialogue response identified this actor.",
     [observationSource.infoGetText] = "Dialogue text identified this actor.",
 }
@@ -396,6 +408,9 @@ local function InteractionStateForSource(source)
     if source == observationSource.activate then
         return interactionState.activated
     end
+    if source == observationSource.inventoryViewed or source == observationSource.barterViewed then
+        return interactionState.activated
+    end
     if source == observationSource.combatStarted then
         return interactionState.combat
     end
@@ -477,7 +492,7 @@ local function UpdateInteractionFacts(data, source)
     data.interaction.observed = data.interaction.observed or source == observationSource.activeCells
     if source == observationSource.activationTargetChanged then
         data.interaction.targeted = true
-    elseif source == observationSource.activate then
+    elseif source == observationSource.activate or source == observationSource.inventoryViewed or source == observationSource.barterViewed then
         data.interaction.activated = true
     elseif source == observationSource.combatStarted then
         data.interaction.combat = true
@@ -951,6 +966,176 @@ function this:OnMenuDialogActivated(e)
     end
 end
 
+--- Resolve the reference stored by the vanilla MenuContents UI without relying on the prior activation target.
+---@param element tes3uiElement?
+---@return tes3reference?
+local function ContentsMenuReference(element)
+    if not element then
+        return nil
+    end
+    local ok, reference = pcall(function()
+        return element:getPropertyObject("MenuContents_ObjectRefr", "tes3reference")
+    end)
+    if ok then
+        return reference --[[@as tes3reference?]]
+    end
+    return nil
+end
+
+--- Observe a reference and return its dynamic Actor Memory entry when it is an actor.
+---@param reference tes3reference?
+---@param source MCP.MemoryActorObservationSource
+---@return MCP.MemoryObservedActor?
+function this:ObserveInventoryActor(reference, source)
+    if not IsActorReference(reference) then
+        return nil
+    end
+    self:ObserveReference(reference, source)
+    local actorId = FindObservedActorId(self.observedActors, ActorReferenceId(reference))
+    return actorId and self.observedActors[actorId] or nil
+end
+
+--- Capture one actor's actual inventory and notify the actor collection after a successful snapshot.
+---@param reference tes3reference?
+---@param eventName string
+---@param description string
+function this:CaptureActualInventory(reference, eventName, description)
+    local observedActor = self:ObserveInventoryActor(reference, observationSource.inventoryViewed)
+    if not observedActor or not actorInventory.CaptureActual(self, observedActor, reference, eventName, description) then
+        return
+    end
+    document.MarkDirty(self.indexEntry)
+    self:MarkDirty()
+    self.logger:debug("Memory actor inventory captured: actor_id=%s event=%s", observedActor.id, eventName)
+end
+
+--- Capture one merchant's trade-eligible inventory through the public item-record eligibility API.
+---@param reference tes3reference?
+---@param eventName string
+---@param description string
+function this:CaptureBarterInventory(reference, eventName, description)
+    local observedActor = self:ObserveInventoryActor(reference, observationSource.barterViewed)
+    if not observedActor or not actorInventory.CaptureBarter(self, observedActor, reference, eventName, description) then
+        return
+    end
+    document.MarkDirty(self.indexEntry)
+    self:MarkDirty()
+    self.logger:debug("Memory actor barter inventory captured: actor_id=%s event=%s", observedActor.id, eventName)
+end
+
+--- Record vanilla barter filter candidates for development-time comparison only.
+--- This callback intentionally never changes e.filter or contributes snapshot data.
+---@param e filterBarterMenuEventData
+function this:OnFilterBarterMenu(e)
+    if not e or not e.item or not e.item.id then
+        return
+    end
+    self.barterFilterCounts = self.barterFilterCounts or {}
+    local itemId = tostring(e.item.id)
+    self.barterFilterCounts[itemId] = (self.barterFilterCounts[itemId] or 0) + (e.tile and e.tile.count or 0)
+end
+
+--- Return item-id counts from the API-derived barter snapshot for diagnostic comparison.
+---@param observedActor MCP.MemoryObservedActor?
+---@return table<string, integer>
+local function BarterSnapshotCounts(observedActor)
+    local counts = {}
+    local items = observedActor and observedActor.barter_data and observedActor.barter_data.items or {}
+    for _, stack in ipairs(items) do
+        local itemId = stack.item and stack.item.id
+        if itemId then
+            counts[itemId] = (counts[itemId] or 0) + (stack.count or 0)
+        end
+    end
+    return counts
+end
+
+--- Log a compact discrepancy when vanilla filter callbacks disagree with the public eligibility API.
+---@param reference tes3reference?
+function this:LogBarterFilterComparison(reference)
+    local observedActor = reference and self:ObserveInventoryActor(reference, observationSource.barterViewed) or nil
+    local expectedCounts = BarterSnapshotCounts(observedActor)
+    local observedCounts = self.barterFilterCounts or {}
+    local differenceCount = 0
+    for itemId, observedCount in pairs(observedCounts) do
+        if expectedCounts[itemId] ~= observedCount then
+            differenceCount = differenceCount + 1
+        end
+        expectedCounts[itemId] = nil
+    end
+    for _ in pairs(expectedCounts) do
+        differenceCount = differenceCount + 1
+    end
+    if differenceCount > 0 then
+        self.logger:debug("Memory actor barter filter comparison mismatch: differences=%d", differenceCount)
+    else
+        self.logger:debug("Memory actor barter filter comparison matched public eligibility API")
+    end
+    self.barterFilterCounts = nil
+end
+
+--- Capture an actor inventory only after the populated contents menu is visible to the player.
+---@param e uiActivatedEventData
+function this:OnMenuContentsActivated(e)
+    if not e or not e.element then
+        return
+    end
+    self:CaptureActualInventory(
+        ContentsMenuReference(e.element),
+        "uiActivated:MenuContents",
+        "Actor inventory observed in the visible contents menu."
+    )
+end
+
+--- Capture a merchant's item-record trade-eligible inventory when the populated barter menu becomes visible.
+---@param e uiActivatedEventData
+function this:OnMenuBarterActivated(e)
+    if not e or not e.element then
+        return
+    end
+    local serviceActor = tes3ui.getServiceActor()
+    self:CaptureBarterInventory(
+        ServiceActorReference(serviceActor),
+        "uiActivated:MenuBarter",
+        "Merchant barter inventory observed in the visible barter menu."
+    )
+    self:LogBarterFilterComparison(ServiceActorReference(serviceActor))
+end
+
+--- Refresh an actor's actual snapshot after the player closes its contents menu and transfers are complete.
+---@param e containerClosedEventData
+function this:OnContainerClosed(e)
+    self:CaptureActualInventory(
+        e and e.reference,
+        "containerClosed",
+        "Actor inventory refreshed after the contents menu closed."
+    )
+end
+
+--- Refresh an actor's actual snapshot after a pickpocket contents window closes.
+---@param e pickpocketEventData
+function this:OnPickpocket(e)
+    if not e or e.item ~= nil then
+        return
+    end
+    self:CaptureActualInventory(
+        e.reference,
+        "pickpocket",
+        "Actor inventory refreshed after the pickpocket window closed."
+    )
+end
+
+--- Refresh merchant actual and trade-eligible inventory snapshots after an accepted barter transfer.
+---@param e barterOfferEventData
+function this:OnBarterOffer(e)
+    if not e or e.success ~= true then
+        return
+    end
+    local reference = ServiceActorReference(e.mobile)
+    self:CaptureActualInventory(reference, "barterOffer", "Merchant actual inventory refreshed after an accepted barter offer.")
+    self:CaptureBarterInventory(reference, "barterOffer", "Merchant barter inventory refreshed after an accepted barter offer.")
+end
+
 --- Record confirmed dialogue responses with actor references in actor-local dialogue memory.
 ---@param e infoResponseEventData
 function this:OnInfoResponse(e)
@@ -1095,6 +1280,54 @@ function this:RegisterEvent()
         self.logger:debug("Memory actor MenuDialog handler registered")
     end
 
+    if not self.contentsActivatedCallback then
+        self.contentsActivatedCallback = function(e)
+            self:OnMenuContentsActivated(e)
+        end
+        event.register(tes3.event.uiActivated, self.contentsActivatedCallback, { filter = "MenuContents" })
+        self.logger:debug("Memory actor MenuContents handler registered")
+    end
+
+    if not self.barterActivatedCallback then
+        self.barterActivatedCallback = function(e)
+            self:OnMenuBarterActivated(e)
+        end
+        event.register(tes3.event.uiActivated, self.barterActivatedCallback, { filter = "MenuBarter" })
+        self.logger:debug("Memory actor MenuBarter handler registered")
+    end
+
+    if not self.containerClosedCallback then
+        self.containerClosedCallback = function(e)
+            self:OnContainerClosed(e)
+        end
+        event.register(tes3.event.containerClosed, self.containerClosedCallback)
+        self.logger:debug("Memory actor containerClosed handler registered")
+    end
+
+    if not self.barterOfferCallback then
+        self.barterOfferCallback = function(e)
+            self:OnBarterOffer(e)
+        end
+        event.register(tes3.event.barterOffer, self.barterOfferCallback)
+        self.logger:debug("Memory actor barterOffer handler registered")
+    end
+
+    if not self.pickpocketCallback then
+        self.pickpocketCallback = function(e)
+            self:OnPickpocket(e)
+        end
+        event.register(tes3.event.pickpocket, self.pickpocketCallback)
+        self.logger:debug("Memory actor pickpocket handler registered")
+    end
+
+    if not self.filterBarterMenuCallback then
+        self.filterBarterMenuCallback = function(e)
+            self:OnFilterBarterMenu(e)
+        end
+        event.register(tes3.event.filterBarterMenu, self.filterBarterMenuCallback)
+        self.logger:debug("Memory actor filterBarterMenu comparison handler registered")
+    end
+
     if not self.infoResponseCallback then
         self.infoResponseCallback = function(e)
             self:OnInfoResponse(e)
@@ -1114,6 +1347,37 @@ end
 
 --- Unregister actor-specific target observation and base loaded refreshes.
 function this:UnregisterEvent()
+    if self.filterBarterMenuCallback then
+        event.unregister(tes3.event.filterBarterMenu, self.filterBarterMenuCallback)
+        self.filterBarterMenuCallback = nil
+        self.barterFilterCounts = nil
+        self.logger:debug("Memory actor filterBarterMenu comparison handler unregistered")
+    end
+    if self.pickpocketCallback then
+        event.unregister(tes3.event.pickpocket, self.pickpocketCallback)
+        self.pickpocketCallback = nil
+        self.logger:debug("Memory actor pickpocket handler unregistered")
+    end
+    if self.barterOfferCallback then
+        event.unregister(tes3.event.barterOffer, self.barterOfferCallback)
+        self.barterOfferCallback = nil
+        self.logger:debug("Memory actor barterOffer handler unregistered")
+    end
+    if self.containerClosedCallback then
+        event.unregister(tes3.event.containerClosed, self.containerClosedCallback)
+        self.containerClosedCallback = nil
+        self.logger:debug("Memory actor containerClosed handler unregistered")
+    end
+    if self.barterActivatedCallback then
+        event.unregister(tes3.event.uiActivated, self.barterActivatedCallback)
+        self.barterActivatedCallback = nil
+        self.logger:debug("Memory actor MenuBarter handler unregistered")
+    end
+    if self.contentsActivatedCallback then
+        event.unregister(tes3.event.uiActivated, self.contentsActivatedCallback)
+        self.contentsActivatedCallback = nil
+        self.logger:debug("Memory actor MenuContents handler unregistered")
+    end
     if self.infoGetTextCallback then
         event.unregister(tes3.event.infoGetText, self.infoGetTextCallback)
         self.infoGetTextCallback = nil
@@ -1172,7 +1436,11 @@ function this:GetLinksForParent(parentUri)
     end
     for _, observedActor in pairs(self.observedActors or {}) do
         if observedActor.descriptor and parentUri == observedActor.descriptor.uri then
-            return actorDialogue.BuildLinks(observedActor)
+            local links = actorDialogue.BuildLinks(observedActor)
+            for _, link in ipairs(actorInventory.BuildLinks(observedActor)) do
+                table.insert(links, link)
+            end
+            return links
         end
     end
     return jsonrpc.array()
@@ -1237,7 +1505,7 @@ function this:BuildActorDocument(actorId)
         {
             subject = observedActor.subject,
             scope = self.manager:GetScope(),
-            links = actorDialogue.BuildLinks(observedActor),
+            links = self:GetLinksForParent(observedActor.descriptor.uri),
             source = document.Source(document.sourceKind.liveState, nil, nil, observedActor.source_description),
         }
     )

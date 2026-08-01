@@ -100,6 +100,8 @@ local dataType = {
     actorIndex = "actor_index",
     npcSummary = "npc_summary",
     creatureSummary = "creature_summary",
+    actorInventoryItems = "actor_inventory_items",
+    actorBarterItems = "actor_barter_items",
     actorDialogueNotes = "actor_dialogue_notes",
     unattributedDialogueNotes = "unattributed_dialogue_notes",
     -- Expected future examples: inventory_items, dialogue_topics, container_items, reference_location.
@@ -116,6 +118,7 @@ local linkRel = {
     quests = "quests",
     actors = "actors",
     actor = "actor",
+    barter = "barter",
     dialogue = "dialogue",
     unattributed = "unattributed",
     -- Expected future examples: inventory, dialogue, container, reference, location.
