@@ -581,14 +581,12 @@ try {
         @("--method", "tools/call", "--tool-name", "mw-menu-action", "--tool-arg", "menu_name=Pete_ContinueButton", "--tool-arg", "action=mouseClick"), # using continue mod
         @("--method", "tools/list"), # expect in game.
         @("--method", "prompts/list"),
-        @("--method", "tools/call", "--tool-name", "mw-activator-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-actor-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-fetch"),
         # Toggle menu mode around player input to exercise menu open and close through the public tool.
         @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=menuMode", "--tool-arg", "how=tap"),
         @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=menuMode", "--tool-arg", "how=tap"),
-        @("--method", "tools/call", "--tool-name", "mw-static-fetch"),
+        @("--method", "tools/call", "--tool-name", "mw-reference-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
         @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=activate", "--tool-arg", "how=tap"),

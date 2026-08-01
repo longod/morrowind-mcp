@@ -360,12 +360,6 @@ local function RegisterTestEvents()
     end
     event.register(tes3.event.bookGetText, bookGetTextCallback)
 
-    ---@param e charGenFinishedEventData
-    local function charGenFinishedCallback(e)
-        logger:trace("charGenFinished %s", FormatEventData(e))
-    end
-    event.register(tes3.event.charGenFinished, charGenFinishedCallback)
-
     ---@param e combatStartedEventData
     local function combatStartedCallback(e)
         logger:trace("combatStarted %s", FormatEventData(e))
@@ -445,7 +439,7 @@ local function RegisterTestEvents()
     local function itemTileUpdatedCallback(e)
         logger:trace("itemTileUpdated %s", FormatEventData(e))
     end
-    event.register(tes3.event.itemTileUpdated, itemTileUpdatedCallback)
+    -- event.register(tes3.event.itemTileUpdated, itemTileUpdatedCallback)
 
     ---@param e pickpocketEventData
     local function pickpocketCallback(e)
@@ -481,7 +475,19 @@ local function RegisterTestEvents()
     local function uiObjectTooltipCallback(e)
         logger:trace("uiObjectTooltip %s", FormatEventData(e))
     end
-    event.register(tes3.event.uiObjectTooltip, uiObjectTooltipCallback)
+    -- event.register(tes3.event.uiObjectTooltip, uiObjectTooltipCallback)
+
+    ---@param e uiSpellTooltipEventData
+    local function uiSpellTooltipCallback(e)
+        logger:trace("uiSpellTooltip %s", FormatEventData(e))
+    end
+    -- event.register(tes3.event.uiSpellTooltip, uiSpellTooltipCallback)
+
+    ---@param e uiSkillTooltipEventData
+    local function uiSkillTooltipCallback(e)
+        logger:trace("uiSkillTooltip %s", FormatEventData(e))
+    end
+    -- event.register(tes3.event.uiSkillTooltip, uiSkillTooltipCallback)
 
     ---@param e weatherTransitionStartedEventData
     local function weatherTransitionStartedCallback(e)
@@ -499,12 +505,12 @@ local function RegisterTestEvents()
     local function menuEnterCallback(e)
         logger:trace("menuEnter %s", FormatEventData(e))
     end
-    event.register(tes3.event.menuEnter, menuEnterCallback)
+    -- event.register(tes3.event.menuEnter, menuEnterCallback)
     --- @param e menuExitEventData
     local function menuExitCallback(e)
         logger:trace("menuExit %s", FormatEventData(e))
     end
-    event.register(tes3.event.menuExit, menuExitCallback)
+    -- event.register(tes3.event.menuExit, menuExitCallback)
 
     --- @param e containerClosedEventData
     local function containerClosedCallback(e)
@@ -643,7 +649,11 @@ end
 -- missing annotations
 
 ---@class tes3scriptVariables
+
 ---@class tes3keyframeDefinition
+
 ---@class tes3mapController
+
 ---@class HINSTANCE
+
 ---@class HWND

@@ -7,6 +7,10 @@ local settings = require("morrowind-mcp.settings")
 local dialogue = require("morrowind-mcp.util.dialogue")
 local datetime = require("morrowind-mcp.util.datetime")
 
+-- TODO use tes3.getCumulativeDaysForMonth
+-- TODO use tes3.getDaysInMonth
+
+
 -- Reconstruct journal dates against the canonical game start used by Morrowind's in-game calendar.
 local tamrielMonthLengths = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
 local tamrielYearDays = 365

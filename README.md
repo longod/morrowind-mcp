@@ -80,7 +80,7 @@ Requires `Node.js`
 
 https://modelcontextprotocol.io/docs/develop/connect-local-servers
 
-### Antigravity CLI and Antigravity IDE
+### Antigravity
 
 **.agents/mcp_config.json** (local)
 **~/.gemini/config/mcp_config.json** (global)

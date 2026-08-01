@@ -575,8 +575,21 @@ function this.tes3worldController(i, o)
     return o
 end
 
+---@param i tes3travelDestinationNode?
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+function this.tes3travelDestinationNode(i, o)
+    if not i then
+        return nil
+    end
+    o = o or jsonrpc.object()
 
+    o.cell = this.tes3cell(i.cell)
+    o.marker = i.marker
 
+    local _ = ValidateType(o)
+    return o
+end
 
 
 
@@ -2190,16 +2203,22 @@ function this.tes3reference(i, o)
     o.cell = this.tes3cell(i.cell)
     -- o.context = i.context
     -- o.data = i.data
-    -- o.destination = i.destination -- TODO
+    o.destination = this.tes3travelDestinationNode(i.destination)
     o.facing = i.facing
     o.forwardDirection = i.forwardDirection -- It perhaps be easier to understand than the facing angle.
     if i.hasNoCollision then
         o.hasNoCollision = i.hasNoCollision
     end
     o.isDead = i.isDead
-    o.isEmpty = i.isEmpty
-    o.isLeveledSpawn = i.isLeveledSpawn
-    o.isRespawn = i.isRespawn
+    if i.isEmpty then
+        o.isEmpty = i.isEmpty
+    end
+    if i.isLeveledSpawn then
+        o.isLeveledSpawn = i.isLeveledSpawn
+    end
+    if i.isRespawn then
+        o.isRespawn = i.isRespawn
+    end
     -- o.itemData = i.itemData -- TODO
     o.leveledBaseReference = this.tes3reference(i.leveledBaseReference)
     -- o.light = i.light

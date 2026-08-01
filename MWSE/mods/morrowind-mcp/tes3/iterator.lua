@@ -1,7 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
 local this = {}
---- TODO move to other helper
+
 ---@param list tes3referenceList
 ---@return fun(): tes3reference
 function this.ForEachReferenceList(list)
@@ -64,25 +64,18 @@ function this.ForEachInventory(inventory)
     return coroutine.wrap(iterator)
 end
 
--- TODO
--- function this.ForEachReferenceListObject(list, func)
--- end
-
--- function this.ForEachInventoryObject(inventory, func)
--- end
-
----@param i any[]
----@param func (fun(i: any, o : MCP.AnyMap?): MCP.AnyMap?)|(fun(i: any): MCP.AnyMap?)
+---@param i tes3referenceList
+---@param func (fun(i: tes3reference, o : MCP.AnyMap?): MCP.AnyMap?)|(fun(i: tes3reference): MCP.AnyMap?)
 ---@param o MCP.AnyMap[]|nil
 ---@return MCP.AnyMap[]|nil
-function this.ForEachObject(i, func, o)
+function this.ForEachReferenceObject(i, func, o)
     if not i then
         return nil
     end
     o = o or jsonrpc.array(table.size(i))
-    for _, value in ipairs(i) do
-        if func then
-            local c = func(value)
+    for ref in this.ForEachReferenceList(i) do
+        if ref:isValid() then
+            local c = func(ref)
             if c then
                 table.insert(o, c)
             end
@@ -94,5 +87,48 @@ function this.ForEachObject(i, func, o)
     return o
 end
 
+---@param inventory tes3inventory|tes3itemStack[]
+---@param func (fun(item: tes3item, count: integer, itemData: tes3itemData?, o : MCP.AnyMap?): MCP.AnyMap?)|(fun(i: any): MCP.AnyMap?)
+---@param o MCP.AnyMap[]|nil
+---@return MCP.AnyMap[]|nil
+function this.ForEachItem(inventory, func, o)
+    if not inventory then
+        return nil
+    end
+    o = o or jsonrpc.array()
+    for item, count, itemData in this.ForEachInventory(inventory) do
+        if item:isValid() then
+            local c = func(item, count, itemData)
+            if c then
+                table.insert(o, c)
+            end
+        end
+    end
+    if table.size(o) == 0 then
+        return nil
+    end
+    return o
+end
+
+---@param i any[]
+---@param func (fun(i: any, o : MCP.AnyMap?): MCP.AnyMap?)|(fun(i: any): MCP.AnyMap?)
+---@param o MCP.AnyMap[]|nil
+---@return MCP.AnyMap[]|nil
+function this.ForEachObject(i, func, o)
+    if not i then
+        return nil
+    end
+    o = o or jsonrpc.array(table.size(i))
+    for _, value in ipairs(i) do
+        local c = func(value)
+        if c then
+            table.insert(o, c)
+        end
+    end
+    if table.size(o) == 0 then
+        return nil
+    end
+    return o
+end
 
 return this
