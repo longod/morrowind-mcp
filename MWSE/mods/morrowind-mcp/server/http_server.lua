@@ -10,6 +10,7 @@ local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.manager")
 local target = require("morrowind-mcp.util.target")
+local pathfinding = require("morrowind-mcp.util.pathfinding")
 
 -- TODO split implementations, such as session manager?
 
@@ -129,6 +130,7 @@ end
 ---@field nextSessionIndex integer
 ---@field lastPollingPromptsInterval number
 ---@field lastPollingToolsInterval number
+---@field pathfinding MCP.Pathfinding
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -144,6 +146,7 @@ function this.new(params)
     instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}
     instance.resource = resourceManager.new()
+    instance.pathfinding = pathfinding.new()
     instance.sessions = {}
     instance.nextSessionIndex = 0
     instance.lastPollingPromptsInterval = 0
@@ -1640,6 +1643,7 @@ function this:Start()
     end
 
     target:RegisterEvent()
+    self.pathfinding:RegisterEventHandlers()
 
     self.server = socket.bind(self.hostname, self.port)
     if not self.server then
@@ -1694,6 +1698,7 @@ function this:Shutdown()
     self.resource:Release()
     self.resource = nil
 
+    self.pathfinding:UnregisterEventHandlers()
     target:UnregisterEvent()
 
     self.server:close()
