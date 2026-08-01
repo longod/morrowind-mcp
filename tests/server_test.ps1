@@ -331,7 +331,10 @@ function New-ServerTestCase {
         [object]$Arguments,
         [scriptblock]$When,
         [scriptblock]$Validate,
-        [scriptblock]$Capture
+        [scriptblock]$Capture,
+        [scriptblock]$RetryUntil,
+        [int]$RetryAttempts = 1,
+        [int]$RetryIntervalSeconds = 0
     )
 
     return [pscustomobject]@{
@@ -340,6 +343,9 @@ function New-ServerTestCase {
         When = $When
         Validate = $Validate
         Capture = $Capture
+        RetryUntil = $RetryUntil
+        RetryAttempts = $RetryAttempts
+        RetryIntervalSeconds = $RetryIntervalSeconds
     }
 }
 
@@ -423,21 +429,30 @@ function Invoke-ServerTestCase {
 
     Write-Host "[CASE] $($TestCase.Name)" -ForegroundColor Cyan
     if ($TestCase.When -and -not (& $TestCase.When $Context)) {
-        Write-Host "[SKIPPED] $($TestCase.Name): unavailable in current server state." -ForegroundColor DarkCyan
+        Write-Host "[SKIPPED] $($TestCase.Name): unavailable in current server state." -ForegroundColor DarkYellow
         return 0
     }
-    $arguments = if ($TestCase.Arguments -is [scriptblock]) { & $TestCase.Arguments $Context } else { $TestCase.Arguments }
-    $response = Invoke-MCPInspector $arguments
     try {
-        Assert-InspectorSuccess -Response $response
-        if ($TestCase.Validate) {
-            & $TestCase.Validate $response.Result $Context
+        for ($attempt = 1; $attempt -le $TestCase.RetryAttempts; $attempt++) {
+            $arguments = if ($TestCase.Arguments -is [scriptblock]) { & $TestCase.Arguments $Context } else { $TestCase.Arguments }
+            $response = Invoke-MCPInspector $arguments
+            Assert-InspectorSuccess -Response $response
+            if ($TestCase.Validate) {
+                & $TestCase.Validate $response.Result $Context
+            }
+            if ($TestCase.Capture) {
+                & $TestCase.Capture $response.Result $Context
+            }
+            if (-not $TestCase.RetryUntil -or (& $TestCase.RetryUntil $response.Result $Context)) {
+                Write-Host "[PASSED] $($TestCase.Name)" -ForegroundColor Green
+                return 0
+            }
+            if ($attempt -lt $TestCase.RetryAttempts) {
+                Write-Host "[WAIT] $($TestCase.Name): server state is still loading ($attempt/$($TestCase.RetryAttempts))." -ForegroundColor DarkCyan
+                Start-Sleep -Seconds $TestCase.RetryIntervalSeconds
+            }
         }
-        if ($TestCase.Capture) {
-            & $TestCase.Capture $response.Result $Context
-        }
-        Write-Host "[PASSED] $($TestCase.Name)" -ForegroundColor Green
-        return 0
+        throw "Server state did not become ready after $($TestCase.RetryAttempts) attempts."
     }
     catch {
         Write-Host "[FAILED] $($TestCase.Name): $($_.Exception.Message)" -ForegroundColor Red
@@ -544,6 +559,8 @@ try {
             param($result)
             Assert-ToolSuccess $result
         }),
+        (New-ServerTestCase -Name "tools list after continue" -Arguments @("--method", "tools/list") -Validate { param($result) if ($null -eq $result.tools) { throw "Missing tools." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) } -RetryUntil { param($result, $context) $context.ToolNames -contains "mw-player-fetch" } -RetryAttempts $MaxTry -RetryIntervalSeconds $IntervalSeconds),
+        (New-ServerTestCase -Name "prompts list after continue" -Arguments @("--method", "prompts/list") -Validate { param($result) if ($null -eq $result.prompts) { throw "Missing prompts." } } -Capture { param($result, $context) $context.PromptNames = @($result.prompts | ForEach-Object { $_.name }) }),
         (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
@@ -567,9 +584,10 @@ try {
             $context.ScreenshotUri = $link.uri
             $context.ScreenshotMimeType = $link.mimeType
         }),
-        (New-ServerTestCase -Name "resources list with screenshot" -Arguments @("--method", "resources/list") -When { param($context) -not [string]::IsNullOrWhiteSpace($context.ScreenshotUri) } -Validate { param($result, $context) if (@($result.resources | Where-Object { $_.uri -eq $context.ScreenshotUri -and $_.mimeType -eq $context.ScreenshotMimeType }).Count -ne 1) { throw "Generated screenshot resource is missing." } }),
+        (New-ServerTestCase -Name "resources list with screenshot" -Arguments @("--method", "resources/list") -When { param($context) -not [string]::IsNullOrWhiteSpace($context.ScreenshotUri) } -Validate { param($result, $context) if (@($result.resources | Where-Object { $_.uri -eq $context.ScreenshotUri -and $_.mimeType -eq $context.ScreenshotMimeType }).Count -ne 1) { throw "Generated screenshot resource is missing." } } -Capture { param($result, $context) $context.ResourceUris = @($result.resources | ForEach-Object { $_.uri }) }),
         (New-ResourceReadTestCase -Name "memory root read" -Uri "morrowind://memory/index.json" -Validate { param($result) $content = @($result.contents | Where-Object { $_.uri -eq "morrowind://memory/index.json" } | Select-Object -First 1)[0]; if ($null -eq $content -or $content.mimeType -ne "application/json" -or [string]::IsNullOrWhiteSpace($content.text)) { throw "Memory root is not JSON text." }; $document = $content.text | ConvertFrom-Json -ErrorAction Stop; foreach ($field in @("schema_version", "type", "data_type", "title", "source", "data")) { if ($null -eq $document.PSObject.Properties[$field]) { throw "Memory root is missing $field." } } }),
-        (New-ResourceReadTestCase -Name "memory player index read" -Uri "morrowind://memory/player/index.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/player/index.json" } -Validate { param($result) if (@($result.contents | Where-Object { $_.uri -eq "morrowind://memory/player/index.json" -and $_.mimeType -eq "application/json" -and $_.text }).Count -ne 1) { throw "Player memory index is not JSON text." } }),
+        (New-ResourceReadTestCase -Name "memory player index read" -Uri "morrowind://memory/player/index.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/player/index.json" } -Validate { param($result) $content = @($result.contents | Where-Object { $_.uri -eq "morrowind://memory/player/index.json" -and $_.mimeType -eq "application/json" -and $_.text } | Select-Object -First 1)[0]; if ($null -eq $content) { throw "Player memory index is not JSON text." }; $document = $content.text | ConvertFrom-Json -ErrorAction Stop; if (@($document.links | Where-Object { $_.rel -eq "equipment" -and $_.uri -eq "morrowind://memory/player/equipment.json" }).Count -ne 1) { throw "Player memory index is missing the equipment link." } }),
+        (New-ResourceReadTestCase -Name "memory player equipment read" -Uri "morrowind://memory/player/equipment.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/player/equipment.json" } -Validate { param($result) $content = @($result.contents | Where-Object { $_.uri -eq "morrowind://memory/player/equipment.json" -and $_.mimeType -eq "application/json" -and $_.text } | Select-Object -First 1)[0]; if ($null -eq $content) { throw "Player equipment memory is not JSON text." }; $document = $content.text | ConvertFrom-Json -ErrorAction Stop; if ($document.type -ne "memory.collection" -or $document.data_type -ne "equipment_items") { throw "Player equipment memory has an invalid document type." }; if ($document.subject.id -ne "player") { throw "Player equipment memory is missing the player subject." }; foreach ($field in @("available", "item_count", "items")) { if ($null -eq $document.data.PSObject.Properties[$field]) { throw "Player equipment memory is missing data.$field." } }; if ($document.data.item_count -ne @($document.data.items).Count) { throw "Player equipment item_count does not match items." } }),
         (New-ResourceReadTestCase -Name "memory actor index read" -Uri "morrowind://memory/actors/index.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/actors/index.json" } -Validate { param($result) if (@($result.contents | Where-Object { $_.uri -eq "morrowind://memory/actors/index.json" -and $_.mimeType -eq "application/json" -and $_.text }).Count -ne 1) { throw "Actor memory index is not JSON text." } }),
         (New-ResourceReadTestCase -Name "screenshot resource read" -Uri { param($context) $context.ScreenshotUri } -When { param($context) -not [string]::IsNullOrWhiteSpace($context.ScreenshotUri) } -Validate { param($result, $context) $content = @($result.contents | Where-Object { $_.uri -eq $context.ScreenshotUri } | Select-Object -First 1)[0]; if ($null -eq $content -or $content.mimeType -ne $context.ScreenshotMimeType -or [string]::IsNullOrWhiteSpace($content.blob) -or $content.blob.Length -lt 4) { throw "Screenshot blob is missing or invalid." }; if ($content.mimeType -eq "image/jpeg" -and -not $content.blob.StartsWith("/9j/")) { throw "Screenshot is not a JPEG blob." } }),
         (New-PromptGetTestCase -Name "prompt loar" -PromptName "mw-loar" -Validate { param($result) if (@($result.messages | Where-Object { $_.content.type -eq "text" -and -not [string]::IsNullOrWhiteSpace($_.content.text) }).Count -eq 0) { throw "Prompt returned no text message." } }),

@@ -1,6 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
+local player = require("morrowind-mcp.resources.memory.player")
 local journal = require("morrowind-mcp.util.journal")
 
 --- Memory module for the current player's journal entries.
@@ -24,7 +25,7 @@ this.link = document.Link(document.linkRel.journal, descriptor.uri, descriptor.t
 ---@return MCP.Resources.Memory.Journal
 function this.new(params)
     params.publishOnLoaded = true
-    params.parentUri = descriptor.uri
+    params.parentUri = player.uri
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_journal" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Journal

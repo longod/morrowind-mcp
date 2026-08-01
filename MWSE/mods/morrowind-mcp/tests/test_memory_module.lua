@@ -375,6 +375,32 @@ function this.Test()
         unitwind:expect(playerLinks[1].uri).toBe("morrowind://memory/player/child-link.json")
     end)
 
+    testMemoryModule("Built-in player child modules share the player index parent", function()
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local memory = manager.new({ resource = resource })
+        local expectedUris = {
+            ["morrowind://memory/player/inventory.json"] = true,
+            ["morrowind://memory/player/equipment.json"] = true,
+            ["morrowind://memory/player/journal.json"] = true,
+            ["morrowind://memory/player/quests.json"] = true,
+        }
+        local playerUri = "morrowind://memory/player/index.json"
+        local found = 0
+
+        for _, module in ipairs(memory.modules) do
+            local entry = module.entries and module.entries[1]
+            if entry and expectedUris[entry.descriptor.uri] then
+                found = found + 1
+                unitwind:expect(module.parentUri).toBe(playerUri)
+            end
+        end
+
+        unitwind:expect(found).toBe(4)
+    end)
+
     testMemoryModule("Memory visibility changes dirty only related link indexes", function()
         ---@type MCP.IResourceManager
         local resource = {

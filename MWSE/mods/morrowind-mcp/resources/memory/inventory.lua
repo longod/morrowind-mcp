@@ -1,6 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
+local player = require("morrowind-mcp.resources.memory.player")
 local iter = require("morrowind-mcp.tes3.iterator")
 local enumname = require("morrowind-mcp.tes3.enumname")
 local inventoryutil = require("morrowind-mcp.util.inventory")
@@ -521,7 +522,7 @@ end
 ---@return MCP.Resources.Memory.Inventory
 function this.new(params)
     params.publishOnLoaded = true
-    params.parentUri = descriptor.uri
+    params.parentUri = player.uri
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_inventory" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Inventory

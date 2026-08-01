@@ -47,7 +47,7 @@ Read policy values:
 
 Current read policies:
 
-- Root, player, journal, quest, inventory, and actor collection indexes are `live` entries.
+- Root, player, journal, quest, inventory, equipment, and actor collection indexes are `live` entries.
 - Actor entity, actor-local dialogue, actor inventory, actor barter inventory, and unattributed dialogue documents are `snapshot` entries.
 - Snapshot capture timing belongs to the feature module. The generic document helper only stores a completed `MCP.MemoryDocument`; it does not know actor ids, observation events, or feature-specific update boundaries.
 
@@ -155,6 +155,16 @@ Mutation events only invalidate and republish the entry. Repeated events while t
 `menuEnter` remains as an eventual-consistency fallback only when `MenuInventory` is visible. `uiActivated` and `menuExit` are not used because opening or closing a menu does not by itself change inventory state. `containerClosed` and `itemTileUpdated` are intentionally not registered: runtime logs show unrelated container batches and repeated UI tile population. `convertReferenceToItem` fires before transfer, while spell, equipment, leveled-item, and power-recharge events do not reliably change fields represented by this document.
 
 These exclusions apply to the player's live Inventory Memory only. Actor inventory snapshots use different capture boundaries because their meaning is what the player has directly observed.
+
+## Player Equipment Memory
+
+Player equipment is published at `morrowind://memory/player/equipment.json` as a child link of `morrowind://memory/player/index.json`. It is a live `memory.collection` document with `data_type` `equipment_items` and the conceptual Player subject.
+
+The payload contains `available`, `item_count`, and `items`. Each equipment stack contains the same serialized `item` and optional mutable `itemData` fields as Player Inventory Memory. Ammunition uses `tes3.mobilePlayer.readiedAmmoCount`; all other equipped stacks have `count` 1. Spell selection and selected enchantments are not part of this document.
+
+Successful player `equipped` and `unequipped` events invalidate and republish the entry. Events from other actors are ignored. This is intentionally event-driven: `tes3.equip` normally raises equip-related events, but calls that use `bypassEquipEvents = true` and `tes3mobileActor:equip()` may leave an already-read cache stale. Condition, charge, and other mutable item data can also change while an item remains equipped and are not immediately tracked in this initial implementation.
+
+If a future equipment field requires eventual consistency outside those events, add a `simulated` fallback that compares a clean entry's primitive tuple for every published field. Extend that tuple whenever the resource adds a field backed by mutable runtime state; do not compare serialized JSON or use a hash.
 
 ## Actor Memory
 

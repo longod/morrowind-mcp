@@ -2,6 +2,7 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local obj = require("morrowind-mcp.tes3.object")
 local document = require("morrowind-mcp.resources.memory.document")
+local player = require("morrowind-mcp.resources.memory.player")
 
 --- Memory module for quest states relevant to the current player.
 ---@class MCP.Resources.Memory.Quest: MCP.Resources.MemoryModule
@@ -25,7 +26,7 @@ this.link = document.Link(document.linkRel.quests, descriptor.uri, descriptor.ti
 ---@return MCP.Resources.Memory.Quest
 function this.new(params)
     params.publishOnLoaded = true
-    params.parentUri = descriptor.uri
+    params.parentUri = player.uri
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_quest" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Quest

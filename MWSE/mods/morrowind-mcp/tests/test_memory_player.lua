@@ -101,9 +101,10 @@ function this.Test()
     ---@return tes3mobilePlayer
     local function MockReadyPlayer()
         local mobilePlayer = MobilePlayer()
+        local playerActor = mobilePlayer.firstPerson
         local playerReference = {
             isDead = false,
-            object = mobilePlayer.firstPerson,
+            object = playerActor,
         }
         unitwind:mock(tes3, "onMainMenu", function() return false end)
         unitwind:mock(tes3, "player", playerReference)
@@ -116,7 +117,13 @@ function this.Test()
     end
 
     unitwind:test("Player Memory separates finalized identity, progression, and vitals", function()
-        MockReadyPlayer()
+        local mobilePlayer = MockReadyPlayer()
+        mobilePlayer.firstPerson = {
+            name = "First Person Render NPC",
+            female = false,
+            race = { name = "Render Race" },
+            class = { name = "Render Class" },
+        }
         local module = CreateModule()
         local indexDocument = ReadEntry(module.playerEntry)
         local progressionDocument = ReadEntry(module.progressionEntry)
@@ -163,8 +170,8 @@ function this.Test()
     end)
 
     unitwind:test("Player Memory tolerates missing class while identity is otherwise ready", function()
-        local mobilePlayer = MockReadyPlayer()
-        mobilePlayer.firstPerson.class = nil
+        MockReadyPlayer()
+        tes3.player.object.class = nil
         local module = CreateModule()
         local indexDocument = ReadEntry(module.playerEntry)
 

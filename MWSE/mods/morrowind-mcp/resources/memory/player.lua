@@ -28,6 +28,7 @@ local playerDescriptor = document.Descriptor(
     "Player Memory",
     "Memory entity for the current player."
 )
+this.uri = playerDescriptor.uri
 
 local progressionDescriptor = document.Descriptor(
     "memory/player/progression.json",
@@ -172,8 +173,8 @@ end
 function this:BuildPlayerDocument()
     local playerReference = ReadValue(function() return tes3.player end)
     local mobilePlayer = ReadValue(function() return tes3.mobilePlayer end)
-    -- Identity belongs to the NPC object, while tes3.player is its placed reference.
-    local playerObject = ReadValue(function() return mobilePlayer and mobilePlayer.firstPerson end)
+    -- The player reference owns the actor instance; firstPerson is only the rendered NPC.
+    local playerObject = ReadValue(function() return playerReference and playerReference.object end)
     local race = ReadValue(function() return playerObject and playerObject["race"] end)
     local class = ReadValue(function() return playerObject and playerObject["class"] end)
     local subjectType = document.SubjectTypeFromObject(playerReference)
