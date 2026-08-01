@@ -1,7 +1,7 @@
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
-local journal = require("morrowind-mcp.resources.journal")
+local journal = require("morrowind-mcp.util.journal")
 
 --- Memory module for the current player's journal entries.
 ---@class MCP.Resources.Memory.Journal: MCP.Resources.MemoryModule

@@ -6,28 +6,8 @@ local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
 local base64 = require("morrowind-mcp.core.base64")
 local datetime = require("morrowind-mcp.util.datetime")
-
-local journal = require("morrowind-mcp.resources.journal")
-local quest = require("morrowind-mcp.resources.quest")
 local memory = require("morrowind-mcp.resources.memory.manager")
 
---[[
---- I want to idendify same or difference character.
----@class MCP.SaveGameState
----@field playerName string
------@field modifiedTime string
------@field filename string
------@field fileSize number
-
--- IGT useful for loading save game.
-
----@class MCP.ResourceCacheState
----@field save MCP.SaveGameState
----@field lastModifiedInSystemTime number
----@field lastModifiedInGameTime number
----@field lastAccessedInSystemTime number
----@field lastAccessedInGameTime number
---]]
 
 ---@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]
 
@@ -64,8 +44,6 @@ function this.new(params)
     -- fastest in this server. because resource manager reset resource cache state. then any resources update on loaded.
     event.register(tes3.event.loaded, instance.loadedCallback, { priority = 100 })
 
-    -- journal.RegisterEvent(instance)
-    -- quest.RegisterEvent(instance)
     instance.memory = memory.new({ resource = instance })
     instance.memory:RegisterEvent()
     return instance
@@ -76,9 +54,6 @@ function this:Release()
         self.memory:UnregisterEvent()
         self.memory = nil
     end
-
-    -- journal.UnregisterEvent()
-    -- quest.UnregisterEvent()
 
     if self.loadedCallback then
         event.unregister(tes3.event.loaded, self.loadedCallback)

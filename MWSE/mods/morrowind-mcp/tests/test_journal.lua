@@ -13,9 +13,9 @@ function this.Test()
     end
 
     local datetime = require("morrowind-mcp.util.datetime")
-    local journal = require("morrowind-mcp.resources.journal")
+    local journal = require("morrowind-mcp.util.journal")
 
-    unitwind:start("morrowind-mcp.tools.resources.journal")
+    unitwind:start("morrowind-mcp.util.journal")
 
     unitwind:test("BuildMonthIndexByName resolves month order from GMST", function()
         local values = {

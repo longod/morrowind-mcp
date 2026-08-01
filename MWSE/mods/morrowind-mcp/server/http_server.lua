@@ -8,7 +8,7 @@ local toolvalidator = require("morrowind-mcp.core.toolvalidator")
 local promptvalidator = require("morrowind-mcp.core.promptvalidator")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
-local resourceManager = require("morrowind-mcp.resources.manager")
+local resourceManager = require("morrowind-mcp.resources.resource")
 local target = require("morrowind-mcp.util.target")
 local pathfinding = require("morrowind-mcp.util.pathfinding")
 
