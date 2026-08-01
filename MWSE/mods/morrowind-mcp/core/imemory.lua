@@ -145,6 +145,32 @@
 ---@field item_count integer Number of distinct serialized inventory stacks.
 ---@field items MCP.AnyMap[] Serialized player inventory stacks.
 
+--- Stable identity and readiness payload written by the Player Memory index.
+---@class MCP.MemoryPlayerSummaryData
+---@field available boolean Whether a player mobile is available outside the main menu.
+---@field ready boolean Whether character generation has finished and identity fields are final.
+---@field character_generation MCP.AnyMap Current character generation lifecycle state.
+---@field name string? Player name after character generation finishes.
+---@field race string? Player race name after character generation finishes.
+---@field gender string? Player gender after character generation finishes.
+---@field class string? Player class name after character generation finishes.
+---@field birthsign string? Player birthsign name after character generation finishes.
+
+--- Progression payload written by Player Memory.
+---@class MCP.MemoryPlayerProgressionData
+---@field available boolean Whether progression values can be read from the current player mobile.
+---@field level integer? Current player level.
+---@field attributes MCP.AnyMap Attribute statistics keyed by display name.
+---@field skills MCP.AnyMap Skill statistics keyed by display name.
+
+--- Vital state payload written by Player Memory.
+---@class MCP.MemoryPlayerVitalsData
+---@field available boolean Whether vital values can be read from the current player mobile.
+---@field alive boolean? Whether the player reference is alive.
+---@field health MCP.AnyMap? Current health statistic.
+---@field magicka MCP.AnyMap? Current magicka statistic.
+---@field fatigue MCP.AnyMap? Current fatigue statistic.
+
 --- Runtime payload for dialogue text that is intentionally not assigned to an actor.
 ---@class MCP.MemoryUnattributedDialogueData
 ---@field topics string[] Lower-case topics linked from unattributed text.

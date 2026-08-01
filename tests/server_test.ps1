@@ -595,6 +595,8 @@ try {
         @("--method", "resources/list"),
         @("--method", "resources/read", "--uri", "morrowind://memory/index.json"),
         @("--method", "resources/read", "--uri", "morrowind://memory/player/index.json"),
+        @("--method", "resources/read", "--uri", "morrowind://memory/player/progression.json"),
+        @("--method", "resources/read", "--uri", "morrowind://memory/player/vitals.json"),
         @("--method", "resources/read", "--uri", "morrowind://memory/player/journal.json"),
         @("--method", "resources/read", "--uri", "morrowind://memory/player/quests.json"),
         @("--method", "resources/read", "--uri", "morrowind://memory/actors/index.json"),

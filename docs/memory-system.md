@@ -51,6 +51,16 @@ Current read policies:
 - Actor entity, actor-local dialogue, actor inventory, actor barter inventory, and unattributed dialogue documents are `snapshot` entries.
 - Snapshot capture timing belongs to the feature module. The generic document helper only stores a completed `MCP.MemoryDocument`; it does not know actor ids, observation events, or feature-specific update boundaries.
 
+## Player Memory
+
+Player identity is published at `morrowind://memory/player/index.json`. It contains availability and character-generation readiness plus finalized `name`, `race`, `gender`, a structured `class`, and `birthsign`. The class contains its name, specialization, governing attributes, and major/minor skills so user-defined classes remain intelligible. While character generation is incomplete, identity fields are omitted and `ready` is false. The index links to `morrowind://memory/player/progression.json` and `morrowind://memory/player/vitals.json`.
+
+Progression is a live `player_progression` document containing level, the eight named attributes, and the 27 named skills. Each statistic uses the shared `base`, `current`, `normalized` representation; skills additionally expose their class-assigned `type`.
+
+Vitals are a live `player_vitals` document containing `alive`, health, magicka, and fatigue. `damaged`, `damagedHandToHand`, and `death` immediately invalidate player vitals. `levelUp` and `skillRaised` immediately invalidate progression. `charGenFinished` invalidates all Player Memory entries.
+
+The `simulated` event is a player-only fallback for changes without a complete event source, including mod, potion, and magic effects. It compares values only while the relevant live entry is clean. Progression invalidates for any observed value change. Vitals invalidate when `base` changes, when zero or full state changes, or when the published normalized value differs by at least 0.05. The comparison baseline is the last resource build, so repeated small changes accumulate instead of causing one invalidation per tick. Magic-specific events are intentionally not registered yet; they may later request the same re-evaluation paths without changing the resource contract.
+
 Scope kind values:
 
 - `current_loaded_game`: current loaded game or save context.
