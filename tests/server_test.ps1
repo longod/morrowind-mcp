@@ -1,10 +1,13 @@
 param(
-    [switch]$NoForeground
+    [switch]$NoForeground,
+    [switch]$Unpretty
 )
 
 $MaxTry = 10
 $IntervalSeconds = 3
-$ProtocolVersion = "2025-11-25"
+$InspectorPackage = "@modelcontextprotocol/inspector"
+$InspectorMinimumMajorVersion = 2
+$InspectorConnectTimeoutMilliseconds = 15000
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "mwmcp_config.ps1")
@@ -22,6 +25,7 @@ $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $InspectorLogPath = Join-Path $LogsRoot "inspector_$RunTimestamp.log"
 $MwseLogSourcePath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
 $MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
+$InspectorVersion = "unknown"
 
 function Convert-ToFileUri {
     param(
@@ -159,10 +163,22 @@ public static class MorrowindMcpUser32 {
 
 try {
     $null = New-Item -Path $LogsRoot -ItemType Directory -Force
+    $InspectorVersion = (& npm.cmd view $InspectorPackage version 2>&1 | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($InspectorVersion)) {
+        $InspectorVersion = "unavailable"
+    }
+    if ($InspectorVersion -notmatch '^(\d+)\.\d+\.\d+') {
+        throw "Unable to determine Inspector version: $InspectorVersion"
+    }
+    if ([int]$Matches[1] -lt $InspectorMinimumMajorVersion) {
+        throw "Inspector version $InspectorVersion is unsupported; version $InspectorMinimumMajorVersion or later is required."
+    }
+    Write-Host "[INFO] Inspector: $InspectorPackage ($InspectorVersion)" -ForegroundColor Cyan
     Set-Content -Path $InspectorLogPath -Value @(
         "# Morrowind MCP server_test inspector log"
         "# StartedAt: $(Get-Date -Format o)"
         "# Endpoint: $($Config.Connection.url)"
+        "# Inspector: $InspectorPackage ($InspectorVersion)"
         ""
     )
 }
@@ -171,11 +187,6 @@ catch {
     exit 1
 }
 
-# Workaround for Inspector issue/PR #1337:
-# https://github.com/modelcontextprotocol/inspector/issues/1334
-# https://github.com/modelcontextprotocol/inspector/pull/1337
-# "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" が混在しても
-# stdout が有効 JSON かつ実エラーが無ければ成功扱いにする。
 function Invoke-MCPInspector {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
@@ -184,16 +195,19 @@ function Invoke-MCPInspector {
 
     $commandArguments = @(
         "--yes",
-        "@modelcontextprotocol/inspector",
+        $InspectorPackage,
         "--cli",
         $Config.Connection.url,
         "--transport",
-        "http"
+        "http",
+        "--connect-timeout",
+        $InspectorConnectTimeoutMilliseconds,
+        "--format",
+        "json"
     )
     if ($Arguments) { $commandArguments += $Arguments }
 
     Write-Host "[RUN] $($Arguments -join ' ')" -ForegroundColor Cyan
-    # 判定のために標準出力(JSON本体)と標準エラー(エラーメッセージ)を分離して取得する。
     $stdoutFile = [System.IO.Path]::GetTempFileName()
     $stderrFile = [System.IO.Path]::GetTempFileName()
 
@@ -204,6 +218,28 @@ function Invoke-MCPInspector {
 
         $stdoutText = if (Test-Path $stdoutFile) { Get-Content -Path $stdoutFile -Raw } else { "" }
         $stderrText = if (Test-Path $stderrFile) { Get-Content -Path $stderrFile -Raw } else { "" }
+
+        $json = $null
+        $parseError = $null
+        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
+            try {
+                $json = $stdoutText | ConvertFrom-Json -ErrorAction Stop
+            }
+            catch {
+                $parseError = $_.Exception.Message
+            }
+        }
+
+        $logStdout = $stdoutText
+        if ($json -and $json.result -and $json.result.contents) {
+            $blobContent = @($json.result.contents | Where-Object { $_.blob } | Select-Object -First 1)
+            if ($blobContent.Count -gt 0) {
+                $logStdout = "<binary resource response omitted: uri=$($blobContent[0].uri) mimeType=$($blobContent[0].mimeType) blobLength=$($blobContent[0].blob.Length)>"
+            }
+        }
+        if ($json -and -not $Unpretty -and $logStdout -eq $stdoutText) {
+            $logStdout = $json | ConvertTo-Json -Depth 100
+        }
 
         Add-Content -Path $InspectorLogPath -Value @(
             "================================================================================"
@@ -222,63 +258,33 @@ function Invoke-MCPInspector {
         Add-Content -Path $InspectorLogPath -Value @(
             "--- STDOUT ---"
         )
-        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
-            Add-Content -Path $InspectorLogPath -Value $stdoutText
+        if (-not [string]::IsNullOrWhiteSpace($logStdout)) {
+            Add-Content -Path $InspectorLogPath -Value $logStdout
         }
         else {
             Add-Content -Path $InspectorLogPath -Value "<empty>"
         }
         Add-Content -Path $InspectorLogPath -Value ""
 
-        # Inspector の既知問題で出るノイズ行を定義する。
-        $assertionPattern = "Assertion failed: !\(handle->flags & UV_HANDLE_CLOSING\)"
-        $knownExitLinePattern = "^Failed with exit code:\s*3221226505\s*$"
-        $hasKnownAssertion = $stderrText -match $assertionPattern
-
-        # stdout が正しい JSON として読めるなら、MCP メソッド自体は成功しているとみなせる。
-        $hasValidJson = $false
-        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
-            try {
-                $null = $stdoutText | ConvertFrom-Json -ErrorAction Stop
-                $hasValidJson = $true
+        if ($result -ne 0 -or $null -eq $json) {
+            Write-Host "[FAILED] $result" -ForegroundColor Red
+            if ($parseError) {
+                Write-Host "  Invalid Inspector JSON: $parseError" -ForegroundColor DarkYellow
             }
-            catch {
-                $hasValidJson = $false
+            if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
+                $preview = $stderrText -split "`r?`n" | Where-Object { $_ } | Select-Object -First 5
+                foreach ($line in $preview) {
+                    Write-Host "  $line" -ForegroundColor DarkYellow
+                }
             }
         }
 
-        # 既知ノイズを除いた stderr が残る場合は、実際の失敗(例: Method not found)と判定する。
-        $filteredStderrLines = @()
-        if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
-            $filteredStderrLines = $stderrText -split "`r?`n" | Where-Object {
-                $_ -and
-                $_ -notmatch $assertionPattern -and
-                $_ -notmatch $knownExitLinePattern
-            }
+        return [pscustomobject]@{
+            ExitCode = $result
+            Result = if ($json) { $json.result } else { $null }
+            Error = if ($json) { $json.error } else { $null }
+            ParseError = $parseError
         }
-        $hasRealStderrError = $filteredStderrLines.Count -gt 0
-
-        # TODO 成功は、jsonの精査も行いたい
-        if ($result -eq 0) {
-            Write-Host "[PASSED]" -ForegroundColor Green
-            return 0
-        }
-
-        # Issue/PR #1337 のワークアラウンド:
-        # exit code は 1 でも、stdout が有効 JSON かつ stderr が既知ノイズのみなら成功扱いにする。
-        if ($result -eq 1 -and $hasKnownAssertion -and $hasValidJson -and -not $hasRealStderrError) {
-            Write-Host "[PASSED] (Known UV handle assertion ignored)" -ForegroundColor Green
-            return 0
-        }
-
-        Write-Host "[FAILED] $result" -ForegroundColor Red
-        if ($hasRealStderrError) {
-            $preview = $filteredStderrLines | Select-Object -First 5
-            foreach ($line in $preview) {
-                Write-Host "  $line" -ForegroundColor DarkYellow
-            }
-        }
-        return $result
     }
     finally {
         Remove-Item -Path $stdoutFile -ErrorAction SilentlyContinue
@@ -286,209 +292,157 @@ function Invoke-MCPInspector {
     }
 }
 
-function New-McpRequest {
+function Assert-InspectorSuccess {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Method,
-        [Parameter(Mandatory = $true)]
-        [string]$Url,
-        [string]$SessionId,
-        [string]$Body
+        [pscustomobject]$Response
     )
 
-    $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::$Method, $Url)
-    $request.Headers.TryAddWithoutValidation("Accept", "application/json, text/event-stream") | Out-Null
-    $request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", $ProtocolVersion) | Out-Null
-    if (-not [string]::IsNullOrWhiteSpace($SessionId)) {
-        $request.Headers.TryAddWithoutValidation("MCP-Session-Id", $SessionId) | Out-Null
+    if ($Response.ExitCode -ne 0) {
+        throw "Inspector exited with code $($Response.ExitCode)."
     }
-    if ($null -ne $Body) {
-        $request.Content = [System.Net.Http.StringContent]::new($Body, [System.Text.Encoding]::UTF8, "application/json")
+    if ($Response.ParseError) {
+        throw "Inspector output was not JSON: $($Response.ParseError)"
     }
-    return $request
+    if ($Response.Error) {
+        throw "Inspector returned an error: $($Response.Error.message)"
+    }
+    if ($null -eq $Response.Result) {
+        throw "Inspector JSON envelope is missing result."
+    }
 }
 
-function Get-RequiredHeaderValue {
+function Assert-ToolSuccess {
     param(
         [Parameter(Mandatory = $true)]
-        [System.Net.Http.HttpResponseMessage]$Response,
-        [Parameter(Mandatory = $true)]
-        [string]$Name
+        [pscustomobject]$Result
     )
 
-    $values = [string[]]@()
-    if (-not $Response.Headers.TryGetValues($Name, [ref]$values)) {
-        throw "Missing response header: $Name"
+    if ($Result.isError -eq $true) {
+        throw "Tool returned isError=true."
     }
-    if ($values.Count -eq 0 -or [string]::IsNullOrWhiteSpace($values[0])) {
-        throw "Empty response header: $Name"
-    }
-    return $values[0]
 }
 
-function Send-McpJson {
+function New-ServerTestCase {
     param(
         [Parameter(Mandatory = $true)]
-        [System.Net.Http.HttpClient]$Client,
+        [string]$Name,
         [Parameter(Mandatory = $true)]
-        [string]$Url,
-        [string]$SessionId,
-        [Parameter(Mandatory = $true)]
-        [hashtable]$Message
+        [object]$Arguments,
+        [scriptblock]$When,
+        [scriptblock]$Validate,
+        [scriptblock]$Capture
     )
 
-    $body = $Message | ConvertTo-Json -Depth 16 -Compress
-    $request = New-McpRequest -Method "Post" -Url $Url -SessionId $SessionId -Body $body
-    return $Client.SendAsync($request).GetAwaiter().GetResult()
+    return [pscustomobject]@{
+        Name = $Name
+        Arguments = $Arguments
+        When = $When
+        Validate = $Validate
+        Capture = $Capture
+    }
 }
 
-function Invoke-MemoryTraversalTest {
+function New-ToolCallArguments {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$EndpointUrl
+        [string]$ToolName,
+        [hashtable]$ToolArguments
     )
 
-    Write-Host "[RUN] live memory traversal" -ForegroundColor Cyan
-    $client = [System.Net.Http.HttpClient]::new()
-    $sessionId = $null
-    $requestId = 10000
-    $issues = [System.Collections.Generic.List[string]]::new()
-    $visited = @{}
-    $queue = [System.Collections.Queue]::new()
-    $queue.Enqueue("morrowind://memory/index.json")
+    $arguments = @("--method", "tools/call", "--tool-name", $ToolName)
+    if ($ToolArguments) {
+        foreach ($entry in $ToolArguments.GetEnumerator()) {
+            $arguments += "--tool-arg", ("{0}={1}" -f $entry.Key, $entry.Value)
+        }
+    }
+    return $arguments
+}
 
+function New-ToolCallTestCase {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string]$ToolName,
+        [hashtable]$ToolArguments,
+        [scriptblock]$When,
+        [scriptblock]$Validate,
+        [scriptblock]$Capture
+    )
+
+    return New-ServerTestCase -Name $Name -Arguments (New-ToolCallArguments -ToolName $ToolName -ToolArguments $ToolArguments) -When $When -Validate $Validate -Capture $Capture
+}
+
+function New-PromptGetTestCase {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string]$PromptName,
+        [scriptblock]$When,
+        [scriptblock]$Validate,
+        [scriptblock]$Capture
+    )
+
+    return New-ServerTestCase -Name $Name -Arguments @("--method", "prompts/get", "--prompt-name", $PromptName) -When $When -Validate $Validate -Capture $Capture
+}
+
+function New-ResourceReadTestCase {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [object]$Uri,
+        [scriptblock]$When,
+        [scriptblock]$Validate,
+        [scriptblock]$Capture
+    )
+
+    if ($Uri -is [scriptblock]) {
+        $uriFactory = $Uri
+        $arguments = {
+            param($context)
+            @("--method", "resources/read", "--uri", (& $uriFactory $context))
+        }.GetNewClosure()
+    }
+    else {
+        $arguments = @("--method", "resources/read", "--uri", $Uri)
+    }
+
+    return New-ServerTestCase -Name $Name -Arguments $arguments -When $When -Validate $Validate -Capture $Capture
+}
+
+function Invoke-ServerTestCase {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$TestCase,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Context
+    )
+
+    Write-Host "[CASE] $($TestCase.Name)" -ForegroundColor Cyan
+    if ($TestCase.When -and -not (& $TestCase.When $Context)) {
+        Write-Host "[SKIPPED] $($TestCase.Name): unavailable in current server state." -ForegroundColor DarkCyan
+        return 0
+    }
+    $arguments = if ($TestCase.Arguments -is [scriptblock]) { & $TestCase.Arguments $Context } else { $TestCase.Arguments }
+    $response = Invoke-MCPInspector $arguments
     try {
-        $initialize = @{
-            jsonrpc = "2.0"
-            id = $requestId++
-            method = "initialize"
-            params = @{
-                protocolVersion = $ProtocolVersion
-                capabilities = @{}
-                clientInfo = @{
-                    name = "morrowind-mcp-server-test"
-                    version = "1.0.0"
-                }
-            }
+        Assert-InspectorSuccess -Response $response
+        if ($TestCase.Validate) {
+            & $TestCase.Validate $response.Result $Context
         }
-        $initializeResponse = Send-McpJson -Client $client -Url $EndpointUrl -Message $initialize
-        if ($initializeResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
-            throw "Initialize failed: HTTP $([int]$initializeResponse.StatusCode)"
+        if ($TestCase.Capture) {
+            & $TestCase.Capture $response.Result $Context
         }
-        $sessionId = Get-RequiredHeaderValue -Response $initializeResponse -Name "MCP-Session-Id"
-
-        $initialized = @{
-            jsonrpc = "2.0"
-            method = "notifications/initialized"
-        }
-        $initializedResponse = Send-McpJson -Client $client -Url $EndpointUrl -SessionId $sessionId -Message $initialized
-        if ($initializedResponse.StatusCode -ne [System.Net.HttpStatusCode]::Accepted) {
-            throw "Initialized notification failed: HTTP $([int]$initializedResponse.StatusCode)"
-        }
-
-        while ($queue.Count -gt 0) {
-            $uri = [string]$queue.Dequeue()
-            if ($visited.ContainsKey($uri)) {
-                continue
-            }
-            $visited[$uri] = $true
-
-            $read = @{
-                jsonrpc = "2.0"
-                id = $requestId++
-                method = "resources/read"
-                params = @{
-                    uri = $uri
-                }
-            }
-            $readResponse = Send-McpJson -Client $client -Url $EndpointUrl -SessionId $sessionId -Message $read
-            $readText = $readResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-            if ($readResponse.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
-                $issues.Add("Read failed: uri=$uri http=$([int]$readResponse.StatusCode)")
-                continue
-            }
-
-            try {
-                $readBody = $readText | ConvertFrom-Json -ErrorAction Stop
-            }
-            catch {
-                $issues.Add("Read returned invalid JSON-RPC: uri=$uri error=$($_.Exception.Message)")
-                continue
-            }
-            if ($readBody.error) {
-                $issues.Add("Read returned JSON-RPC error: uri=$uri code=$($readBody.error.code) message=$($readBody.error.message)")
-                continue
-            }
-
-            $content = @($readBody.result.contents | Where-Object { $_.uri -eq $uri } | Select-Object -First 1)
-            if ($content.Count -eq 0) {
-                $issues.Add("Read result missing requested content: uri=$uri")
-                continue
-            }
-            if ($content[0].mimeType -ne "application/json" -or [string]::IsNullOrWhiteSpace($content[0].text)) {
-                $issues.Add("Memory content is not JSON text: uri=$uri mimeType=$($content[0].mimeType)")
-                continue
-            }
-
-            try {
-                $document = $content[0].text | ConvertFrom-Json -ErrorAction Stop
-            }
-            catch {
-                $issues.Add("Memory document text is invalid JSON: uri=$uri error=$($_.Exception.Message)")
-                continue
-            }
-
-            foreach ($field in @("schema_version", "type", "data_type", "title", "source", "data")) {
-                if ($null -eq $document.PSObject.Properties[$field]) {
-                    $issues.Add(("Missing {0}: uri={1}" -f $field, $uri))
-                }
-            }
-            if ($document.type -match '^memory\.(index|collection)$' -and $null -ne $document.data.PSObject.Properties["links"]) {
-                $issues.Add("Index/collection duplicates links inside data: uri=$uri")
-            }
-
-            foreach ($link in @($document.links)) {
-                if ($null -eq $link) {
-                    continue
-                }
-                if ([string]::IsNullOrWhiteSpace($link.uri)) {
-                    $issues.Add("Link is missing uri: parent=$uri")
-                    continue
-                }
-                if ($link.uri -notlike "morrowind://memory/*") {
-                    continue
-                }
-                if ($uri -eq "morrowind://memory/actors/index.json" -and $link.rel -eq "actor") {
-                    $description = [string]$link.description
-                    foreach ($token in @("data_type=", "base_id=", "reference_id=", "identity_kind=", "interaction_state=")) {
-                        if (-not $description.Contains($token)) {
-                            $issues.Add("Actor link description missing $token parent=$uri child=$($link.uri)")
-                        }
-                    }
-                }
-                if (-not $visited.ContainsKey($link.uri)) {
-                    $queue.Enqueue($link.uri)
-                }
-            }
-        }
+        Write-Host "[PASSED] $($TestCase.Name)" -ForegroundColor Green
+        return 0
     }
     catch {
-        $issues.Add($_.Exception.Message)
-    }
-    finally {
-        $client.Dispose()
-    }
-
-    if ($issues.Count -gt 0) {
-        Write-Host "[FAILED] live memory traversal" -ForegroundColor Red
-        foreach ($issue in ($issues | Select-Object -First 10)) {
-            Write-Host "  $issue" -ForegroundColor DarkYellow
-        }
+        Write-Host "[FAILED] $($TestCase.Name): $($_.Exception.Message)" -ForegroundColor Red
         return 1
     }
-
-    Write-Host "[PASSED] live memory traversal: documents=$($visited.Count)" -ForegroundColor Green
-    return 0
 }
 
 $TargetIP = $Config.Connection.host
@@ -564,57 +518,79 @@ try {
     }
 
     # TODO 成功を期待するテストのみなので、失敗を期待するテストも欲しい。無効な引数などで通信は成功するが、内容がエラーになることを確認する。
-    # TODO luaからテストケースをある程度自動生成したい
 
     # what is this:
     # npm warn ERESOLVE overriding peer dependency
     # npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
     # npm warn deprecated @modelcontextprotocol/server-legacy@2.0.0-beta.5: This package is a frozen copy of v1's SSE transport and OAuth Authorization Server helpers for migration purposes only. Use StreamableHTTP from @modelcontextprotocol/server and a dedicated OAuth server in production. Will not receive new features.
 
+    # Add cases with New-ServerTestCase for a raw Inspector method, or
+    # New-ToolCallTestCase for tools/call. Validate receives ($result, $context).
     $TestCases = @(
-        @("--method", "logging/setLevel", "--log-level", "debug"),
-        @("--method", "tools/list"),
-        @("--method", "resources/list"),
-        @("--method", "prompts/list"),
-        @("--method", "resources/templates/list"),
-        @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-menu-action", "--tool-arg", "menu_name=Pete_ContinueButton", "--tool-arg", "action=mouseClick"), # using continue mod
-        @("--method", "tools/list"), # expect in game.
-        @("--method", "prompts/list"),
-        @("--method", "tools/call", "--tool-name", "mw-player-fetch"),
-        # Toggle menu mode around player input to exercise menu open and close through the public tool.
-        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=menuMode", "--tool-arg", "how=tap"),
-        @("--method", "tools/call", "--tool-name", "mw-inventory-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=menuMode", "--tool-arg", "how=tap"),
-        @("--method", "tools/call", "--tool-name", "mw-reference-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-target-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-world-fetch"),
-        @("--method", "tools/call", "--tool-name", "mw-player-action", "--tool-arg", "action=activate", "--tool-arg", "how=tap"),
-        @("--method", "tools/call", "--tool-name", "mw-screenshot-save", "--tool-arg", "file_name=$RunTimestamp"),
-        @("--method", "tools/call", "--tool-name", "mw-menu-fetch"),
-        @("--method", "resources/list"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/index.json"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/player/index.json"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/player/progression.json"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/player/vitals.json"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/player/journal.json"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/player/quests.json"),
-        @("--method", "resources/read", "--uri", "morrowind://memory/actors/index.json"),
-        @("--method", "resources/read", "--uri", "morrowind://screenshot/$RunTimestamp.jpg"), # TODO listから取得したファイルを読む
-        @("--method", "prompts/get", "--prompt-name", "mw-loar"),
-        @("--method", "prompts/get", "--prompt-name", "mw-role"),
-        @("--method", "prompts/get", "--prompt-name", "mw-todo"),
-        @("--method", "prompts/get", "--prompt-name", "mw-loar"),
-        @("--method", "prompts/get", "--prompt-name", "mw-translate"),
-        @("--method", "prompts/get", "--prompt-name", "mw-walkthrough"),
-        @("--method", "tools/call", "--tool-name", "mw-debug-action", "--tool-arg", "action=memory:SaveDebugDocuments")
+        (New-ServerTestCase -Name "initialize" -Arguments @("--method", "initialize") -Validate { param($result) if ([string]::IsNullOrWhiteSpace($result.protocolVersion) -or -not $result.serverInfo -or -not $result.capabilities) { throw "Initialize response is incomplete." } }),
+        (New-ServerTestCase -Name "tools list" -Arguments @("--method", "tools/list") -Validate { param($result) $names = @($result.tools | ForEach-Object { $_.name }); foreach ($name in @("mw-menu-fetch", "mw-screenshot-save", "mw-debug-action")) { if ($names -notcontains $name) { throw "Missing tool: $name" } }; if (@($result.tools | Where-Object { $_.name -notmatch '^mw-' }).Count -gt 0) { throw "Tool name is missing the mw- prefix." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) }),
+        (New-ServerTestCase -Name "resources list" -Arguments @("--method", "resources/list") -Validate { param($result) if (@($result.resources | Where-Object { $_.uri -eq "morrowind://memory/index.json" -and $_.mimeType -eq "application/json" }).Count -ne 1) { throw "Memory root resource is missing." } } -Capture { param($result, $context) $context.ResourceUris = @($result.resources | ForEach-Object { $_.uri }) }),
+        (New-ServerTestCase -Name "prompts list" -Arguments @("--method", "prompts/list") -Validate { param($result) $names = @($result.prompts | ForEach-Object { $_.name }); foreach ($name in @("mw-loar", "mw-todo", "mw-translate", "mw-walkthrough")) { if ($names -notcontains $name) { throw "Missing prompt: $name" } } } -Capture { param($result, $context) $context.PromptNames = @($result.prompts | ForEach-Object { $_.name }) }),
+        (New-ServerTestCase -Name "resource templates list" -Arguments @("--method", "resources/templates/list") -Validate { param($result) if ($null -eq $result.resourceTemplates) { throw "Missing resourceTemplates." } }),
+        (New-ToolCallTestCase -Name "menu fetch" -ToolName "mw-menu-fetch" -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }
+        }),
+        (New-ToolCallTestCase -Name "continue menu action" -ToolName "mw-menu-action" -ToolArguments @{
+            menu_name = "Pete_ContinueButton"
+            action = "mouseClick"
+        } -When { param($context) $context.ToolNames -contains "mw-menu-action" } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+        }),
+        (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "target fetch" -ToolName "mw-target-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "world fetch" -ToolName "mw-world-fetch" -When { param($context) $context.ToolNames -contains "mw-world-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "activate action" -ToolName "mw-player-action" -ToolArguments @{ action = "activate"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "screenshot save" -ToolName "mw-screenshot-save" -ToolArguments @{ file_name = $RunTimestamp } -When {
+            param($context)
+            $context.ToolNames -contains "mw-screenshot-save"
+        } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            if (@($result.content | Where-Object { $_.type -eq "resource_link" }).Count -ne 1) {
+                throw "Screenshot result is missing a resource link."
+            }
+        } -Capture {
+            param($result, $context)
+            $link = @($result.content | Where-Object { $_.type -eq "resource_link" } | Select-Object -First 1)[0]
+            $context.ScreenshotUri = $link.uri
+            $context.ScreenshotMimeType = $link.mimeType
+        }),
+        (New-ServerTestCase -Name "resources list with screenshot" -Arguments @("--method", "resources/list") -When { param($context) -not [string]::IsNullOrWhiteSpace($context.ScreenshotUri) } -Validate { param($result, $context) if (@($result.resources | Where-Object { $_.uri -eq $context.ScreenshotUri -and $_.mimeType -eq $context.ScreenshotMimeType }).Count -ne 1) { throw "Generated screenshot resource is missing." } }),
+        (New-ResourceReadTestCase -Name "memory root read" -Uri "morrowind://memory/index.json" -Validate { param($result) $content = @($result.contents | Where-Object { $_.uri -eq "morrowind://memory/index.json" } | Select-Object -First 1)[0]; if ($null -eq $content -or $content.mimeType -ne "application/json" -or [string]::IsNullOrWhiteSpace($content.text)) { throw "Memory root is not JSON text." }; $document = $content.text | ConvertFrom-Json -ErrorAction Stop; foreach ($field in @("schema_version", "type", "data_type", "title", "source", "data")) { if ($null -eq $document.PSObject.Properties[$field]) { throw "Memory root is missing $field." } } }),
+        (New-ResourceReadTestCase -Name "memory player index read" -Uri "morrowind://memory/player/index.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/player/index.json" } -Validate { param($result) if (@($result.contents | Where-Object { $_.uri -eq "morrowind://memory/player/index.json" -and $_.mimeType -eq "application/json" -and $_.text }).Count -ne 1) { throw "Player memory index is not JSON text." } }),
+        (New-ResourceReadTestCase -Name "memory actor index read" -Uri "morrowind://memory/actors/index.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/actors/index.json" } -Validate { param($result) if (@($result.contents | Where-Object { $_.uri -eq "morrowind://memory/actors/index.json" -and $_.mimeType -eq "application/json" -and $_.text }).Count -ne 1) { throw "Actor memory index is not JSON text." } }),
+        (New-ResourceReadTestCase -Name "screenshot resource read" -Uri { param($context) $context.ScreenshotUri } -When { param($context) -not [string]::IsNullOrWhiteSpace($context.ScreenshotUri) } -Validate { param($result, $context) $content = @($result.contents | Where-Object { $_.uri -eq $context.ScreenshotUri } | Select-Object -First 1)[0]; if ($null -eq $content -or $content.mimeType -ne $context.ScreenshotMimeType -or [string]::IsNullOrWhiteSpace($content.blob) -or $content.blob.Length -lt 4) { throw "Screenshot blob is missing or invalid." }; if ($content.mimeType -eq "image/jpeg" -and -not $content.blob.StartsWith("/9j/")) { throw "Screenshot is not a JPEG blob." } }),
+        (New-PromptGetTestCase -Name "prompt loar" -PromptName "mw-loar" -Validate { param($result) if (@($result.messages | Where-Object { $_.content.type -eq "text" -and -not [string]::IsNullOrWhiteSpace($_.content.text) }).Count -eq 0) { throw "Prompt returned no text message." } }),
+        (New-PromptGetTestCase -Name "prompt role" -PromptName "mw-role" -When { param($context) $context.PromptNames -contains "mw-role" } -Validate { param($result) if (@($result.messages).Count -eq 0) { throw "Prompt returned no messages." } }),
+        (New-PromptGetTestCase -Name "prompt todo" -PromptName "mw-todo" -Validate { param($result) if (@($result.messages).Count -eq 0) { throw "Prompt returned no messages." } }),
+        (New-PromptGetTestCase -Name "prompt translate" -PromptName "mw-translate" -Validate { param($result) if (@($result.messages).Count -eq 0) { throw "Prompt returned no messages." } }),
+        (New-PromptGetTestCase -Name "prompt walkthrough" -PromptName "mw-walkthrough" -Validate { param($result) if (@($result.messages).Count -eq 0) { throw "Prompt returned no messages." } }),
+        (New-ToolCallTestCase -Name "memory debug dump" -ToolName "mw-debug-action" -ToolArguments @{ action = "memory:SaveDebugDocuments" } -When {
+            param($context)
+            $context.ToolNames -contains "mw-debug-action"
+        } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+        })
     )
 
     $TestResult = 0
-    foreach ($Test in $TestCases) {
-        $TestResult = $TestResult -bor (Invoke-MCPInspector $Test)
+    $TestContext = @{}
+    foreach ($TestCase in $TestCases) {
+        $TestResult = $TestResult -bor (Invoke-ServerTestCase -TestCase $TestCase -Context $TestContext)
     }
-    $TestResult = $TestResult -bor (Invoke-MemoryTraversalTest -EndpointUrl $Config.Connection.url)
 
     $ExitCode = $ExitCode -bor $TestResult
 

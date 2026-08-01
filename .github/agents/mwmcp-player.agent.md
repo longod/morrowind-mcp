@@ -1,6 +1,6 @@
 ---
 description: "Morrowind MCP を使ってゲームをプレイします。自立レベル 1〜4 を指定できます。コーディングは行いません。"
-name: "Morrowind Player"
+name: "Morrowind MCP Player"
 tools: [web, 'morrowind-mcp/*']
 agents: []
 user-invocable: true

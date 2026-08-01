@@ -29,10 +29,14 @@ description: |
 
 # 従来挙動: foreground 化を行わない
 .\tests\server_test.ps1 -NoForeground
+
+# Inspector集約ログのJSONを整形しない
+.\tests\server_test.ps1 -Unpretty
 ```
 
 `-NoForeground` を指定すると、接続確認後のフォアグラウンド化ステップをスキップする。
 バックグラウンドではキーボードのキー入力やマウスのボタン入力（mw-player-action など）が送られないため、入力を使う検証ではフォアグラウンド化する必要がある。入力送信が不要な検証では `-NoForeground` で実行してよい。
+Inspector集約ログのJSONは既定でpretty-printされる。エージェントが機械的にログを処理する必要がある場合のみ、`-Unpretty` を指定してInspectorの1行JSONを保存してよい。
 自動 foreground 化は best effort であり、ロードされるセーブ内容や実際のウィンドウ状態に依存するため、`tests/server_test.ps1` は target/activate/MenuDialog への到達を必須にしない。会話 actor まで到達したかは、実行後の `MWSE.log` と `tests/validate_memory_dump.ps1` の `conversationActors` 集計で判断する。
 
 2. 出力を確認する。
@@ -47,23 +51,24 @@ description: |
 
 6. `MWSE.log` からサーバー側の挙動を検査する。
 
-7. Memory dump を検査する。
-  - `tests/server_test.ps1` が `mw-debug-action action=memory:SaveDebugDocuments` を実行した後、`tests/validate_memory_dump.ps1` を実行する。
+7. 必要に応じて Memory dump を検査する。
+  - `tests/server_test.ps1` は `mw-debug-action action=memory:SaveDebugDocuments` を実行するが、`tests/validate_memory_dump.ps1` は自動実行しない。
+  - Memory schema、リンク、debug dump、actor interaction を変更した場合は、必要に応じて `./tests/validate_memory_dump.ps1` を実行する。
   - 出力の `conversationActors` は、debug dump 成果物上で `target -> activate -> MenuDialog` まで到達した actor 数を表す。セーブ内容や foreground 状態に依存するため、通常の server test 合否とは分けて読む。
 
 ## Notes
-- Inspector v0.22.0 では、`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94` が必ず発生する。
-- 既知の問題: [Issue #1334](https://github.com/modelcontextprotocol/inspector/issues/1334), [PR #1337](https://github.com/modelcontextprotocol/inspector/pull/1337)
+- `tests/server_test.ps1` は最新版の `@modelcontextprotocol/inspector` を使用し、起動時に解決したInspector versionが2以上であることを確認してコンソールと集約ログへ出力する。Inspector v2はNode.js 22.19.0以上を必要とする。
 - サーバー側のログは `MWSE.log` で確認できる。
 - `start_server_mo2.ps1` は exit code 1 でも Morrowind が起動している場合があるため、プロセスと `MWSE.log` で確認する
-- `tests/server_test.ps1` の exit code 1 だけで失敗と断定しない。標準出力、Inspector の既知エラー、MCP 応答、`MWSE.log` を突き合わせて判定する
+- `tests/server_test.ps1` は Inspector の `--format json` 出力、終了コード、各caseの応答内容を判定する。Inspector の非0終了は失敗として扱う。
 - `fetch failed` / connection refused / timeout が出た場合は、古いサーバープロセスや半端な起動状態を疑い、`tests/stop_server.ps1` の実行後に再実行する
 - `tests/server_test.ps1` は Inspector の詳細をコンソールへ全量表示しない。詳細は `inspector_<timestamp>.log` に集約保存される。
+- Inspector集約ログのJSONは既定でpretty-printされる。機械処理が必要な場合、エージェントは`-Unpretty`を指定して1行JSONで保存してよい。
 - `tests/server_test.ps1` は実行終了時に `MWSE.log` を `mwse_<timestamp>.log` としてコピー保存する。サーバー側検証はこのコピーを優先利用できる。
 - `tests/server_test.ps1` の既定動作では接続確認後に foreground 化を試行する。バックグラウンドではキーボードのキー入力やマウスのボタン入力が送られないため、入力を使う検証では foreground 化が必要。入力送信が不要な検証は `-NoForeground` を使ってよい。
 - `tools/list` は prefixed name（例: `mw_...`）と prefixed title/description を確認し、`tools/call` も公開後の prefixed name で呼び出す
-- screenshot resource の検証では巨大な blob 全体をログに出さず、mimeType / blob length / PNG signature だけ確認する
-- 正常な PNG blob は base64 先頭が `iVBORw0KGgoA` で始まる
+- screenshot resource の検証では巨大な blob 全体をログに出さず、URI / mimeType / blob length と形式シグネチャだけ確認する
+- 正常な JPEG blob は base64 先頭が `/9j/` で始まる
 
 ## Failure Triage
 失敗時は次の順で確認する。
@@ -74,7 +79,7 @@ description: |
 
 2. Inspector 集約ログ（`inspector_<timestamp>.log`）
   - 該当 `[RUN] ...` ブロックの `[EXIT]`、`--- STDERR ---`、`--- STDOUT ---` を確認する。
-  - `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` と `Failed with exit code: 3221226505` のみで、STDOUT が有効 JSON なら既知ノイズとして扱う。
+  - blobを含む画像resource応答は、URI / MIME type / blob lengthの要約として保存される。
 
 3. MWSE ログコピー（`mwse_<timestamp>.log`）
   - `handle method:` と HTTP status（`success: 200` / `json error: 400` など）でサーバー側処理を照合する。
