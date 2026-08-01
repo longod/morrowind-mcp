@@ -23,7 +23,7 @@
 
 --- Stable identity for the in-game object or concept described by a Memory document.
 ---@class MCP.MemorySubject
----@field tes3_type string TES3 type name such as tes3mobilePlayer or a type derived from tes3.objectType.
+---@field tes3_type string TES3 type name such as tes3npc or a type derived from tes3.objectType.
 ---@field id string|number Stable subject id within the current subject type.
 ---@field title string? Display label for the subject.
 ---@field base MCP.MemorySubject? Base object identity when the subject is a runtime instance.

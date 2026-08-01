@@ -2,29 +2,16 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
 local iter = require("morrowind-mcp.tes3.iterator")
-local obj = require("morrowind-mcp.tes3.object")
 local enumname = require("morrowind-mcp.tes3.enumname")
 
--- and item consumeing events... but it seems they are triggered too many events. and noisy including magic effects.
--- repair, lockPick (including magic), trapDisarm (including magic)
--- convertReferenceToItem? spellCasted? spellCastedFailure? (scroll)
-
---- Memory module for the current player's inventory snapshot.
+--- Memory module for the current player's live inventory collection.
 ---@class MCP.Resources.Memory.Inventory: MCP.Resources.MemoryModule
 ---@field inventoryEntry MCP.MemoryResourceEntry
----@field snapshot MCP.MemoryInventoryStack[]
----@field snapshotByItemId table<string, MCP.MemoryInventoryStack[]> Runtime-only serialized stack index.
----@field gold integer
----@field snapshotAvailable boolean
----@field snapshotCurrent boolean
----@field inventoryMenuWasVisible boolean
 ---@field barterOfferCallback fun(e: barterOfferEventData)?
----@field uiActivatedCallback fun(e: uiActivatedEventData)?
 ---@field menuEnterCallback fun(e: menuEnterEventData)?
----@field menuExitCallback fun(e: menuExitEventData)?
 ---@field activateCallback fun(e: activateEventData)?
 ---@field enchantChargeUseCallback fun(e: enchantChargeUseEventData)?
----@field enchantedItemCreateFailed fun(e: enchantedItemCreateFailedEventData)?
+---@field enchantedItemCreateFailedCallback fun(e: enchantedItemCreateFailedEventData)?
 ---@field enchantedItemCreatedCallback fun(e: enchantedItemCreatedEventData)?
 ---@field itemDroppedCallback fun(e: itemDroppedEventData)?
 ---@field pickpocketCallback fun(e: pickpocketEventData)?
@@ -37,7 +24,6 @@ local this = {}
 setmetatable(this, { __index = base })
 
 local inventoryMenuId = tes3ui.registerID("MenuInventory")
-local standardStackKey = "normal"
 
 local descriptor = document.Descriptor(
     "memory/player/inventory.json",
@@ -84,10 +70,9 @@ function this.tes3enchantment(i)
     if not i then
         return nil
     end
-    -- FIXME FIX TEST
-    -- if not i:isValid() then
-    --     return nil
-    -- end
+    if not i:isValid() then
+        return nil
+    end
     if i.deleted then
         return nil
     end
@@ -136,10 +121,9 @@ function this.tes3skill(i, o)
     if not i then
         return nil
     end
-    -- FIXME FIX TEST
-    -- if not i:isValid() then
-    --     return nil
-    -- end
+    if not i:isValid() then
+        return nil
+    end
     if i.deleted then
         return nil
     end
@@ -431,10 +415,9 @@ local objectHandler = {
 --- lightweight item serializer
 ---@param i tes3alchemy|tes3apparatus|tes3armor|tes3book|tes3clothing|tes3ingredient|tes3item|tes3light|tes3lockpick|tes3misc|tes3probe|tes3repairTool|tes3weapon
 function this.tes3item(i)
-    -- FIXME FIX TEST
-    -- if not i:isValid() then
-    --     return nil
-    -- end
+    if not i:isValid() then
+        return nil
+    end
     if i.deleted then
         return nil
     end
@@ -466,53 +449,11 @@ function this.tes3item(i)
 end
 
 
---- Return whether the player inventory menu currently exists and is visible.
----@return boolean
-local function InventoryMenuVisible()
-    local menu = tes3ui.findMenu(inventoryMenuId)
-    return menu ~= nil and menu.visible == true
-end
-
---- Capture only the stable item identity and display name needed by an inventory stack.
+--- Capture the serialized item definition used by an inventory entry.
 ---@param item tes3alchemy|tes3apparatus|tes3armor|tes3book|tes3clothing|tes3ingredient|tes3item|tes3light|tes3lockpick|tes3misc|tes3probe|tes3repairTool|tes3weapon
 ---@return MCP.AnyMap
 local function SerializeItem(item)
     return this.tes3item(item)
-end
-
---- Equality check for itemData
----@param l tes3itemData
----@param r tes3itemData
-local function EqualsItemData(l, r)
-    if l.charge ~= r.charge then -- without miscitem?
-        return false
-    end
-    if l.condition ~= r.condition then -- without light?
-        return false
-    end
-    if l.count ~= r.count then
-        return false
-    end
-    -- TODO requirement
-    local lowner = l.owner and l.owner.id or nil
-    local rowner = r.owner and r.owner.id or nil
-    if lowner ~= rowner then
-        return false
-    end
-    local lscript = l.script and l.script.id or nil
-    local rscript = r.script and r.script.id or nil
-    if lscript ~= rscript then
-        return false
-    end
-    local lsoul = l.soul and l.soul.id or nil
-    local rsoul = r.soul and r.soul.id or nil
-    if lsoul ~= rsoul then
-        return false
-    end
-     if l.timeLeft ~= r.timeLeft then -- light only?
-        return false
-    end
-    return true
 end
 
 --- Capture mutable item-data fields that distinguish inventory stacks.
@@ -552,6 +493,28 @@ local function IsGoldItem(item)
     return item ~= nil and item.isGold == true
 end
 
+--- Return whether the active player currently carries the specific event item.
+--- This avoids treating items used by other actors as player-inventory mutations.
+---@param item tes3item|nil
+---@param itemData tes3itemData|nil
+---@return boolean
+local function PlayerInventoryContains(item, itemData)
+    local player = tes3.mobilePlayer
+    if player == nil or player.inventory == nil or item == nil then
+        return false
+    end
+    local inventory = player.inventory
+    ---@cast inventory tes3inventory
+    return inventory:contains(item, itemData)
+end
+
+--- Return whether MenuInventory is visible for the eventual-consistency fallback.
+---@return boolean
+local function InventoryMenuVisible()
+    local menu = tes3ui.findMenu(inventoryMenuId)
+    return menu ~= nil and menu.visible == true
+end
+
 --- Create the player inventory module and its one linked collection resource.
 ---@param params MCP.Resources.MemoryModuleParams
 ---@return MCP.Resources.Memory.Inventory
@@ -561,12 +524,6 @@ function this.new(params)
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_inventory" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.Inventory
-    instance.snapshot = jsonrpc.array()
-    instance.snapshotByItemId = {}
-    instance.gold = 0
-    instance.snapshotAvailable = false
-    instance.snapshotCurrent = false
-    instance.inventoryMenuWasVisible = false
     instance.inventoryEntry = document.LiveEntry(descriptor, function()
         return instance:BuildInventoryDocument()
     end)
@@ -575,99 +532,143 @@ function this.new(params)
     return instance
 end
 
---- Replace the runtime snapshot from the complete current player inventory.
----@return boolean
-function this:RefreshSnapshot()
-    self.snapshot = jsonrpc.array()
-    self.snapshotByItemId = {}
-    self.gold = 0
-    self.snapshotAvailable = false
-    self.snapshotCurrent = false
+--- Read and serialize the complete current player inventory for a live document build.
+---@return MCP.AnyMap
+function this:ReadInventoryData()
+    local items = jsonrpc.array()
+    local gold = 0
     if tes3.onMainMenu() or not tes3.mobilePlayer or not tes3.mobilePlayer.inventory then
-        self:MarkDirty()
-        self.logger:debug("Memory inventory refresh skipped: reason=no_player")
-        return false
+        self.logger:debug("Memory inventory live read skipped: reason=no_player")
+        return jsonrpc.object({
+            gold = gold,
+            item_count = table.size(items),
+            items = items,
+        })
     end
 
     for item, count, itemData in iter.ForEachInventory(tes3.mobilePlayer.inventory) do
         if IsGoldItem(item) then
-            self.gold = self.gold + count
+            gold = gold + count
         else
-            local itemId = item.id
-            local stack = {
-                itemId = itemId,
+            table.insert(items, jsonrpc.object({
                 item = SerializeItem(item),
                 itemData = SerializeItemData(itemData, item),
                 count = count,
-                snapshotIndex = table.size(self.snapshot) + 1,
-            }
-            local itemBin = self.snapshotByItemId[itemId]
-            if not itemBin then
-                itemBin = {}
-                self.snapshotByItemId[itemId] = itemBin
-            end
-            table.insert(itemBin, stack)
-            table.insert(self.snapshot, stack)
+            }))
         end
     end
-    self.snapshotAvailable = true
-    self.snapshotCurrent = true
-    self:MarkDirty()
-    self.logger:debug("Memory inventory refreshed: stacks=%d", table.size(self.snapshot))
-    return true
+    self.logger:debug("Memory inventory live read: gold=%d stacks=%d", gold, table.size(items))
+    return jsonrpc.object({
+        gold = gold,
+        item_count = table.size(items),
+        items = items,
+    })
 end
 
---- Apply the gold portion of a successful barter to the aggregated player gold balance.
----@param delta integer
----@return boolean
-function this:ApplyGoldDelta(delta)
-    local nextGold = self.gold + delta
-    if nextGold < 0 then
-        return false
+--- Publish one dirty notification for a burst of inventory mutations.
+--- Repeated actions do not republish until a client has rebuilt the live entry.
+---@param reason string
+function this:InvalidateInventory(reason)
+    if not self.published or self.inventoryEntry.cache.dirty then
+        return
     end
-    self.gold = nextGold
-    return true
+    self.logger:debug("Memory inventory invalidated: reason=%s", reason)
+    self:Publish()
 end
 
---- Want to apply a completed barter transaction without re-enumerating the whole inventory. but it was complicated to do this correctly, so for now just refresh the whole inventory after a barter.
+--- Invalidate after an accepted player barter transaction.
 ---@param e barterOfferEventData
 function this:OnBarterOffer(e)
-    if not e or e.success ~= true or not self.snapshotAvailable or not self.snapshotCurrent then
+    if not e or e.success ~= true then
         return
     end
-
-    self:RefreshSnapshot()
-
+    self:InvalidateInventory("barter_offer")
 end
 
---- Refresh after MenuInventory is built or made visible, only when the menu is visible.
----@param e uiActivatedEventData
-function this:OnInventoryUiActivated(e)
-    if not e or not e.element or e.element.id ~= inventoryMenuId or not InventoryMenuVisible() then
+--- Invalidate after the player activates an object, including an item pickup.
+---@param e activateEventData
+function this:OnActivate(e)
+    if not e or e.activator ~= tes3.player then
         return
     end
-    self.inventoryMenuWasVisible = true
-    self:RefreshSnapshot()
+    self:InvalidateInventory("activate")
 end
 
---- Refresh when any menu-mode entry leaves MenuInventory visible in the composed UI.
+--- Invalidate after the player spends charge on a carried enchanted item.
+---@param e enchantChargeUseEventData
+function this:OnEnchantChargeUse(e)
+    if not e or not e.isCast or e.caster ~= tes3.player or not PlayerInventoryContains(e.item, e.itemData) then
+        return
+    end
+    self:InvalidateInventory("enchant_charge_use")
+end
+
+--- Invalidate after the player completes an enchantment attempt.
+---@param e enchantedItemCreateFailedEventData|enchantedItemCreatedEventData
+function this:OnEnchantedItemCreated(e)
+    if not e or e.enchanterReference ~= tes3.player then
+        return
+    end
+    self:InvalidateInventory("enchanted_item_created")
+end
+
+--- Invalidate after a player item drop.
+---@param e itemDroppedEventData
+function this:OnItemDropped(e)
+    self:InvalidateInventory("item_dropped")
+end
+
+--- Invalidate when a pickpocket window closes after its transfer operations complete.
+---@param e pickpocketEventData
+function this:OnPickpocket(e)
+    if not e or e.item ~= nil then
+        return
+    end
+    self:InvalidateInventory("pickpocket_closed")
+end
+
+--- Invalidate after a potion-brewing attempt changes player ingredients or output.
+---@param e potionBrewFailedEventData|potionBrewedEventData
+function this:OnPotionBrewed(e)
+    self:InvalidateInventory("potion_brewed")
+end
+
+--- Invalidate only when the player uses a physical lockpick carried in inventory.
+---@param e lockPickEventData
+function this:OnLockPick(e)
+    if not e or e.picker ~= tes3.mobilePlayer or not e.tool or e.tool.objectType ~= tes3.objectType.lockpick
+        or not PlayerInventoryContains(e.tool, e.toolItemData) then
+        return
+    end
+    self:InvalidateInventory("lock_pick")
+end
+
+--- Invalidate only when the player uses a physical probe carried in inventory.
+---@param e trapDisarmEventData
+function this:OnTrapDisarm(e)
+    if not e or e.disarmer ~= tes3.mobilePlayer or not e.tool or e.tool.objectType ~= tes3.objectType.probe
+        or not PlayerInventoryContains(e.tool, e.toolItemData) then
+        return
+    end
+    self:InvalidateInventory("trap_disarm")
+end
+
+--- Invalidate a successful player repair when both affected items are still carried.
+---@param e repairEventData
+function this:OnRepair(e)
+    if not e or e.repairer ~= tes3.mobilePlayer or e.roll >= e.chance
+        or not PlayerInventoryContains(e.item, e.itemData) or not PlayerInventoryContains(e.tool, e.toolData) then
+        return
+    end
+    self:InvalidateInventory("repair")
+end
+
+--- Use MenuInventory entry as an eventual-consistency fallback for unattributed mutations.
 ---@param e menuEnterEventData
 function this:OnMenuEnter(e)
-    if not InventoryMenuVisible() then
-        return
+    if InventoryMenuVisible() then
+        self:InvalidateInventory("menu_inventory_visible")
     end
-    self.inventoryMenuWasVisible = true
-    self:RefreshSnapshot()
-end
-
---- Refresh after MenuInventory becomes invisible, avoiding unrelated menu exits.
----@param e menuExitEventData
-function this:OnMenuExit(e)
-    if not self.inventoryMenuWasVisible or InventoryMenuVisible() then
-        return
-    end
-    self.inventoryMenuWasVisible = false
-    self:RefreshSnapshot()
 end
 
 --- Register inventory-specific event callbacks alongside the standard loaded callback.
@@ -676,79 +677,89 @@ function this:RegisterEvent()
     if not self.barterOfferCallback then
         self.barterOfferCallback = function(e) self:OnBarterOffer(e) end
         event.register(tes3.event.barterOffer, self.barterOfferCallback)
-        self.logger:debug("Memory inventory barterOffer handler registered")
-    end
-    if not self.uiActivatedCallback then
-        self.uiActivatedCallback = function(e) self:OnInventoryUiActivated(e) end
-        event.register(tes3.event.uiActivated, self.uiActivatedCallback)
-        self.logger:debug("Memory inventory uiActivated handler registered")
     end
     if not self.menuEnterCallback then
         self.menuEnterCallback = function(e) self:OnMenuEnter(e) end
         event.register(tes3.event.menuEnter, self.menuEnterCallback)
-        self.logger:debug("Memory inventory menuEnter handler registered")
     end
-    if not self.menuExitCallback then
-        self.menuExitCallback = function(e) self:OnMenuExit(e) end
-        event.register(tes3.event.menuExit, self.menuExitCallback)
-        self.logger:debug("Memory inventory menuExit handler registered")
+    if not self.activateCallback then
+        self.activateCallback = function(e) self:OnActivate(e) end
+        event.register(tes3.event.activate, self.activateCallback)
+    end
+    if not self.enchantChargeUseCallback then
+        self.enchantChargeUseCallback = function(e) self:OnEnchantChargeUse(e) end
+        event.register(tes3.event.enchantChargeUse, self.enchantChargeUseCallback)
+    end
+    if not self.enchantedItemCreateFailedCallback then
+        self.enchantedItemCreateFailedCallback = function(e) self:OnEnchantedItemCreated(e) end
+        event.register(tes3.event.enchantedItemCreateFailed, self.enchantedItemCreateFailedCallback)
+    end
+    if not self.enchantedItemCreatedCallback then
+        self.enchantedItemCreatedCallback = function(e) self:OnEnchantedItemCreated(e) end
+        event.register(tes3.event.enchantedItemCreated, self.enchantedItemCreatedCallback)
+    end
+    if not self.itemDroppedCallback then
+        self.itemDroppedCallback = function(e) self:OnItemDropped(e) end
+        event.register(tes3.event.itemDropped, self.itemDroppedCallback)
+    end
+    if not self.pickpocketCallback then
+        self.pickpocketCallback = function(e) self:OnPickpocket(e) end
+        event.register(tes3.event.pickpocket, self.pickpocketCallback)
+    end
+    if not self.potionBrewFailedCallback then
+        self.potionBrewFailedCallback = function(e) self:OnPotionBrewed(e) end
+        event.register(tes3.event.potionBrewFailed, self.potionBrewFailedCallback)
+    end
+    if not self.potionBrewedCallback then
+        self.potionBrewedCallback = function(e) self:OnPotionBrewed(e) end
+        event.register(tes3.event.potionBrewed, self.potionBrewedCallback)
+    end
+    if not self.lockPickCallback then
+        self.lockPickCallback = function(e) self:OnLockPick(e) end
+        event.register(tes3.event.lockPick, self.lockPickCallback)
+    end
+    if not self.repairCallback then
+        self.repairCallback = function(e) self:OnRepair(e) end
+        event.register(tes3.event.repair, self.repairCallback)
+    end
+    if not self.trapDisarmCallback then
+        self.trapDisarmCallback = function(e) self:OnTrapDisarm(e) end
+        event.register(tes3.event.trapDisarm, self.trapDisarmCallback)
     end
 end
 
 --- Unregister inventory-specific callbacks before releasing the standard loaded callback.
 function this:UnregisterEvent()
-    if self.menuExitCallback then
-        event.unregister(tes3.event.menuExit, self.menuExitCallback)
-        self.menuExitCallback = nil
-        self.logger:debug("Memory inventory menuExit handler unregistered")
-    end
-    if self.menuEnterCallback then
-        event.unregister(tes3.event.menuEnter, self.menuEnterCallback)
-        self.menuEnterCallback = nil
-        self.logger:debug("Memory inventory menuEnter handler unregistered")
-    end
-    if self.uiActivatedCallback then
-        event.unregister(tes3.event.uiActivated, self.uiActivatedCallback)
-        self.uiActivatedCallback = nil
-        self.logger:debug("Memory inventory uiActivated handler unregistered")
-    end
-    if self.barterOfferCallback then
-        event.unregister(tes3.event.barterOffer, self.barterOfferCallback)
-        self.barterOfferCallback = nil
-        self.logger:debug("Memory inventory barterOffer handler unregistered")
+    local callbacks = {
+        { "trapDisarmCallback", tes3.event.trapDisarm },
+        { "repairCallback", tes3.event.repair },
+        { "lockPickCallback", tes3.event.lockPick },
+        { "potionBrewedCallback", tes3.event.potionBrewed },
+        { "potionBrewFailedCallback", tes3.event.potionBrewFailed },
+        { "pickpocketCallback", tes3.event.pickpocket },
+        { "itemDroppedCallback", tes3.event.itemDropped },
+        { "enchantedItemCreatedCallback", tes3.event.enchantedItemCreated },
+        { "enchantedItemCreateFailedCallback", tes3.event.enchantedItemCreateFailed },
+        { "enchantChargeUseCallback", tes3.event.enchantChargeUse },
+        { "activateCallback", tes3.event.activate },
+        { "menuEnterCallback", tes3.event.menuEnter },
+        { "barterOfferCallback", tes3.event.barterOffer },
+    }
+    for _, callback in ipairs(callbacks) do
+        local callbackName = callback[1]
+        local eventId = callback[2]
+        if self[callbackName] then
+            event.unregister(eventId, self[callbackName])
+            self[callbackName] = nil
+        end
     end
     base.UnregisterEvent(self)
 end
 
---- Synchronize UI state and capture a full snapshot before publishing after a loaded-game transition.
----@param e loadedEventData
-function this:OnLoaded(e)
-    self.inventoryMenuWasVisible = InventoryMenuVisible()
-    self:RefreshSnapshot()
-    base.OnLoaded(self, e)
-end
-
---- Build the serialized inventory collection from the runtime snapshot.
+--- Build the serialized inventory collection from the current player inventory.
 ---@return MCP.MemoryDocument
 function this:BuildInventoryDocument()
-    -- TODO it seems to on-demand reflesh on document build better than event driven snapshot.
-    -- event just notification.
-
-    local items = jsonrpc.array()
-    for _, stack in ipairs(self.snapshot) do
-        table.insert(items, jsonrpc.object({
-            item = stack.item,
-            itemData = stack.itemData,
-            count = stack.count,
-        }))
-    end
-    local data = jsonrpc.object({
-        -- available = self.snapshotAvailable, -- need?
-        -- is_current = self.snapshotCurrent, -- need?
-        gold = self.gold,
-        item_count = table.size(items),
-        items = items,
-    })
+    local data = self:ReadInventoryData()
     local subjectType = document.SubjectTypeFromObject(tes3.player)
     return document.Document(
         document.documentType.collection,
@@ -758,7 +769,7 @@ function this:BuildInventoryDocument()
         {
             subject = subjectType and document.Subject(subjectType, document.subjectId.player, "Player") or nil,
             scope = self.manager:GetScope(),
-            source = document.Source(document.sourceKind.liveState, nil, nil, "Current player inventory snapshot."),
+            source = document.Source(document.sourceKind.liveState, nil, nil, "Current player inventory read on demand."),
         }
     )
 end
