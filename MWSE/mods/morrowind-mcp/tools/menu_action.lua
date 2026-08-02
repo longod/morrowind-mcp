@@ -1,14 +1,59 @@
 local base = require("morrowind-mcp.core.itool")
 local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local jsonpointer = require("morrowind-mcp.core.json_pointer")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
+local minMenuPathLength = 1
+local maxMenuPathLength = 1024
 
 ---@class MCP.Tools.MenuAction: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
+
+--- Validates RFC 6901 syntax before an action reaches the live UI tree.
+---@param menuPath string
+---@return boolean valid
+---@return string? errorMessage
+function this.ValidateMenuPath(menuPath)
+    local tokens, errorMessage = jsonpointer.Parse(menuPath)
+    return tokens ~= nil, errorMessage
+end
+
+--- Resolves a serialized UI path against mainRoot using only children-array tokens.
+---@param root tes3uiElement
+---@param menuPath string
+---@return tes3uiElement? target
+---@return string? errorMessage
+function this.ResolveMenuPath(root, menuPath)
+    local tokens, errorMessage = jsonpointer.Parse(menuPath)
+    if not tokens then
+        return nil, errorMessage
+    end
+
+    local target = root
+    local tokenIndex = 1
+    while tokenIndex <= table.size(tokens) do
+        if tokens[tokenIndex] ~= "children" then
+            return nil, "menu_path may only traverse children arrays."
+        end
+        local serializedIndex = tonumber(tokens[tokenIndex + 1])
+        if serializedIndex == nil or serializedIndex < 0 or tostring(serializedIndex) ~= tokens[tokenIndex + 1] then
+            return nil, "menu_path contains an invalid children index."
+        end
+        if not target.children then
+            return nil, "menu_path traverses an element without children."
+        end
+        target = target.children[serializedIndex + 1]
+        if not target then
+            return nil, "menu_path points to a missing child."
+        end
+        tokenIndex = tokenIndex + 2
+    end
+    return target, nil
+end
 
 ---@param params table?
 ---@return MCP.Tools.MenuAction
@@ -24,15 +69,20 @@ function this.new(params)
             {
                 menu_id = jsonrpc.NumberSchema(
                     "Menu ID",
-                    "(Required) Action to perform on the non-root menu by ID (key name is `id`). One of `menu_id` or `menu_name` should be specified."
+                    "(One selector required) Action to perform on the non-root menu by ID (key name is `id`). Specify exactly one of `menu_id`, `menu_name`, or `menu_path`."
                 ),
                 menu_name = jsonrpc.StringSchema(
                     "Menu Name",
-                    "(Required) Action to perform on the non-root menu by name (key name is `name`). One of `menu_id` or `menu_name` should be specified.",
+                    "(One selector required) Action to perform on the non-root menu by name (key name is `name`). Specify exactly one of `menu_id`, `menu_name`, or `menu_path`.",
                     minMenuNameLength,
                     maxMenuNameLength
                 ),
-                -- TODO menu path, because menu name and menu id are not unique, but menu path is unique. json path is not good, because menu name can contain dot.
+                menu_path = jsonrpc.StringSchema(
+                    "Menu Path",
+                    "(One selector required) Action to perform on the non-root menu by RFC 6901 JSON Pointer. Specify exactly one of `menu_id`, `menu_name`, or `menu_path`.",
+                    minMenuPathLength,
+                    maxMenuPathLength
+                ),
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
                     {
                         -- empty is inspect how to use this menu element?
@@ -74,20 +124,32 @@ function this:Validate(params)
     local arguments = params.arguments or {}
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
+    local menu_path = arguments["menu_path"]
     local action = arguments["action"]
     local text = arguments["text"]
-    if menu_id ~= nil and menu_name ~= nil then
+    local targetCount = (menu_id ~= nil and 1 or 0) + (menu_name ~= nil and 1 or 0) + (menu_path ~= nil and 1 or 0)
+    if targetCount > 1 then
         table.insert(result.errors, {
             path = "$",
-            message = "Only one of menu_id or menu_name should be specified.",
+            message = "Only one of menu_id, menu_name, or menu_path should be specified.",
         })
         result.valid = false
-    elseif menu_id == nil and menu_name == nil then
+    elseif targetCount == 0 then
         table.insert(result.errors, {
             path = "$",
-            message = "One of menu_id or menu_name should be specified.",
+            message = "One of menu_id, menu_name, or menu_path should be specified.",
         })
         result.valid = false
+    end
+    if menu_path ~= nil then
+        local validPath, pathError = this.ValidateMenuPath(menu_path)
+        if not validPath then
+            table.insert(result.errors, {
+                path = "menu_path",
+                message = pathError,
+            })
+            result.valid = false
+        end
     end
     if action == "textInput" and text == nil then
         table.insert(result.errors, {
@@ -110,6 +172,7 @@ function this:Execute(arguments, context)
     -- Argument validation already covered schema, cross-field, and text-sink checks; this function handles live UI state.
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
+    local menu_path = arguments["menu_path"]
     local action = arguments["action"]
 
     local menu = tes3.worldController.menuController.mainRoot
@@ -125,6 +188,15 @@ function this:Execute(arguments, context)
         self.logger:debug("Searching for menu with Name: %s", menu_name)
 
         target = menu:findChild(menu_name)
+    elseif menu_path ~= nil then
+        self.logger:debug("Searching for menu with path: %s", menu_path)
+
+        local pathError = nil
+        target, pathError = this.ResolveMenuPath(menu, menu_path)
+        if not target then
+            local errorContent = jsonrpc.TextContent(pathError or "Menu path could not be resolved.")
+            return jsonrpc.CallToolResult(errorContent, nil, true)
+        end
     end
 
     -- Target availability can only be checked against the current UI tree at execution time.

@@ -3,6 +3,7 @@ local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 local enumname = require("morrowind-mcp.tes3.enumname")
 local ui_action = require("morrowind-mcp.util.ui_action")
 local strutil = require("morrowind-mcp.core.strutil")
+local widgetutil = require("morrowind-mcp.tes3.widget")
 
 local this = {}
 
@@ -17,25 +18,6 @@ local fontName = {
     [1] = "century_gothic_font_regular", -- Century Sans
     [2] = "daedric_font",
 }
-
----@param widget tes3uiWidget
----@return string? widgetType
-local function GetWidgetType(widget)
-    local element = widget.element
-
-    -- Prefer MWSE's public type because it already reflects widget kind.
-    local widgetType = element.type
-
-    -- extended by MWSE or other mod.
-    if widgetType == "luaWidget" then
-        local luaWidgetType = element:getLuaData("MWSE:WidgetTypeName")
-        if type(luaWidgetType) == "string" and luaWidgetType ~= "" then
-            widgetType = luaWidgetType
-        end
-    end
-
-    return widgetType
-end
 
 ---@param i tes3uiElement
 ---@param o MCP.AnyMap?
@@ -224,8 +206,10 @@ function this.tes3uiWidget(i, o)
 
     o = o or jsonrpc.object()
 
-    local widgetType = GetWidgetType(i)
+    local widgetType = widgetutil.GetType(i)
     o.type = widgetType
+    -- Always expose an array so unsupported widgets are distinguishable from omitted metadata.
+    o.actionable = jsonrpc.array(ui_action.GetWidgetActionProperties(i))
     -- o.element = i.element -- parent
 
     local handler = widgetHandler[widgetType]
@@ -241,7 +225,7 @@ end
 ---@param i tes3uiElement
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
-function this.tes3uiElement(i, o)
+function this.tes3uiElement(i, o, path)
     if not i then
         return nil
     end
@@ -254,6 +238,9 @@ function this.tes3uiElement(i, o)
     end
 
     o = o or jsonrpc.object()
+    -- This RFC 6901 pointer addresses the serialized tree, so duplicate names and IDs remain unambiguous.
+    local elementPath = path or ""
+    o.path = elementPath
     -- o.absolutePosAlignX = i.absolutePosAlignX
     -- o.absolutePosAlignY = i.absolutePosAlignY
     -- o.alpha = i.alpha
@@ -328,7 +315,8 @@ function this.tes3uiElement(i, o)
 
     local children = jsonrpc.array(table.size(i.children))
     for _, child in ipairs(i.children) do
-        local c = this.tes3uiElement(child)
+        local childPath = elementPath .. "/children/" .. tostring(table.size(children))
+        local c = this.tes3uiElement(child, nil, childPath)
         if c then
             table.insert(children, c)
         end

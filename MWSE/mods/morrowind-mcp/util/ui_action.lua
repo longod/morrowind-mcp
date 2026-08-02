@@ -1,8 +1,10 @@
 local this = {}
 local enumname = require("morrowind-mcp.tes3.enumname")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "ui_action" })
+local jsonpointer = require("morrowind-mcp.core.json_pointer")
+local widgetutil = require("morrowind-mcp.tes3.widget")
 
-local defaultPathSeparator = "|"
+local defaultPathSeparator = "/"
 
 -- Native Morrowind menus can attach meaningful handlers to widgetless layout elements.
 -- Only keep properties that are plausible direct input actions for menu-action style triggering.
@@ -19,102 +21,102 @@ local actionableProperty = {
 ---@type MCP.UIActionHint[]
 local staticHints = {
     {
-        path = "layout|MenuBook|PartNonDragMenu_main|null|MenuBook_buttons_left|null|MenuBook_button_prev",
+        path = "layout/MenuBook/PartNonDragMenu_main/null/MenuBook_buttons_left/null/MenuBook_button_prev",
         properties = { "mouseClick" },
         name = "MenuBook_button_prev"
     },
     {
-        path = "layout|MenuBook|PartNonDragMenu_main|null|MenuBook_buttons_left|null|MenuBook_button_take",
+        path = "layout/MenuBook/PartNonDragMenu_main/null/MenuBook_buttons_left/null/MenuBook_button_take",
         properties = { "mouseClick" },
         name = "MenuBook_button_take"
     },
     {
-        path = "layout|MenuBook|PartNonDragMenu_main|null|MenuBook_buttons_right|null|MenuBook_button_close",
+        path = "layout/MenuBook/PartNonDragMenu_main/null/MenuBook_buttons_right/null/MenuBook_button_close",
         properties = { "mouseClick", "keyPress" },
         name = "MenuBook_button_close"
     },
     {
-        path = "layout|MenuBook|PartNonDragMenu_main|null|MenuBook_buttons_right|null|MenuBook_button_next",
+        path = "layout/MenuBook/PartNonDragMenu_main/null/MenuBook_buttons_right/null/MenuBook_button_next",
         properties = { "mouseClick" },
         name = "MenuBook_button_next"
     },
     {
-        path = "layout|MenuJournal|PartNonDragMenu_main|MenuJournal_bookmark|MenuJournal_button_bookmark_cancel",
+        path = "layout/MenuJournal/PartNonDragMenu_main/MenuJournal_bookmark/MenuJournal_button_bookmark_cancel",
         properties = { "mouseClick" },
         name = "MenuJournal_button_bookmark_cancel"
     },
     {
-        path = "layout|MenuJournal|PartNonDragMenu_main|MenuJournal_bookmark|null|MenuJournal_button_bookmark_quests",
+        path = "layout/MenuJournal/PartNonDragMenu_main/MenuJournal_bookmark/null/MenuJournal_button_bookmark_quests",
         properties = { "mouseClick" },
         name = "MenuJournal_button_bookmark_quests"
     },
     {
-        path = "layout|MenuJournal|PartNonDragMenu_main|MenuJournal_bookmark|null|MenuJournal_button_bookmark_topics",
+        path = "layout/MenuJournal/PartNonDragMenu_main/MenuJournal_bookmark/null/MenuJournal_button_bookmark_topics",
         properties = { "mouseClick" },
         name = "MenuJournal_button_bookmark_topics"
     },
     {
-        path = "layout|MenuJournal|PartNonDragMenu_main|null|MenuBook_buttons_left|null|MenuBook_button_take",
+        path = "layout/MenuJournal/PartNonDragMenu_main/null/MenuBook_buttons_left/null/MenuBook_button_take",
         properties = { "mouseClick" },
         name = "MenuBook_button_take"
     },
     {
-        path = "layout|MenuJournal|PartNonDragMenu_main|null|MenuBook_buttons_right|null|MenuBook_button_close",
+        path = "layout/MenuJournal/PartNonDragMenu_main/null/MenuBook_buttons_right/null/MenuBook_button_close",
         properties = { "mouseClick" },
         name = "MenuBook_button_close"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_Exit_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_Exit_container",
         properties = { "mouseClick" },
         name = "MenuOptions_Exit_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_Load_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_Load_container",
         properties = { "mouseClick" },
         name = "MenuOptions_Load_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_MCM_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_MCM_container",
         properties = { "mouseClick" },
         name = "MenuOptions_MCM_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_New_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_New_container",
         properties = { "mouseClick" },
         name = "MenuOptions_New_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_Options_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_Options_container",
         properties = { "mouseClick" },
         name = "MenuOptions_Options_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_Return_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_Return_container",
         properties = { "mouseClick" },
         name = "MenuOptions_Return_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|MenuOptions_Save_container",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/MenuOptions_Save_container",
         properties = { "mouseClick" },
         name = "MenuOptions_Save_container"
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|ImprovedMainMenu:ContinueButton",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/ImprovedMainMenu:ContinueButton",
         properties = { "mouseClick" },
         name = "ImprovedMainMenu:ContinueButton" -- Improved Main Menu mod
     },
     {
-        path = "layout|MenuOptions|PartNonDragMenu_main|null|Pete_ContinueButton",
+        path = "layout/MenuOptions/PartNonDragMenu_main/null/Pete_ContinueButton",
         properties = { "mouseClick" },
         name = "Pete_ContinueButton" -- Continue mod
     },
     {
-        path = "layout|MenuScroll|PartNonDragMenu_main|null|MenuBook_PickupButton",
+        path = "layout/MenuScroll/PartNonDragMenu_main/null/MenuBook_PickupButton",
         properties = { "mouseClick" },
         name = "MenuBook_PickupButton"
     },
     {
-        path = "layout|MenuScroll|PartNonDragMenu_main|null|MenuScroll_Close",
+        path = "layout/MenuScroll/PartNonDragMenu_main/null/MenuScroll_Close",
         properties = { "mouseClick" },
         name = "MenuScroll_Close"
     },
@@ -135,6 +137,16 @@ local observedHintsDirty = false
 
 ---@type table<string, MCP.UIActionHint>
 local staticHintByPath = {}
+
+-- Widget actions are declarative so menu inspection never needs to observe user input.
+---@type table<string, string[]>
+local widgetActionProperties = {
+    button = { "mouseClick" },
+    cycleButton = { "mouseClick" },
+    hyperlink = { "mouseClick" },
+    textInput = { "textInput" },
+    textSelect = { "mouseClick" },
+}
 
 -- Build an index once at module load so serialization can do constant-time lookups by path.
 for _, hint in ipairs(staticHints) do
@@ -159,6 +171,13 @@ local function GetPathSegment(element)
     return nil
 end
 
+--- Escapes a path token according to RFC 6901 so UI names cannot collide with separators.
+---@param token string
+---@return string
+function this.EscapeJsonPointerToken(token)
+    return jsonpointer.EscapeToken(token)
+end
+
 --- Builds a stable UI path for matching native layout events, not a filesystem or resource path.
 ---@param element tes3uiElement
 ---@param separator string?
@@ -177,11 +196,27 @@ function this.BuildElementPath(element, separator)
         if not segment then
             return nil
         end
-        table.insert(segments, 1, segment)
+        segments[table.size(segments) + 1] = this.EscapeJsonPointerToken(segment)
         current = current.parent
     end
 
-    return table.concat(segments, pathSeparator)
+    local pathParts = {}
+    for index = table.size(segments), 1, -1 do
+        pathParts[table.size(pathParts) + 1] = segments[index]
+    end
+    return table.concat(pathParts, pathSeparator)
+end
+
+--- Returns action metadata for a widget, including an explicit empty list for unsupported widgets.
+---@param widget tes3uiWidget
+---@return string[] properties
+function this.GetWidgetActionProperties(widget)
+    if not widget or not widget.element then
+        return {}
+    end
+
+    local widgetType = widgetutil.GetType(widget)
+    return widgetActionProperties[widgetType] or {}
 end
 
 --- Checks element validity defensively because observed UI objects may disappear between events.
@@ -344,6 +379,10 @@ end
 ---@param element tes3uiElement
 ---@return string[]? properties tes3.uiProperty names
 function this.GetActionProperties(element)
+    if IsValidElement(element) and widgetutil.IsScrollArrow(element) then
+        return { "mouseClick" }
+    end
+
     local hint = GetActionHint(element)
     return hint and hint.properties or nil
 end
@@ -395,16 +434,6 @@ function this.FormatObservedHintsForStaticList()
         table.insert(lines, FormatStaticHintRow(observedHintByPath[key]))
     end
     return table.concat(lines, "\n")
-end
-
---- Changes the path separator for tests or future compatibility with different path encodings.
----@param separator string
-function this.SetDefaultPathSeparator(separator)
-    if type(separator) ~= "string" or separator == "" then
-        logger:error("Invalid UI action path separator: %s", tostring(separator))
-        return
-    end
-    defaultPathSeparator = separator
 end
 
 return this

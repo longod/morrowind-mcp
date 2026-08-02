@@ -39,7 +39,7 @@ function this.Test()
 
     unitwind:start("morrowind-mcp.util.ui_action")
 
-    unitwind:test("BuildElementPath uses the default separator", function()
+    unitwind:test("BuildElementPath uses RFC 6901 separators", function()
         local root = NewElement(nil, "layout")
         local menu = NewElement("MenuScroll", "rect", root)
         local main = NewElement("PartNonDragMenu_main", "model", menu)
@@ -47,14 +47,14 @@ function this.Test()
         local button = NewElement("MenuBook_PickupButton", "layout", holder)
 
         unitwind:expect(uiAction.BuildElementPath(button)).toBe(
-            "layout|MenuScroll|PartNonDragMenu_main|null|MenuBook_PickupButton")
+            "layout/MenuScroll/PartNonDragMenu_main/null/MenuBook_PickupButton")
     end)
 
-    unitwind:test("BuildElementPath accepts an alternate separator", function()
+    unitwind:test("BuildElementPath escapes RFC 6901 token characters", function()
         local root = NewElement(nil, "layout")
-        local child = NewElement("Child", "layout", root)
+        local child = NewElement("Child/with~characters", "layout", root)
 
-        unitwind:expect(uiAction.BuildElementPath(child, ">")).toBe("layout>Child")
+        unitwind:expect(uiAction.BuildElementPath(child)).toBe("layout/Child~1with~0characters")
     end)
 
     unitwind:test("BuildElementPath does not include runtime ids", function()
@@ -62,7 +62,7 @@ function this.Test()
         local child = NewElement("Child", "layout", root)
         child.id = 12345
 
-        unitwind:expect(uiAction.BuildElementPath(child)).toBe("layout|Child")
+        unitwind:expect(uiAction.BuildElementPath(child)).toBe("layout/Child")
     end)
 
     unitwind:test("BuildElementPath rejects elements without name or type", function()
@@ -77,6 +77,69 @@ function this.Test()
         button.widget = {}
 
         unitwind:expect(uiAction.GetActionProperties(button)).toBe(nil)
+    end)
+
+    unitwind:test("GetWidgetActionProperties returns supported actions", function()
+        local buttonElement = NewElement("Button", "button")
+        local properties = uiAction.GetWidgetActionProperties({ element = buttonElement })
+
+        unitwind:expect(table.size(properties)).toBe(1)
+        unitwind:expect(properties[1]).toBe("mouseClick")
+    end)
+
+    unitwind:test("GetWidgetActionProperties makes unsupported widgets explicit", function()
+        local fillbarElement = NewElement("Fill", "fillbar")
+        local properties = uiAction.GetWidgetActionProperties({ element = fillbarElement })
+
+        unitwind:expect(table.size(properties)).toBe(0)
+    end)
+
+    unitwind:test("GetActionProperties exposes scroll arrow mouse clicks", function()
+        local root = NewElement(nil, "layout")
+        local scrollBar = NewElement("Slider", "scrollBar", root)
+        scrollBar.widget = {}
+        local arrow = NewElement("PartScrollBar_left_arrow", "model", scrollBar)
+
+        local properties = uiAction.GetActionProperties(arrow)
+
+        unitwind:expect(properties == nil).toBe(false)
+        if properties then
+            unitwind:expect(properties[1]).toBe("mouseClick")
+        end
+    end)
+
+    unitwind:test("tes3uiElement emits unique structural paths for duplicate names", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local root = NewElement(nil, "layout")
+        root.children = {}
+        local first = NewElement("duplicate", "layout", root)
+        local second = NewElement("duplicate", "layout", root)
+        first.children = {}
+        second.children = {}
+        root.children = { first, second }
+
+        local serialized = ui.tes3uiElement(root)
+
+        unitwind:expect(serialized == nil).toBe(false)
+        if serialized and serialized.children then
+            unitwind:expect(serialized.path).toBe("")
+            unitwind:expect(serialized.children[1].path).toBe("/children/0")
+            unitwind:expect(serialized.children[2].path).toBe("/children/1")
+        end
+    end)
+
+    unitwind:test("tes3uiWidget exposes an empty actionable array for unsupported widgets", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local fillbarElement = NewElement("Fill", "fillbar")
+        local serialized = ui.tes3uiWidget({ element = fillbarElement })
+
+        unitwind:expect(serialized == nil).toBe(false)
+        if serialized then
+            unitwind:expect(serialized.actionable == nil).toBe(false)
+            if serialized.actionable then
+                unitwind:expect(table.size(serialized.actionable)).toBe(0)
+            end
+        end
     end)
 
     unitwind:test("GetActionProperties skips non-layout elements", function()
