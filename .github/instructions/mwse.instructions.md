@@ -30,7 +30,7 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 
 - LuaJIT を使用している
 - Morrowind Script Extender (MWSE) を使用している
-- MWSEに関する情報は `MWSE Documentation` or `MWSE GitHub` を参照する
+- MWSEに関する情報はローカルのソースコードとメタ情報を確認し、内部実装を調べたい場合は [MWSE GitHub](https://github.com/MWSE/MWSE) を調べる
 - エントリポイント: [main.lua](../../MWSE/mods/morrowind-mcp/main.lua)
 - loggerを使用することで `MWSE.log` にログを出力できる
 - `MWSE.log` を確認することで、サーバー側の挙動を検査できるようにする

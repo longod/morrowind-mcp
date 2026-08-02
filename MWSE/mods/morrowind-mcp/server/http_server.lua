@@ -984,7 +984,6 @@ function this:OnToolsCall(params, request)
         end,
     }
 
-    -- FIXME I dont want to called tools in unit test, because it is unexpected!
     if config.indicator.toolsCall and tes3.isInitialized() then
         -- Insert clear visual indicators when tools are invoked
         local notify = string.format("%s is running %s", settings.modName, params.name)

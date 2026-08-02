@@ -153,11 +153,12 @@ function this:Execute(arguments, context)
             local errorContent = jsonrpc.TextContent("Menu is not a text input.")
             return jsonrpc.CallToolResult(errorContent, nil, true)
         end
-        -- FIXME it seems to enter name at the first time, no entered name later when character sheets shown.
-        -- tes3ui.acquireTextInput(target) -- TODO
+        local topLevelMenu = target:getTopLevelMenu()
         target.text = text
-        -- target:triggerEvent(tes3.uiEvent.textUpdated) -- need?
-        -- target:updateLayout() -- need?
+        target:triggerEvent(tes3.uiEvent.textUpdated)
+        if topLevelMenu and topLevelMenu:isValid() then
+            topLevelMenu:updateLayout()
+        end
     else
         -- mouseClick
         target:triggerEvent(action)
