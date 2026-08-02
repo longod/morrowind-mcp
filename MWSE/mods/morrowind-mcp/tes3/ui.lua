@@ -2,6 +2,7 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "tes3ui" })
 local enumname = require("morrowind-mcp.tes3.enumname")
 local ui_action = require("morrowind-mcp.util.ui_action")
+local jsonpointer = require("morrowind-mcp.core.json_pointer")
 local strutil = require("morrowind-mcp.core.strutil")
 local widgetutil = require("morrowind-mcp.tes3.widget")
 
@@ -18,6 +19,48 @@ local fontName = {
     [1] = "century_gothic_font_regular", -- Century Sans
     [2] = "daedric_font",
 }
+
+--- Validates an RFC 6901 UI path before resolving it against a live UI tree.
+---@param menuPath string
+---@return boolean valid
+---@return string? errorMessage
+function this.ValidatePath(menuPath)
+    local tokens, errorMessage = jsonpointer.Parse(menuPath)
+    return tokens ~= nil, errorMessage
+end
+
+--- Resolves a serialized UI path using raw MWSE child indexes.
+---@param root tes3uiElement
+---@param menuPath string
+---@return tes3uiElement? target
+---@return string? errorMessage
+function this.ResolvePath(root, menuPath)
+    local tokens, errorMessage = jsonpointer.Parse(menuPath)
+    if not tokens then
+        return nil, errorMessage
+    end
+
+    local target = root
+    local tokenIndex = 1
+    while tokenIndex <= table.size(tokens) do
+        if tokens[tokenIndex] ~= "children" then
+            return nil, "menu_path may only traverse children arrays."
+        end
+        local rawIndex = tonumber(tokens[tokenIndex + 1])
+        if rawIndex == nil or rawIndex < 0 or tostring(rawIndex) ~= tokens[tokenIndex + 1] then
+            return nil, "menu_path contains an invalid children index."
+        end
+        if not target.children then
+            return nil, "menu_path traverses an element without children."
+        end
+        target = target.children[rawIndex + 1]
+        if not target then
+            return nil, "menu_path points to a missing child."
+        end
+        tokenIndex = tokenIndex + 2
+    end
+    return target, nil
+end
 
 ---@param i tes3uiElement
 ---@param o MCP.AnyMap?
@@ -229,17 +272,14 @@ function this.tes3uiElement(i, o, path)
     if not i then
         return nil
     end
-    if not i:isValid() then
-        return nil
-    end
-    -- same as human visibility
-    if not i.visible then
+    local elementPath = path or ""
+    if not i:isValid() or not i.visible then
+        -- Menu fetch exposes only live controls a player can currently see.
         return nil
     end
 
     o = o or jsonrpc.object()
     -- This RFC 6901 pointer addresses the serialized tree, so duplicate names and IDs remain unambiguous.
-    local elementPath = path or ""
     o.path = elementPath
     -- o.absolutePosAlignX = i.absolutePosAlignX
     -- o.absolutePosAlignY = i.absolutePosAlignY
@@ -302,7 +342,6 @@ function this.tes3uiElement(i, o, path)
     end
     -- o.texture = i.texture, -- need
     o.type = i.type -- already a string from MWSE; tes3.uiElementType holds numbers, not this field
-    -- o.visible = i.visible -- if element is not terminated, it is needed to contain
     o.widget = this.tes3uiWidget(i.widget)
     -- o.width = i.width
     -- o.widthProportional = i.widthProportional
@@ -313,9 +352,10 @@ function this.tes3uiElement(i, o, path)
         o.actionable = jsonrpc.array(actionable)
     end
 
-    local children = jsonrpc.array(table.size(i.children))
-    for _, child in ipairs(i.children) do
-        local childPath = elementPath .. "/children/" .. tostring(table.size(children))
+    local children = jsonrpc.array()
+    for childIndex, child in ipairs(i.children) do
+        -- Paths use raw MWSE child indexes so visible siblings do not shift when hidden ones toggle.
+        local childPath = elementPath .. "/children/" .. tostring(childIndex - 1)
         local c = this.tes3uiElement(child, nil, childPath)
         if c then
             table.insert(children, c)

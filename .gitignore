@@ -39,6 +39,11 @@ luac.out
 *.x86_64
 *.hex
 
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
 # Project
 .vscode/
 meta.ini
@@ -46,6 +51,7 @@ meta.ini
 .exit-after-tests
 .server-test-running
 *.log
+tests/logs/game_progression/
 mwmcp.local.json
 .agents/mcp_config.json
 .mcp.json

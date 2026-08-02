@@ -1,3 +1,9 @@
+param(
+    [switch]$WaitForServer,
+    [ValidateRange(1, 300)]
+    [int]$ServerReadyTimeoutSeconds = 60
+)
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "mwmcp_config.ps1")
 
@@ -21,8 +27,27 @@ if (-not (Test-Path -LiteralPath $mo2ExeFile)) {
 $shortcut = "moshortcut://$mo2Profile`:$mo2Application"
 Write-Host "[INFO] Launching: $mo2ExeFile $shortcut" -ForegroundColor DarkCyan
 & $mo2ExeFile $shortcut
+$launchExitCode = [int]$LASTEXITCODE
 # 戻り値が0以外でも正常に起動している可能性があるようだ。1, 64など。
-if ([int]$LASTEXITCODE -ne 0) {
-    Write-Host "[WARN] MO2 launch command exited with code: $LASTEXITCODE" -ForegroundColor Yellow
+if ($launchExitCode -ne 0) {
+    Write-Host "[WARN] MO2 launch command exited with code: $launchExitCode" -ForegroundColor Yellow
 }
-exit $LASTEXITCODE
+
+if (-not $WaitForServer) {
+    exit $launchExitCode
+}
+
+$deadline = (Get-Date).AddSeconds($ServerReadyTimeoutSeconds)
+do {
+    $connection = Test-NetConnection -ComputerName $config.Connection.host -Port $config.Connection.port -WarningAction Ignore -InformationAction Ignore
+    if ($connection.TcpTestSucceeded) {
+        Write-Host "[INFO] Server is responding on $($config.Connection.host):$($config.Connection.port)." -ForegroundColor Green
+        exit 0
+    }
+    if ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 3
+    }
+} while ((Get-Date) -lt $deadline)
+
+Write-Host "[ERROR] Server did not become reachable at $($config.Connection.host):$($config.Connection.port) within $ServerReadyTimeoutSeconds seconds." -ForegroundColor Red
+exit 1

@@ -75,6 +75,7 @@ Windows上での開発のため、以下の運用ルールを必須とする。
 
 - Bash/Unix 系コマンドを使用しない（例: `bash`, `sh`, `rg`, `grep`, `sed`, `awk`, `cat`, `ls`, `find`, `xargs`）
 - スクリプト実行は PowerShell のみを使用する（`.ps1` と PowerShell cmdlet）
+- `tests/game_progression/` の Python runner とその単体テストに限り、uv 管理の Python 3.14 を使用してよい。起動・停止・設定解決は既存の PowerShell スクリプトを優先して再利用する。
 - 検索は VS Code の検索ツールを優先する（`grep_search`, `file_search`, `semantic_search`）
 - ターミナルで検索が必要な場合は PowerShell cmdlet を使う（例: `Get-ChildItem`, `Select-String`）
 - 代替手段が無い場合は、実行前にユーザー確認を取る

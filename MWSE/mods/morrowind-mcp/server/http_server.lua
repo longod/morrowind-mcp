@@ -953,10 +953,13 @@ function this:OnToolsCall(params, request)
 
 
     if not tool:CanExecute(params) then
+        -- Runtime availability is not an authorization failure. Keep the HTTP transport successful so
+        -- clients do not attempt OAuth discovery, and surface the condition through the MCP tool result.
+        local message = string.format("Tool is unavailable in the current game state: %s", tostring(params.name))
         ---@type MCP.MethodResult
         return {
-            http_response = http.response_code.forbidden,
-            error = jsonrpc.error_code.invalid_params,
+            http_response = http.response_code.ok,
+            result = jsonrpc.CallToolResult(jsonrpc.TextContent(message), nil, true),
         }
     end
 
@@ -1023,9 +1026,10 @@ function this:OnPromptsGet(params)
         }
     end
     if not prompt:CanExecute(params) then
+        -- Prompt availability depends on the current game state, not client authorization.
         ---@type MCP.MethodResult
         return {
-            http_response = http.response_code.forbidden,
+            http_response = http.response_code.bad_request,
             error = jsonrpc.error_code.invalid_params,
         }
     end

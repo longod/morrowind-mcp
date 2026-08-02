@@ -4,11 +4,12 @@
 
 -- agent agressivly use morrowind mcp, first read resources, then use tools.
 
--- set expected AI autonomy
--- https://arxiv.org/abs/2506.12469
--- level 1. assistant AI. can answer questions and give advice.
--- level 2. co-pilot AI. can do some tasks.
--- level 3. autonomous AI agent. within the limits of human player information and game rules.
--- level 4. fully autonomous AI agent. using all meta data.
+-- Autonomy is defined by required user involvement, not by tool capability.
+-- https://arxiv.org/html/2506.12469v2
+-- Level 1 Operator: execute only explicitly requested actions; the user owns planning and choices.
+-- Level 2 Collaborator: share planning and progress; execute delegated multi-step work and hand back meaningful choices.
+-- Level 3 Consultant: plan and execute most work; request preferences, missing information, or direction-changing decisions.
+-- Level 4 Approver: complete the objective independently; request approval only for blockers, credentials, consequential actions, or predeclared approval conditions.
+-- This interactive Player does not use the paper's Level 5 Observer, where the user can only stop the agent.
 
 -- how to use resources.

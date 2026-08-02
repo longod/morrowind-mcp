@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Morrowind MCP Game Progression Scenario",
+  "type": "object",
+  "required": ["schema_version", "name", "bootstrap", "steps"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "bootstrap": {
+      "type": "object",
+      "required": ["start_mode"],
+      "properties": { "start_mode": { "const": "new_game" } }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "contains": { "required": ["expected_error"] },
+      "minContains": 0,
+      "maxContains": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "intent", "operation"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "intent": { "type": "string", "minLength": 1 },
+          "operation": { "type": "object" },
+          "assertions": { "type": "array" },
+          "expected_error": {
+            "type": "object",
+            "required": ["message_contains"],
+            "properties": {
+              "message_contains": { "type": "string", "minLength": 1 }
+            }
+          },
+          "wait_until": { "type": "object" },
+          "observed": { "type": "object" },
+          "assessment": {
+            "type": "object",
+            "required": ["situation", "evidence", "candidate_actions", "decision"],
+            "properties": {
+              "situation": { "type": "string", "minLength": 1 },
+              "evidence": { "type": "string", "minLength": 1 },
+              "candidate_actions": { "type": "array", "items": { "type": "string" } },
+              "decision": { "type": "string", "minLength": 1 }
+            }
+          },
+          "screenshots": { "type": "array" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "termination_policy": { "type": "object" }
+  }
+}

@@ -1,7 +1,7 @@
 local base = require("morrowind-mcp.core.itool")
 local inputvalidator = require("morrowind-mcp.core.inputvalidator")
-local jsonpointer = require("morrowind-mcp.core.json_pointer")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+local ui = require("morrowind-mcp.tes3.ui")
 
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
@@ -12,48 +12,6 @@ local maxMenuPathLength = 1024
 ---@field logger mwseLogger
 local this = {}
 setmetatable(this, { __index = base })
-
---- Validates RFC 6901 syntax before an action reaches the live UI tree.
----@param menuPath string
----@return boolean valid
----@return string? errorMessage
-function this.ValidateMenuPath(menuPath)
-    local tokens, errorMessage = jsonpointer.Parse(menuPath)
-    return tokens ~= nil, errorMessage
-end
-
---- Resolves a serialized UI path against mainRoot using only children-array tokens.
----@param root tes3uiElement
----@param menuPath string
----@return tes3uiElement? target
----@return string? errorMessage
-function this.ResolveMenuPath(root, menuPath)
-    local tokens, errorMessage = jsonpointer.Parse(menuPath)
-    if not tokens then
-        return nil, errorMessage
-    end
-
-    local target = root
-    local tokenIndex = 1
-    while tokenIndex <= table.size(tokens) do
-        if tokens[tokenIndex] ~= "children" then
-            return nil, "menu_path may only traverse children arrays."
-        end
-        local serializedIndex = tonumber(tokens[tokenIndex + 1])
-        if serializedIndex == nil or serializedIndex < 0 or tostring(serializedIndex) ~= tokens[tokenIndex + 1] then
-            return nil, "menu_path contains an invalid children index."
-        end
-        if not target.children then
-            return nil, "menu_path traverses an element without children."
-        end
-        target = target.children[serializedIndex + 1]
-        if not target then
-            return nil, "menu_path points to a missing child."
-        end
-        tokenIndex = tokenIndex + 2
-    end
-    return target, nil
-end
 
 ---@param params table?
 ---@return MCP.Tools.MenuAction
@@ -79,7 +37,7 @@ function this.new(params)
                 ),
                 menu_path = jsonrpc.StringSchema(
                     "Menu Path",
-                    "(One selector required) Action to perform on the non-root menu by RFC 6901 JSON Pointer. Specify exactly one of `menu_id`, `menu_name`, or `menu_path`.",
+                    "(One selector required) Action to perform using a `path` returned by mw-menu-fetch; paths use raw MWSE child indexes, not serialized array positions. Specify exactly one of `menu_id`, `menu_name`, or `menu_path`.",
                     minMenuPathLength,
                     maxMenuPathLength
                 ),
@@ -142,7 +100,7 @@ function this:Validate(params)
         result.valid = false
     end
     if menu_path ~= nil then
-        local validPath, pathError = this.ValidateMenuPath(menu_path)
+        local validPath, pathError = ui.ValidatePath(menu_path)
         if not validPath then
             table.insert(result.errors, {
                 path = "menu_path",
@@ -192,7 +150,7 @@ function this:Execute(arguments, context)
         self.logger:debug("Searching for menu with path: %s", menu_path)
 
         local pathError = nil
-        target, pathError = this.ResolveMenuPath(menu, menu_path)
+        target, pathError = ui.ResolvePath(menu, menu_path)
         if not target then
             local errorContent = jsonrpc.TextContent(pathError or "Menu path could not be resolved.")
             return jsonrpc.CallToolResult(errorContent, nil, true)
