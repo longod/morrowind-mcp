@@ -28,14 +28,17 @@ function this.new(params)
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
                     {
                         "teleport",
-                        "look_at",
                     },
-                    "Action",
-                    "Action to perform on the player character.",
-                    "activate"
+                    "Method",
+                    "Method to navigate the player character.",
+                    "teleport"
                 ),
+                -- array, object schema are in specification, but it seems client view is not supported.
+                position_x = jsonrpc.NumberSchema("X", "X coordinate in world space.", nil, nil, 0),
+                position_y = jsonrpc.NumberSchema("Y", "Y coordinate in world space.", nil, nil, 0),
+                position_z = jsonrpc.NumberSchema("Z", "Z coordinate in world space.", nil, nil, 0),
             },
-            jsonrpc.array({ "action" })
+            jsonrpc.array({ "action", "position_x", "position_y", "position_z" })
         ),
         annotations = jsonrpc.ToolAnnotations(nil, false, false),
 
@@ -52,13 +55,25 @@ function this:CanExecute(params)
 end
 
 function this:Execute(arguments, context)
-    local action = arguments["action"]
+    local method = arguments["method"]
+    local position = tes3vector3.new(arguments["position_x"], arguments["position_y"], arguments["position_z"])
 
-    -- tes3.positionCell
+    local result = tes3.positionCell({
+        --      reference = tes3.mobilePlayer,
+        --      cell = tes3.getPlayerCell(),
+        position = position,
 
-    return nil
+    })
 
+    if not result then
+        return jsonrpc.CallToolResult(
+            jsonrpc.TextContent(string.format("Failed to teleport player to position: %s", tostring(position))),
+            nil,
+            true)
+    end
 
+    return jsonrpc.CallToolResult(
+        jsonrpc.TextContent(string.format("Player was teleported to position: %s", tostring(position))), nil, false)
 end
 
 return this

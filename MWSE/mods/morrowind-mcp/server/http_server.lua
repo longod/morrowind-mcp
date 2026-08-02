@@ -1682,6 +1682,9 @@ function this:Start()
         end
         event.register(tes3.event.keyDown, self.debugKeyCallback, { filter = tes3.scanCode.F4 })
     end
+    tes3.worldController.menuController.bordersEnabled = true
+    tes3.worldController.menuController.collisionBoxesEnabled = true
+    tes3.worldController.menuController.pathGridShown = true
     return true
 end
 

@@ -12,7 +12,26 @@ function this.Test()
 
     --- Build the minimal loaded-cell shape consumed by UpdateCell.
     local function Cell(id, gridX, gridY, nodes)
-        return { id = id, isInterior = false, gridX = gridX, gridY = gridY, waterLevel = 0, pathGrid = { isLoaded = true, nodes = nodes } }
+        local cell = { id = id, isInterior = false, gridX = gridX, gridY = gridY, waterLevel = 0, pathGrid = { isLoaded = true, nodes = nodes }, valid = true }
+        function cell:isValid()
+            return self.valid ~= false
+        end
+        return cell
+    end
+
+    --- Mirror the safe-handle validity boundary used by MWSE timer callbacks.
+    local function SafeObjectHandle(object)
+        return {
+            valid = function()
+                return object:isValid()
+            end,
+            getObject = function()
+                if object:isValid() then
+                    return object
+                end
+                return nil
+            end,
+        }
     end
 
     unitwind:start("morrowind-mcp.util.pathfinding")
@@ -134,6 +153,149 @@ function this.Test()
         local westNodeId = graph.nodeIdsByCellId[west.id][1]
         local eastNodeId = graph.nodeIdsByCellId[east.id][1]
         unitwind:expect(graph.edgeIdByNeighborId[westNodeId][eastNodeId] == nil).toBe(true)
+    end)
+
+    unitwind:test("Pathgrid polling follows cell, load, and shutdown lifecycles", function()
+        local registeredCallbacks = {}
+        local startedTimers = {}
+        unitwind:mock(tes3, "makeSafeObjectHandle", SafeObjectHandle)
+        unitwind:mock(event, "register", function(eventId, callback)
+            registeredCallbacks[eventId] = callback
+        end)
+        unitwind:mock(event, "unregister", function(eventId, callback)
+            if registeredCallbacks[eventId] == callback then
+                registeredCallbacks[eventId] = nil
+            end
+        end)
+        unitwind:mock(timer, "start", function(params)
+            local timerInstance = { cancelled = false, timing = params.duration }
+            function timerInstance:cancel()
+                self.cancelled = true
+            end
+            table.insert(startedTimers, { params = params, instance = timerInstance })
+            return timerInstance
+        end)
+
+        local graph = pathfinding.new({ pathgridPollInterval = 0.25, pathgridPollDeadline = 5 })
+        graph:RegisterEventHandlers()
+        unitwind:expect(registeredCallbacks[tes3.event.cellActivated] == nil).toBe(false)
+        unitwind:expect(registeredCallbacks[tes3.event.cellDeactivated] == nil).toBe(false)
+        unitwind:expect(registeredCallbacks[tes3.event.loaded] == nil).toBe(false)
+
+        local originalCell = Cell("reactivated", 0, 0, { Node(0, 0, 0) })
+        originalCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = originalCell })
+        registeredCallbacks[tes3.event.cellActivated]({ cell = originalCell })
+        unitwind:expect(table.size(startedTimers)).toBe(1)
+        unitwind:expect(startedTimers[1].instance.cancelled).toBe(false)
+
+        local replacementCell = Cell("reactivated", 0, 0, { Node(0, 0, 0) })
+        replacementCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = replacementCell })
+        unitwind:expect(startedTimers[1].instance.cancelled).toBe(true)
+        unitwind:expect(table.size(startedTimers)).toBe(2)
+        unitwind:expect(graph.pendingPathgridPolls[replacementCell.id].cellHandle:getObject()).toBe(replacementCell)
+        registeredCallbacks[tes3.event.cellDeactivated]({ cell = replacementCell })
+        unitwind:expect(startedTimers[2].instance.cancelled).toBe(true)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        local deactivatedCell = Cell("deactivated", 0, 0, { Node(0, 0, 0) })
+        deactivatedCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = deactivatedCell })
+        unitwind:expect(startedTimers[3].params.type).toBe(timer.real)
+        unitwind:expect(startedTimers[3].params.duration).toBe(0.25)
+        unitwind:expect(startedTimers[3].params.iterations).toBe(-1)
+        unitwind:expect(startedTimers[3].params.persist).toBe(false)
+        registeredCallbacks[tes3.event.cellDeactivated]({ cell = deactivatedCell })
+        unitwind:expect(startedTimers[3].instance.cancelled).toBe(true)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        local polledCell = Cell("polled", 1, 0, { Node(0, 0, 0) })
+        polledCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = polledCell })
+        polledCell.pathGrid.isLoaded = true
+        startedTimers[4].params.callback()
+        unitwind:expect(startedTimers[4].instance.cancelled).toBe(true)
+        unitwind:expect(graph.cells[polledCell.id] == nil).toBe(false)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        local loadedCell = Cell("loaded", 2, 0, { Node(0, 0, 0) })
+        loadedCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = loadedCell })
+        -- MWSE cancels active timers immediately before firing loaded.
+        startedTimers[5].instance.cancelled = true
+        loadedCell.pathGrid.isLoaded = true
+        registeredCallbacks[tes3.event.loaded]({})
+        unitwind:expect(graph.cells[loadedCell.id] == nil).toBe(false)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        local deadlineCell = Cell("deadline", 3, 0, { Node(0, 0, 0) })
+        deadlineCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = deadlineCell })
+        startedTimers[6].instance.timing = 5.25
+        startedTimers[6].params.callback()
+        unitwind:expect(startedTimers[6].instance.cancelled).toBe(true)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        local shutdownCell = Cell("shutdown", 3, 0, { Node(0, 0, 0) })
+        shutdownCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = shutdownCell })
+        graph:UnregisterEventHandlers()
+        unitwind:expect(startedTimers[7].instance.cancelled).toBe(true)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+        unitwind:expect(registeredCallbacks[tes3.event.cellActivated] == nil).toBe(true)
+        unitwind:expect(registeredCallbacks[tes3.event.cellDeactivated] == nil).toBe(true)
+        unitwind:expect(registeredCallbacks[tes3.event.loaded] == nil).toBe(true)
+    end)
+
+    unitwind:test("Pathgrid polling drops invalidated cells before touching pathgrid state", function()
+        local registeredCallbacks = {}
+        local startedTimers = {}
+        unitwind:mock(tes3, "makeSafeObjectHandle", SafeObjectHandle)
+        unitwind:mock(event, "register", function(eventId, callback)
+            registeredCallbacks[eventId] = callback
+        end)
+        unitwind:mock(event, "unregister", function(eventId, callback)
+            if registeredCallbacks[eventId] == callback then
+                registeredCallbacks[eventId] = nil
+            end
+        end)
+        unitwind:mock(timer, "start", function(params)
+            local timerInstance = { cancelled = false, timing = params.duration }
+            function timerInstance:cancel()
+                self.cancelled = true
+            end
+            table.insert(startedTimers, { params = params, instance = timerInstance })
+            return timerInstance
+        end)
+
+        local graph = pathfinding.new({ pathgridPollInterval = 0.1, pathgridPollDeadline = 5 })
+        graph:RegisterEventHandlers()
+
+        local pollingCell = Cell("invalidated-polling", 0, 0, { Node(0, 0, 0) })
+        pollingCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = pollingCell })
+        pollingCell.valid = false
+        pollingCell.pathGrid = nil
+        -- An invalid MWSE cell can no longer safely expose properties such as id.
+        pollingCell.id = nil
+        startedTimers[1].params.callback()
+        unitwind:expect(startedTimers[1].instance.cancelled).toBe(true)
+        unitwind:expect(graph.cells["invalidated-polling"] == nil).toBe(true)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        local loadedCell = Cell("invalidated-loaded", 1, 0, { Node(0, 0, 0) })
+        loadedCell.pathGrid.isLoaded = false
+        registeredCallbacks[tes3.event.cellActivated]({ cell = loadedCell })
+        startedTimers[2].instance.cancelled = true
+        loadedCell.valid = false
+        loadedCell.pathGrid = nil
+        loadedCell.id = nil
+        registeredCallbacks[tes3.event.loaded]({})
+        unitwind:expect(graph.cells["invalidated-loaded"] == nil).toBe(true)
+        unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
+
+        graph:UnregisterEventHandlers()
     end)
 
     local testsPassed, testsFailed = unitwind.testsPassed, unitwind.testsFailed

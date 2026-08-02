@@ -340,13 +340,13 @@ local function RegisterTestEvents()
     local function addSoundCallback(e)
         logger:trace("addSound %s", FormatEventData(e))
     end
-    event.register(tes3.event.addSound, addSoundCallback)
+    -- event.register(tes3.event.addSound, addSoundCallback)
 
     ---@param e addTempSoundEventData
     local function addTempSoundCallback(e)
         logger:trace("addTempSound %s", FormatEventData(e))
     end
-    event.register(tes3.event.addTempSound, addTempSoundCallback)
+    -- event.register(tes3.event.addTempSound, addTempSoundCallback)
 
     ---@param e barterOfferEventData
     local function barterOfferCallback(e)

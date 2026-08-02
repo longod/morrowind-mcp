@@ -42,6 +42,8 @@
 ---@field stitchBorderMargin number?
 ---@field stitchMaxHorizontalDistance number?
 ---@field stitchMaxVerticalDistance number?
+---@field pathgridPollInterval number?
+---@field pathgridPollDeadline number?
 
 ---@class MCP.PathfindingNearestWeights
 ---@field horizontal number?
@@ -78,6 +80,11 @@
 ---@alias MCP.PathfindingPrevious table<integer, MCP.PathfindingPreviousEntry>
 ---@alias MCP.PathfindingClosed table<integer, boolean>
 
+---@class MCP.PathfindingPoll
+---@field cellHandle mwseSafeObjectHandle
+---@field timer mwseTimer?
+---@field startTiming number
+
 ---@class MCP.Pathfinding
 ---@field logger mwseLogger
 ---@field cells table<string, MCP.PathfindingCell>
@@ -92,7 +99,12 @@
 ---@field stitchBorderMargin number
 ---@field stitchMaxHorizontalDistance number
 ---@field stitchMaxVerticalDistance number
+---@field pathgridPollInterval number
+---@field pathgridPollDeadline number
+---@field pendingPathgridPolls table<string, MCP.PathfindingPoll>
 ---@field cellActivatedCallback fun(e: cellActivatedEventData)?
+---@field cellDeactivatedCallback fun(e: cellDeactivatedEventData)?
+---@field loadedCallback fun(e: loadedEventData)?
 local this = {}
 
 local exteriorCellSize = 8192
@@ -146,7 +158,12 @@ function this.new(params)
         stitchBorderMargin = 256,
         stitchMaxHorizontalDistance = 512,
         stitchMaxVerticalDistance = 256,
+        pathgridPollInterval = 0.1,
+        pathgridPollDeadline = 5,
+        pendingPathgridPolls = {},
         cellActivatedCallback = nil,
+        cellDeactivatedCallback = nil,
+        loadedCallback = nil,
         logger = require("morrowind-mcp.logger").Get({ moduleName = "pathfinding" }),
     }
     if params then
@@ -155,6 +172,8 @@ function this.new(params)
         instance.stitchBorderMargin = params.stitchBorderMargin or instance.stitchBorderMargin
         instance.stitchMaxHorizontalDistance = params.stitchMaxHorizontalDistance or instance.stitchMaxHorizontalDistance
         instance.stitchMaxVerticalDistance = params.stitchMaxVerticalDistance or instance.stitchMaxVerticalDistance
+        instance.pathgridPollInterval = params.pathgridPollInterval or instance.pathgridPollInterval
+        instance.pathgridPollDeadline = params.pathgridPollDeadline or instance.pathgridPollDeadline
     end
     setmetatable(instance, { __index = this })
     return instance
@@ -311,8 +330,20 @@ end
 ---@param cell tes3cell
 ---@return boolean updated
 function this:UpdateCell(cell)
-    if not cell or not cell.id or not cell.pathGrid or not cell.pathGrid.isLoaded then
-        self.logger:debug("Skipping pathgrid snapshot because the cell is unavailable or unloaded.")
+    if not cell then
+        self.logger:debug("Skipping pathgrid snapshot because the cell is unavailable: cell=nil")
+        return false
+    end
+    if not cell.id then
+        self.logger:debug("Skipping pathgrid snapshot because the cell has no id.")
+        return false
+    end
+    if not cell.pathGrid then
+        self.logger:debug("Skipping pathgrid snapshot because the cell has no pathgrid: cell=%s", cell.id)
+        return false
+    end
+    if not cell.pathGrid.isLoaded then
+        self.logger:debug("Skipping pathgrid snapshot because the pathgrid is not loaded: cell=%s", cell.id)
         return false
     end
     if self.cells[cell.id] then
@@ -356,6 +387,99 @@ function this:UpdateCell(cell)
     self:StitchExteriorCell(cell.id)
     self.logger:debug("Snapshotted pathgrid: cell=%s nodes=%d edges=%d", cell.id, table.size(self.nodeIdsByCellId[cell.id]), table.size(self.edges))
     return true
+end
+
+--- Stop one pending poll and release its timer and cell references.
+---@param cellId string
+---@param reason string
+---@return boolean stopped
+function this:StopPathgridPoll(cellId, reason)
+    local poll = self.pendingPathgridPolls[cellId]
+    if not poll then
+        return false
+    end
+    self.pendingPathgridPolls[cellId] = nil
+    if poll.timer then
+        local ok, errorMessage = pcall(function()
+            poll.timer:cancel()
+        end)
+        if not ok then
+            self.logger:error("Failed to cancel pathgrid polling timer: cell=%s error=%s", cellId, tostring(errorMessage))
+        end
+    end
+    self.logger:debug("Stopped pathgrid polling: cell=%s reason=%s", cellId, reason)
+    return true
+end
+
+--- Start real-time polling that continues until the pathgrid loads or its lifecycle ends.
+---@param cell tes3cell
+---@return boolean started
+function this:StartPathgridPoll(cell)
+    -- Retain the cell ID as a Lua string because the cell userdata can become invalid before a timer callback runs.
+    local cellId = cell.id
+    if self.pendingPathgridPolls[cellId] then
+        return false
+    end
+    -- Store a safe handle instead of a raw cell because the timer executes after the activation event ends.
+    ---@type MCP.PathfindingPoll
+    local poll = { cellHandle = tes3.makeSafeObjectHandle(cell), timer = nil, startTiming = 0 }
+    self.pendingPathgridPolls[cellId] = poll
+    local ok, timerInstanceOrError = pcall(function()
+        return timer.start({
+            type = timer.real,
+            duration = self.pathgridPollInterval,
+            iterations = -1,
+            persist = false,
+            callback = function()
+                if self.pendingPathgridPolls[cellId] ~= poll then
+                    return
+                end
+                if not poll.cellHandle:valid() then
+                    self:StopPathgridPoll(cellId, "cell invalidated")
+                    return
+                end
+                local pollingCell = poll.cellHandle:getObject() ---@cast pollingCell tes3cell
+                if poll.timer and poll.timer.timing - poll.startTiming >= self.pathgridPollDeadline then
+                    self.logger:warn("Stopping pathgrid polling because its real-time deadline elapsed: cell=%s deadline=%.3f", cellId, self.pathgridPollDeadline)
+                    self:StopPathgridPoll(cellId, "deadline elapsed")
+                    return
+                end
+                if self:UpdateCell(pollingCell) then
+                    self:StopPathgridPoll(cellId, "pathgrid loaded")
+                elseif not pollingCell.pathGrid then
+                    self:StopPathgridPoll(cellId, "pathgrid unavailable")
+                end
+            end,
+        })
+    end)
+    if not ok then
+        self.pendingPathgridPolls[cellId] = nil
+        self.logger:error("Failed to start pathgrid polling timer: cell=%s error=%s", cellId, tostring(timerInstanceOrError))
+        return false
+    end
+    poll.timer = timerInstanceOrError
+    poll.startTiming = poll.timer.timing
+    self.logger:debug("Started real-time pathgrid polling: cell=%s interval=%.3f deadline=%.3f", cellId, self.pathgridPollInterval, self.pathgridPollDeadline)
+    return true
+end
+
+--- Clear timers canceled automatically by loading and take one final loaded-state snapshot.
+function this:OnLoaded()
+    local pendingPathgridPolls = self.pendingPathgridPolls
+    self.pendingPathgridPolls = {}
+    for cellId, poll in pairs(pendingPathgridPolls) do
+        poll.timer = nil
+        if not poll.cellHandle:valid() then
+            self.logger:debug("Discarded pending pathgrid poll because its cell became invalid across game loading: cell=%s", cellId)
+        else
+            local cell = poll.cellHandle:getObject() ---@cast cell tes3cell
+            if self:UpdateCell(cell) then
+                self.logger:debug("Pathgrid became loaded when game loading completed: cell=%s", cellId)
+            else
+                self.logger:debug("Discarded pending pathgrid poll when game loading completed: cell=%s", cellId)
+            end
+        end
+    end
 end
 
 --- Find the nearest stored node in the locator's cell using a cheap brute-force scan.
@@ -516,19 +640,72 @@ end
 --- Register cell activation updates and retain the callback for server shutdown.
 function this:RegisterEventHandlers()
     self.cellActivatedCallback = function(e)
-        self:UpdateCell(e.cell)
+        local updated = self:UpdateCell(e.cell)
+        if not e.cell or not e.cell.id then
+            return
+        end
+        local cellId = e.cell.id
+        local pendingPoll = self.pendingPathgridPolls[cellId]
+        if updated or self.cells[cellId] then
+            if pendingPoll then
+                self:StopPathgridPoll(cellId, "cell reactivated after pathgrid snapshot")
+            end
+            return
+        end
+        if not e.cell.pathGrid or e.cell.pathGrid.isLoaded then
+            return
+        end
+        if pendingPoll then
+            if not pendingPoll.cellHandle:valid() then
+                -- Previous cell was destructed; the fresh instance may share the cellId but must be re-polled.
+                self.logger:warn("Replacing pathgrid polling after the previous cell was invalidated: cell=%s", cellId)
+                self:StopPathgridPoll(cellId, "previous cell invalidated")
+            elseif pendingPoll.cellHandle:getObject() == e.cell then
+                -- userdata equality is pointer identity; a reloaded cell would have a different pointer and take the else branch.
+                self.logger:debug("Ignoring duplicate cell activation while pathgrid polling is pending: cell=%s", cellId)
+                return
+            else
+                self.logger:warn("Replacing pathgrid polling after cell activation supplied a different cell instance: cell=%s", cellId)
+                self:StopPathgridPoll(cellId, "cell reactivated with different instance")
+            end
+        end
+        self:StartPathgridPoll(e.cell)
+    end
+    self.cellDeactivatedCallback = function(e)
+        if e.cell and e.cell.id then
+            self:StopPathgridPoll(e.cell.id, "cell deactivated")
+        end
+    end
+    self.loadedCallback = function()
+        self:OnLoaded()
     end
     event.register(tes3.event.cellActivated, self.cellActivatedCallback)
+    event.register(tes3.event.cellDeactivated, self.cellDeactivatedCallback)
+    event.register(tes3.event.loaded, self.loadedCallback)
     self.logger:debug("Registered pathfinding cell activation handler.")
 end
 
 --- Unregister the activation callback before the server instance is discarded.
 function this:UnregisterEventHandlers()
-    if not self.cellActivatedCallback then
-        return
+    if self.cellActivatedCallback then
+        event.unregister(tes3.event.cellActivated, self.cellActivatedCallback)
+        self.cellActivatedCallback = nil
     end
-    event.unregister(tes3.event.cellActivated, self.cellActivatedCallback)
-    self.cellActivatedCallback = nil
+    if self.cellDeactivatedCallback then
+        event.unregister(tes3.event.cellDeactivated, self.cellDeactivatedCallback)
+        self.cellDeactivatedCallback = nil
+    end
+    if self.loadedCallback then
+        event.unregister(tes3.event.loaded, self.loadedCallback)
+        self.loadedCallback = nil
+    end
+    local pendingCellIds = {}
+    for cellId in pairs(self.pendingPathgridPolls) do
+        table.insert(pendingCellIds, cellId)
+    end
+    for _, cellId in ipairs(pendingCellIds) do
+        self:StopPathgridPoll(cellId, "event handlers unregistered")
+    end
     self.logger:debug("Unregistered pathfinding cell activation handler.")
 end
 

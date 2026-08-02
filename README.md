@@ -27,11 +27,23 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 - (Optional) [Mod Organizer 2](https://www.nexusmods.com/skyrimspecialedition/mods/6194) (MO2): for managing mods. Also useful for development and testing.
 - (Optional) [MGE XE UF](https://www.nexusmods.com/morrowind/mods/57200): It is unofficial update for MGE XE.
 
+#### Recommended settings for Agent
+
+- `Subtitles`: On
+
 ## MCP Configuration
 
-### VS Code
+| Client | Project config file | User config file | Sample | Notes |
+|---|---|---|---|---|
+| VSCode | .vscode/mcp.json | %APPDATA%/Code/User/mcp.json | [sample](#vscode) | [MCP configuration reference](https://code.visualstudio.com/docs/agents/reference/mcp-configuration) |
+| Claude Desktop | .mcp.json | %APPDATA%/Claude/claude_desktop_config.json | [sample](#claude-desktop) | [Connect to local MCP servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers) |
+| Claude Code | .mcp.json | %USERPROFILE%/.claude.json | [sample](#claude-code) | [Connect to MCP servers](https://code.claude.com/docs/en/mcp-quickstart) |
+| Cursor | .cursor/mcp.json | %USERPROFILE%/.cursor/mcp.json | [sample](#claude-code) | [Model Context Protocol (MCP)](https://cursor.com/docs/mcp) |
+| ChatGPT Codex | .config.toml | %USERPROFILE%/.codex/config.toml | [sample](#chatgpt-codex) | [Advanced Configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) |
+| Antigravity | .agents/mcp_config.json | %USERPROFILE%/.gemini/config/mcp_config.json | [sample](#antigravity) | [Model Context Protocol (MCP)](https://antigravity.google/docs/mcp) |
 
-**.vscode/mcp.json**
+
+### VSCode
 
 ```json
 {
@@ -44,25 +56,9 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 }
 ```
 
-VSCode only
-https://code.visualstudio.com/docs/agents/reference/mcp-configuration
-
-### ChatGPT Codex
-
-**./config.toml** (global)
-
-```toml
-[mcp_servers.morrowind-mcp]
-enabled = true
-url = "http://localhost:33427"
-```
-
-
 ### Claude Desktop
 
-**./claude_desktop_config.json** (global)
-
-Requires `Node.js`
+Requires [Node.js](https://nodejs.org/ja/download)
 
 ```json
 {
@@ -78,29 +74,7 @@ Requires `Node.js`
 }
 ```
 
-https://modelcontextprotocol.io/docs/develop/connect-local-servers
-
-### Antigravity
-
-**.agents/mcp_config.json** (local)
-**~/.gemini/config/mcp_config.json** (global)
-
-```json
-{
-  "mcpServers": {
-    "morrowind-mcp": {
-      "serverUrl": "http://localhost:33427"
-    }
-  }
-}
-```
-
-https://antigravity.google/docs/mcp
-
-### Others
-
-- Cursor: `.cursor/mcp.json`
-- Others: `.mcp.json`
+### Claude Code
 
 ```json
 {
@@ -113,8 +87,25 @@ https://antigravity.google/docs/mcp
 }
 ```
 
-https://code.claude.com/docs/en/mcp-quickstart
-https://docs.github.com/ja/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers
+### ChatGPT Codex
+
+```toml
+[mcp_servers.morrowind-mcp]
+enabled = true
+url = "http://localhost:33427"
+```
+
+### Antigravity
+
+```json
+{
+  "mcpServers": {
+    "morrowind-mcp": {
+      "serverUrl": "http://localhost:33427"
+    }
+  }
+}
+```
 
 ## Features
 
@@ -196,7 +187,7 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 
 | MCP Method | Supported |
 |---|---|
-| `completion/complete` | No (undecided) |
+| `completion/complete` | `No` |
 | `elicitation/create` | No (undecided) |
 | `initialize` | Yes |
 | `logging/setLevel` | Yes |
@@ -221,7 +212,7 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 | `resources/list` | Yes |
 | `resources/read` | Yes |
 | `resources/subscribe` | Yes |
-| `resources/templates/list` | Yes |
+| `resources/templates/list` | `No` |
 | `resources/unsubscribe` | Yes |
 | `roots/list` | No (undecided) |
 | `sampling/createMessage` | No (undecided) |
