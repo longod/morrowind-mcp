@@ -29,7 +29,7 @@ this.defaultConfig = {
     },
 
     indicator = {
-        toolsCall = true,
+        toolsCall = false,
     },
 
     autoplay = {

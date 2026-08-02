@@ -113,6 +113,14 @@ function this.Test()
         unitwind:expect(actual.error.data.reason).toBe("missing")
     end)
 
+    unitwind:test("ErrorWithMessage preserves the error code", function()
+        local error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params, "Call resources/list to confirm.")
+
+        unitwind:expect(error.code).toBe(jsonrpc.error_code.invalid_params.code)
+        unitwind:expect(error.message).toBe("Call resources/list to confirm.")
+        unitwind:expect(error == jsonrpc.error_code.invalid_params).toBe(false)
+    end)
+
     unitwind:test("notification encodes JSON-RPC notification", function()
         local notificationJson = jsonrpc.notification("ping", { x = 1 })
         unitwind:expect(notificationJson).toBe(json.encode({

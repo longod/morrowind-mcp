@@ -4,6 +4,7 @@ local http = require("morrowind-mcp.server.http")
 local pathutil = require("morrowind-mcp.core.pathutil")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local settings = require("morrowind-mcp.settings")
+local mcp = require("morrowind-mcp.core.mcp")
 local base64 = require("morrowind-mcp.core.base64")
 local datetime = require("morrowind-mcp.util.datetime")
 local memory = require("morrowind-mcp.resources.memory.manager")
@@ -171,7 +172,9 @@ function this:OnResourcesRead(params)
             ---@type MCP.MethodResult
             return {
                 http_response = http.response_code.not_found, -- ?
-                error = jsonrpc.error_code.invalid_params,
+                error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
+                    string.format("Resource is unavailable: %s. Call %s to confirm current availability.",
+                        tostring(params.uri), mcp.method.resources_list)),
             }
         end
         return {
@@ -203,7 +206,9 @@ function this:OnResourcesRead(params)
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
+            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
+                string.format("Resource is unavailable: %s. Call %s to confirm current availability.",
+                    tostring(params.uri), mcp.method.resources_list)),
         }
     end
 

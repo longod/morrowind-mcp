@@ -181,6 +181,8 @@ function this.Test()
         unitwind:expect(table.size(executedArguments)).toBe(0)
         unitwind:expect(unknownResult.http_response).toBe(http.response_code.bad_request)
         unitwind:expect(unknownResult.error.code).toBe(jsonrpc.error_code.invalid_params.code)
+        unitwind:expect(unknownResult.error.message).toBe(
+            "Prompt is unavailable or unknown: unknown. Call prompts/list to confirm current availability.")
     end)
 
     local testsPassed = unitwind.testsPassed

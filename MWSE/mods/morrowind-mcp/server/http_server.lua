@@ -947,7 +947,9 @@ function this:OnToolsCall(params, request)
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.method_not_found,
+            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.method_not_found,
+                string.format("Tool is unavailable or unknown: %s. Call %s to confirm current availability.",
+                    tostring(params.name), mcp.method.tools_call)),
         }
     end
 
@@ -955,7 +957,9 @@ function this:OnToolsCall(params, request)
     if not tool:CanExecute(params) then
         -- Runtime availability is not an authorization failure. Keep the HTTP transport successful so
         -- clients do not attempt OAuth discovery, and surface the condition through the MCP tool result.
-        local message = string.format("Tool is unavailable in the current game state: %s", tostring(params.name))
+        local message = string.format(
+            "Tool is unavailable in the current game state: %s. Call %s to confirm current availability.",
+            tostring(params.name), mcp.method.tools_call)
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.ok,
@@ -1022,7 +1026,9 @@ function this:OnPromptsGet(params)
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
+            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
+                string.format("Prompt is unavailable or unknown: %s. Call %s to confirm current availability.",
+                    tostring(params.name), mcp.method.prompts_list)),
         }
     end
     if not prompt:CanExecute(params) then
@@ -1030,7 +1036,10 @@ function this:OnPromptsGet(params)
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
+            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
+                string.format(
+                    "Prompt is unavailable in the current game state: %s. Call %s to confirm current availability.",
+                    tostring(params.name), mcp.method.prompts_list)),
         }
     end
 

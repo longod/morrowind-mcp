@@ -169,6 +169,16 @@ function this.error(id, err, data)
     return json.encode(body, { indent = false })
 end
 
+---@param error MCP.Error
+---@param message string
+---@return MCP.Error
+function this.ErrorWithMessage(error, message)
+    return {
+        code = error.code,
+        message = message,
+    }
+end
+
 --- maybe server should not use notification.
 ---@param method MCP.Method
 ---@param params table?
