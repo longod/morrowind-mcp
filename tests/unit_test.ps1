@@ -3,8 +3,8 @@ param(
     [string[]]$TestTargets,
     [switch]$NoForeground,
     [switch]$VerifyRuntimeAfterTests,
-    [ValidateRange(1, 300)]
-    [int]$RuntimeReadyTimeoutSeconds = 60
+    [ValidateRange(1, 60)]
+    [int]$RuntimeReadyTimeoutSeconds = 20
 )
 
 $MaxWaitSeconds = 10

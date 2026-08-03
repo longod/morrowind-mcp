@@ -55,6 +55,12 @@ Current read policies:
 
 Player identity is published at `morrowind://memory/player/index.json`. It contains availability and character-generation readiness plus finalized `name`, `race`, `gender`, a structured `class`, and `birthsign`. The class contains its name, specialization, governing attributes, and major/minor skills so user-defined classes remain intelligible. While character generation is incomplete, identity fields are omitted and `ready` is false. The index links to `morrowind://memory/player/progression.json`, `morrowind://memory/player/vitals.json`, and its visible child collections.
 
+Player identity also contains `current_cell`, a compact current-location object read from `tes3.dataHandler.currentCell` whenever a player is available, including before character generation finishes. It includes raw unique `id`, display name, interior/exterior state, exterior grid coordinates when applicable, region identity when available, and `resting_is_illegal`. `cellChanged` invalidates this live entry. Position and facing are intentionally excluded because they can change every frame.
+
+Visited places are published at `morrowind://memory/player/visited-cells.json` as a live `visited_cells` collection. The module observes the current cell after each loaded-game transition and records `cellChanged.e.cell` afterwards. The collection has a sorted `cells` array, while its runtime lookup is keyed by raw unique `cell.id`. Each entry contains the compact cell facts plus `first_observed_at`, `last_observed_at`, and `entry_count`; observation times use `datetime.ToInGameShortText` and `entry_count` excludes the initial loaded cell. `first_observed_at` is assigned only when the entry is created, while each later cell-change observation updates `last_observed_at` and increments `entry_count`. This is an in-memory current-loaded-game record, so a new load clears previous entries. The current cell appears in the collection but is authoritative only in `player_summary.current_cell`.
+
+The `cells` array contains only Memory-observed cells; it does not synthesize placeholders for missing exterior grid coordinates. Exterior entries always contain `grid_x` and `grid_y` and are sorted north-to-south by `grid_y` and west-to-east by `grid_x`; interior entries follow in stable display-name order. This ordering is a readability aid, not evidence that adjacent entries are connected or reachable. A missing coordinate means only that this Memory collection has not observed that cell, not that the cell is nonexistent, unreachable, or unvisited before tracking began.
+
 Progression is a live `player_progression` document containing level, the eight named attributes, and the 27 named skills. Each statistic uses the shared `base`, `current`, `normalized` representation; skills additionally expose their class-assigned `type`.
 
 Vitals are a live `player_vitals` document containing `alive`, health, magicka, and fatigue. `damaged`, `damagedHandToHand`, and `death` immediately invalidate player vitals. `levelUp` and `skillRaised` immediately invalidate progression. `charGenFinished` invalidates all Player Memory entries.
@@ -78,6 +84,7 @@ Data type values currently used:
 
 - `memory_roots`: root Memory index payload.
 - `player_summary`: player Memory document payload.
+- `visited_cells`: player-entered cell collection payload.
 - `inventory_items`: current player inventory snapshot payload.
 - `journal_entries`: journal Memory document payload.
 - `quest_entries`: quest Memory document payload.

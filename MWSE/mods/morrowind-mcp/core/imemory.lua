@@ -88,6 +88,22 @@
 ---@field cached_json string?
 ---@field built_at MCP.MemoryTimestamp?
 
+--- Compact serialized facts for a TES3 cell used by player location Memory.
+---@class MCP.MemoryCell
+---@field id string Raw unique TES3 cell id.
+---@field display_name string? Gameplay-facing cell name.
+---@field is_interior boolean
+---@field grid_x number? Exterior cell X coordinate.
+---@field grid_y number? Exterior cell Y coordinate.
+---@field region MCP.AnyMap? Exterior or exterior-behaving cell region identity.
+---@field resting_is_illegal boolean
+
+--- One current-loaded-game cell observation.
+---@class MCP.MemoryVisitedCell: MCP.MemoryCell
+---@field first_observed_at string? Compact in-game time when tracking first saw this cell.
+---@field last_observed_at string? Compact in-game time when tracking last saw this cell.
+---@field entry_count integer Number of tracked cell-change entries after initial load.
+
 --- Runtime state for one observed actor managed inside the Actor Memory module.
 ---@class MCP.MemoryObservedActor
 ---@field id string Stable memory id for the observed actor entry.

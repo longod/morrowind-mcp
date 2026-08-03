@@ -182,6 +182,19 @@ function this.Test()
         unitwind:expect(indexDocument.data.birthsign).toBe("The Mage")
     end)
 
+    unitwind:test("Player Memory retains current cell while character generation is incomplete", function()
+        MockReadyPlayer()
+        unitwind:mock(tes3, "isCharGenFinished", function() return false end)
+        unitwind:mock(tes3, "dataHandler", {
+            currentCell = { id = "Seyda Neen", displayName = "Seyda Neen", isInterior = false, gridX = -2, gridY = -9, restingIsIllegal = false },
+        })
+        local module = CreateModule()
+        local indexDocument = ReadEntry(module.playerEntry)
+
+        unitwind:expect(indexDocument.data.ready).toBe(false)
+        unitwind:expect(indexDocument.data.current_cell.id).toBe("Seyda Neen")
+    end)
+
     unitwind:test("Player Memory applies vital thresholds from the last published snapshot", function()
         local mobilePlayer = MockReadyPlayer()
         local module = CreateModule()
@@ -228,6 +241,37 @@ function this.Test()
         unitwind:expect(module.progressionEntry.cache.dirty).toBe(true)
     end)
 
+    unitwind:test("Player Memory exposes and refreshes its current cell", function()
+        MockReadyPlayer()
+        local balmora = {
+            id = "Balmora",
+            displayName = "Balmora",
+            isInterior = false,
+            gridX = -3,
+            gridY = -2,
+            restingIsIllegal = false,
+            region = { id = "west gash", name = "West Gash" },
+        }
+        unitwind:mock(tes3, "dataHandler", { currentCell = balmora })
+        local module = CreateModule()
+        local firstDocument = ReadEntry(module.playerEntry)
+        unitwind:expect(firstDocument.data.current_cell.id).toBe("Balmora")
+        unitwind:expect(firstDocument.data.current_cell.resting_is_illegal).toBe(false)
+
+        tes3.dataHandler.currentCell = {
+            id = "Forbidden Inn",
+            displayName = "Forbidden Inn",
+            isInterior = true,
+            restingIsIllegal = true,
+        }
+        module:OnCellChanged({})
+        local secondDocument = ReadEntry(module.playerEntry)
+        unitwind:expect(secondDocument.data.current_cell.id).toBe("Forbidden Inn")
+        unitwind:expect(secondDocument.data.current_cell.resting_is_illegal).toBe(true)
+        unitwind:expect(secondDocument.data.current_cell.grid_x == nil).toBe(true)
+        unitwind:expect(secondDocument.data.current_cell.grid_y == nil).toBe(true)
+    end)
+
     unitwind:test("Player Memory registers its player-only event handlers", function()
         local registered = {}
         local unregistered = {}
@@ -249,7 +293,9 @@ function this.Test()
         unitwind:expect(registered[tes3.event.levelUp]).toBe(true)
         unitwind:expect(registered[tes3.event.skillRaised]).toBe(true)
         unitwind:expect(registered[tes3.event.simulated]).toBe(true)
+        unitwind:expect(registered[tes3.event.cellChanged]).toBe(true)
         unitwind:expect(unregistered[tes3.event.simulated]).toBe(true)
+        unitwind:expect(unregistered[tes3.event.cellChanged]).toBe(true)
     end)
 
     local testsPassed = unitwind.testsPassed

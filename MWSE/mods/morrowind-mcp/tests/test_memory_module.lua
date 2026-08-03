@@ -385,6 +385,7 @@ function this.Test()
             ["morrowind://memory/player/inventory.json"] = true,
             ["morrowind://memory/player/equipment.json"] = true,
             ["morrowind://memory/player/spellbook.json"] = true,
+            ["morrowind://memory/player/visited-cells.json"] = true,
             ["morrowind://memory/player/journal.json"] = true,
             ["morrowind://memory/player/quests.json"] = true,
         }
@@ -399,7 +400,7 @@ function this.Test()
             end
         end
 
-        unitwind:expect(found).toBe(5)
+        unitwind:expect(found).toBe(6)
     end)
 
     testMemoryModule("Memory visibility changes dirty only related link indexes", function()

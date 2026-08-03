@@ -3,6 +3,7 @@ local base = require("morrowind-mcp.resources.memory.imodule")
 local obj = require("morrowind-mcp.tes3.object")
 local document = require("morrowind-mcp.resources.memory.document")
 local enumname = require("morrowind-mcp.tes3.enumname")
+local cellmemory = require("morrowind-mcp.resources.memory.cell")
 
 --- Memory module for the single current player entity.
 ---@class MCP.Resources.Memory.Player: MCP.Resources.MemoryModule
@@ -18,6 +19,7 @@ local enumname = require("morrowind-mcp.tes3.enumname")
 ---@field levelUpCallback fun(e: table)?
 ---@field skillRaisedCallback fun(e: table)?
 ---@field simulatedCallback fun(e: table)?
+---@field cellChangedCallback fun(e: cellChangedEventData)?
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -190,6 +192,7 @@ function this:BuildPlayerDocument()
         gender = ready and ReadValue(function() return playerObject and playerObject["female"] and "female" or "male" end) or nil,
         class = ready and ReadValue(function() return obj.tes3class(class) end) or nil,
         birthsign = ready and ReadValue(function() return mobilePlayer and mobilePlayer["birthsign"] and mobilePlayer.birthsign.name end) or nil,
+        current_cell = available and cellmemory.Serialize(ReadValue(function() return tes3.dataHandler and tes3.dataHandler.currentCell end)) or nil,
     })
     local links = self.manager:GetLinksForParent(playerDescriptor.uri)
     table.insert(links, progressionLink)
@@ -338,6 +341,12 @@ function this:OnProgressionEvent()
     document.MarkDirty(self.progressionEntry)
 end
 
+--- Refresh the current-cell summary after the player enters a different cell.
+---@param e cellChangedEventData?
+function this:OnCellChanged(e)
+    document.MarkDirty(self.playerEntry)
+end
+
 --- Poll only clean live entries after game logic to cover mod, potion, and magic changes without dedicated events.
 function this:OnSimulated()
     self:CheckVitals()
@@ -357,6 +366,7 @@ function this:RegisterEvent()
     self.levelUpCallback = function(e) self:OnProgressionEvent() end
     self.skillRaisedCallback = function(e) self:OnProgressionEvent() end
     self.simulatedCallback = function(e) self:OnSimulated() end
+    self.cellChangedCallback = function(e) self:OnCellChanged(e) end
     event.register(tes3.event.charGenFinished, self.charGenFinishedCallback)
     event.register(tes3.event.damaged, self.damagedCallback)
     event.register(tes3.event.damagedHandToHand, self.damagedHandToHandCallback)
@@ -364,6 +374,7 @@ function this:RegisterEvent()
     event.register(tes3.event.levelUp, self.levelUpCallback)
     event.register(tes3.event.skillRaised, self.skillRaisedCallback)
     event.register(tes3.event.simulated, self.simulatedCallback)
+    event.register(tes3.event.cellChanged, self.cellChangedCallback)
 end
 
 --- Unregister all player-specific handlers before releasing the Memory module.
@@ -376,6 +387,7 @@ function this:UnregisterEvent()
         { tes3.event.levelUp, "levelUpCallback" },
         { tes3.event.skillRaised, "skillRaisedCallback" },
         { tes3.event.simulated, "simulatedCallback" },
+        { tes3.event.cellChanged, "cellChangedCallback" },
     }
     for _, item in ipairs(callbacks) do
         local callback = self[item[2]]
