@@ -171,6 +171,28 @@
 ---@field magicka MCP.AnyMap? Current magicka statistic.
 ---@field fatigue MCP.AnyMap? Current fatigue statistic.
 
+--- One spell definition listed by Player Spellbook Memory.
+--- This shape deliberately supports every TES3 spell cast type so actor Memory can reuse it later.
+---@class MCP.MemorySpell
+---@field id string Raw TES3 spell id.
+---@field name string Spell display name.
+---@field castType string Spell cast type name.
+---@field magickaCost number Static spell definition cost, not a runtime consumption prediction.
+---@field effects MCP.AnyMap[] Serialized spell effects.
+
+--- One power entry listed by Player Spellbook Memory.
+---@class MCP.MemoryPower: MCP.MemorySpell
+---@field used boolean Whether the player has used this power during its current recharge period.
+---@field available boolean Whether the power is currently available for casting.
+
+--- Payload written by Player Spellbook Memory.
+---@class MCP.MemoryPlayerSpellbookData
+---@field available boolean Whether the current player spell list can be read.
+---@field spell_count integer Number of normal spells known by the player.
+---@field power_count integer Number of powers available to the player.
+---@field spells MCP.MemorySpell[] Current normal spells.
+---@field powers MCP.MemoryPower[] Current powers and their recharge state.
+
 --- Runtime payload for dialogue text that is intentionally not assigned to an actor.
 ---@class MCP.MemoryUnattributedDialogueData
 ---@field topics string[] Lower-case topics linked from unattributed text.

@@ -1,7 +1,7 @@
 ---
 description: "Morrowind MCP の実装要求を調査し、実装可能な計画を作成します。実装は行いません。"
 name: "Morrowind MCP Planner"
-tools: [read, search, web]
+tools: [vscode/memory, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, vscode/toolSearch, read, search, web, vscodeGeneral/toolSearch, todo]
 model: ["GPT-5.6 Sol (copilot)"]
 agents: []
 user-invocable: true

@@ -384,6 +384,7 @@ function this.Test()
         local expectedUris = {
             ["morrowind://memory/player/inventory.json"] = true,
             ["morrowind://memory/player/equipment.json"] = true,
+            ["morrowind://memory/player/spellbook.json"] = true,
             ["morrowind://memory/player/journal.json"] = true,
             ["morrowind://memory/player/quests.json"] = true,
         }
@@ -398,7 +399,7 @@ function this.Test()
             end
         end
 
-        unitwind:expect(found).toBe(4)
+        unitwind:expect(found).toBe(5)
     end)
 
     testMemoryModule("Memory visibility changes dirty only related link indexes", function()

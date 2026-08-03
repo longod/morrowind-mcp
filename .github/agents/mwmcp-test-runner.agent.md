@@ -1,7 +1,7 @@
 ---
 description: "Morrowind MCP の関連テストを実行し、結果と失敗原因を報告します。"
 name: "Morrowind MCP Test Runner"
-tools: [read, search, execute]
+tools: [vscode/memory, vscode/resolveMemoryFileUri, execute, read, search]
 model: ["GPT-5.6 Luna (copilot)", "GPT-5.4 mini (copilot)"]
 agents: []
 user-invocable: true

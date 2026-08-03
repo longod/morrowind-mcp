@@ -5,6 +5,7 @@ return {
     require("morrowind-mcp.resources.memory.player"),
     require("morrowind-mcp.resources.memory.inventory"),
     require("morrowind-mcp.resources.memory.equipment"),
+    require("morrowind-mcp.resources.memory.spellbook"),
     require("morrowind-mcp.resources.memory.journal"),
     require("morrowind-mcp.resources.memory.quest"),
     require("morrowind-mcp.resources.memory.actor"),
