@@ -17,11 +17,22 @@
 ---@field id integer
 ---@field fromId integer
 ---@field toId integer
----@field kind string
+---@field kind MCP.PathfindingEdgeKind
 ---@field horizontalDistance number
 ---@field verticalDistance number
----@field surface string
+---@field surface MCP.PathfindingEdgeSurface
 ---@field blocked boolean
+---@field sourceCellId string?
+---@field destinationCellId string?
+---@field doorPosition MCP.PathfindingPosition?
+---@field markerPosition MCP.PathfindingPosition?
+---@field directed boolean?
+
+---@class MCP.PathfindingTravelDestination
+---@field sourceCellId string
+---@field destinationCellId string
+---@field doorPosition MCP.PathfindingPosition
+---@field markerPosition MCP.PathfindingPosition
 
 ---@class MCP.PathfindingCell
 ---@field id string
@@ -79,6 +90,7 @@
 ---@alias MCP.PathfindingCosts table<integer, number>
 ---@alias MCP.PathfindingPrevious table<integer, MCP.PathfindingPreviousEntry>
 ---@alias MCP.PathfindingClosed table<integer, boolean>
+---@alias MCP.PathfindingTravelDestinationsByCellId table<string, MCP.PathfindingTravelDestination[]>
 
 ---@class MCP.PathfindingPoll
 ---@field cellHandle mwseSafeObjectHandle
@@ -93,6 +105,9 @@
 ---@field nodeIdsByCellId table<string, MCP.PathfindingNodeIds>
 ---@field edges MCP.PathfindingEdges
 ---@field edgeIdByNeighborId MCP.PathfindingAdjacency
+---@field travelDestinationsByCellId MCP.PathfindingTravelDestinationsByCellId
+---@field sourceCellIdsByDestinationCellId table<string, table<string, boolean>>
+---@field travelEdgeCount integer
 ---@field nextNodeId integer
 ---@field nextEdgeId integer
 ---@field exteriorCellSize number
@@ -108,6 +123,36 @@
 local this = {}
 
 local exteriorCellSize = 8192
+
+---@enum MCP.PathfindingEdgeKind
+local edgeKind = {
+    walk = 1,
+    travel = 2,
+}
+
+---@enum MCP.PathfindingEdgeSurface
+local edgeSurface = {
+    unknown = 1,
+    water = 2,
+}
+
+--- Return a graph key that distinguishes exterior cells sharing a region ID.
+---@param cell tes3cell
+---@return string?
+local function GetCellId(cell)
+    if not cell or not cell.id then
+        return nil
+    end
+    if cell.isInterior then
+        -- Interior cell IDs are globally unique.
+        return cell.id
+    end
+    if cell.gridX == nil or cell.gridY == nil then
+        return nil
+    end
+    -- Exterior region IDs repeat across grid positions.
+    return string.format("exterior:%s:%d,%d", cell.id, cell.gridX, cell.gridY)
+end
 
 --- Copy a vector because pathfinding snapshots must not retain MWSE userdata.
 ---@param position tes3vector3|MCP.PathfindingPosition
@@ -152,6 +197,9 @@ function this.new(params)
         nodeIdsByCellId = {},
         edges = {},
         edgeIdByNeighborId = {},
+        travelDestinationsByCellId = {},
+        sourceCellIdsByDestinationCellId = {},
+        travelEdgeCount = 0,
         nextNodeId = 1,
         nextEdgeId = 1,
         exteriorCellSize = exteriorCellSize,
@@ -179,7 +227,7 @@ function this.new(params)
     return instance
 end
 
---- Remove an edge from the graph and both endpoint adjacency lists.
+--- Remove an edge from the graph and its directed adjacency entry.
 ---@param edgeId integer
 function this:RemoveEdge(edgeId)
     local edge = self.edges[edgeId]
@@ -187,20 +235,67 @@ function this:RemoveEdge(edgeId)
         return
     end
     self.edges[edgeId] = nil
-    if self.edgeIdByNeighborId[edge.fromId] then
+    if self.edgeIdByNeighborId[edge.fromId] and self.edgeIdByNeighborId[edge.fromId][edge.toId] == edgeId then
         self.edgeIdByNeighborId[edge.fromId][edge.toId] = nil
     end
-    if self.edgeIdByNeighborId[edge.toId] then
+    if not edge.directed and self.edgeIdByNeighborId[edge.toId] and self.edgeIdByNeighborId[edge.toId][edge.fromId] == edgeId then
         self.edgeIdByNeighborId[edge.toId][edge.fromId] = nil
+    end
+    if edge.kind == edgeKind.travel then
+        self.travelEdgeCount = self.travelEdgeCount - 1
     end
 end
 
---- Connect two nodes with one undirected edge, replacing an existing matching edge.
+--- Connect two nodes with a directed edge. Travel destinations must remain
+--- one-way because a paired return door is not guaranteed to exist.
 ---@param fromId integer
 ---@param toId integer
----@param kind string?
+---@param kind MCP.PathfindingEdgeKind
+---@param horizontalDistance number
+---@param verticalDistance number
+---@param metadata MCP.PathfindingTravelDestination?
 ---@return MCP.PathfindingEdge?
-function this:ConnectUndirected(fromId, toId, kind)
+function this:ConnectDirected(fromId, toId, kind, horizontalDistance, verticalDistance, metadata)
+    if not self.nodes[fromId] or not self.nodes[toId] or fromId == toId then
+        return nil
+    end
+    local existingEdgeId = self.edgeIdByNeighborId[fromId] and self.edgeIdByNeighborId[fromId][toId]
+    if existingEdgeId then
+        self:RemoveEdge(existingEdgeId)
+    end
+    local edgeId = self.nextEdgeId
+    self.nextEdgeId = self.nextEdgeId + 1
+    local edge = {
+        id = edgeId,
+        fromId = fromId,
+        toId = toId,
+        kind = kind,
+        horizontalDistance = horizontalDistance,
+        verticalDistance = verticalDistance,
+        surface = edgeSurface.unknown,
+        blocked = false,
+        directed = true,
+    }
+    if metadata then
+        edge.sourceCellId = metadata.sourceCellId
+        edge.destinationCellId = metadata.destinationCellId
+        edge.doorPosition = metadata.doorPosition
+        edge.markerPosition = metadata.markerPosition
+    end
+    self.edges[edgeId] = edge
+    self.edgeIdByNeighborId[fromId] = self.edgeIdByNeighborId[fromId] or {}
+    self.edgeIdByNeighborId[fromId][toId] = edgeId
+    if kind == edgeKind.travel then
+        self.travelEdgeCount = self.travelEdgeCount + 1
+    end
+    return edge
+end
+
+--- Connect two nodes with one undirected walking edge, replacing an existing match.
+---@param fromId integer
+---@param toId integer
+---@return MCP.PathfindingEdge?
+function this:ConnectUndirected(fromId, toId)
     local from = self.nodes[fromId]
     local to = self.nodes[toId]
     if not from or not to or fromId == toId then
@@ -218,11 +313,12 @@ function this:ConnectUndirected(fromId, toId, kind)
         id = edgeId,
         fromId = fromId,
         toId = toId,
-        kind = kind or "walk",
+        kind = edgeKind.walk,
         horizontalDistance = horizontalDistance,
         verticalDistance = verticalDistance,
-        surface = "unknown",
+        surface = edgeSurface.unknown,
         blocked = false,
+        directed = false,
     }
     self.edges[edgeId] = edge
     self.edgeIdByNeighborId[fromId] = self.edgeIdByNeighborId[fromId] or {}
@@ -232,31 +328,123 @@ function this:ConnectUndirected(fromId, toId, kind)
     return edge
 end
 
---- Remove a cell snapshot and every edge that references its nodes.
+--- Find a nearest node from a copied position in a known snapshotted cell.
 ---@param cellId string
-function this:RemoveCell(cellId)
-    local nodeIds = self.nodeIdsByCellId[cellId]
-    if not nodeIds then
-        self.cells[cellId] = nil
+---@param position MCP.PathfindingPosition
+---@return MCP.PathfindingNode?
+function this:FindNearestNodeByPosition(cellId, position)
+    local nearestNode = nil
+    local nearestScore = nil
+    for _, nodeId in ipairs(self.nodeIdsByCellId[cellId] or {}) do
+        local node = self.nodes[nodeId]
+        local dx = node.position.x - position.x
+        local dy = node.position.y - position.y
+        local dz = node.position.z - position.z
+        local score = dx * dx + dy * dy + dz * dz
+        if not nearestScore or score < nearestScore then
+            nearestNode = node
+            nearestScore = score
+        end
+    end
+    return nearestNode
+end
+
+--- Replace active-cell teleport door snapshots without retaining MWSE userdata.
+---@param cell tes3cell
+function this:CollectTravelDestinations(cell)
+    local cellId = GetCellId(cell)
+    if not cellId then
         return
     end
-    for _, nodeId in ipairs(nodeIds) do
-        local removedEdgeIds = {}
-        for _, edgeId in pairs(self.edgeIdByNeighborId[nodeId] or {}) do
+    self:RemoveTravelDestinationSource(cellId)
+    local destinations = {}
+    local doorCount = 0
+    local grid = cell.isInterior and "interior" or string.format("%d,%d", cell.gridX, cell.gridY)
+    for reference in cell:iterateReferences(tes3.objectType.door, false) do
+        doorCount = doorCount + 1
+        if reference:isValid() then
+            local destination = reference.destination
+            if destination and destination.cell and destination.cell.id and destination.marker and destination.marker.position then
+                local destinationCellId = GetCellId(destination.cell)
+                if destinationCellId then
+                    table.insert(destinations, {
+                        sourceCellId = cellId,
+                        destinationCellId = destinationCellId,
+                        doorPosition = CopyPosition(reference.position),
+                        markerPosition = CopyPosition(destination.marker.position),
+                    })
+                    local sources = self.sourceCellIdsByDestinationCellId[destinationCellId] or {}
+                    sources[cellId] = true
+                    self.sourceCellIdsByDestinationCellId[destinationCellId] = sources
+                    self.logger:trace("Collected travel destination: sourceCell=%s destinationCell=%s door=(%.1f,%.1f,%.1f) marker=(%.1f,%.1f,%.1f)", cellId, destinationCellId, reference.position.x, reference.position.y, reference.position.z, destination.marker.position.x, destination.marker.position.y, destination.marker.position.z)
+                else
+                    self.logger:trace("Skipped travel destination without graph key: sourceCell=%s destinationCell=%s", cellId, destination.cell.id)
+                end
+            end
+        end
+    end
+    self.travelDestinationsByCellId[cellId] = destinations
+    self.logger:debug("Collected travel destinations: cell=%s key=%s grid=%s doors=%d destinations=%d", cell.id, cellId, grid, doorCount, table.size(destinations))
+end
+
+--- Remove reverse-index entries for one source cell.
+---@param sourceCellId string
+function this:RemoveTravelDestinationSource(sourceCellId)
+    for _, destination in ipairs(self.travelDestinationsByCellId[sourceCellId] or {}) do
+        local sources = self.sourceCellIdsByDestinationCellId[destination.destinationCellId]
+        if sources then
+            sources[sourceCellId] = nil
+            if table.size(sources) == 0 then
+                self.sourceCellIdsByDestinationCellId[destination.destinationCellId] = nil
+            end
+        end
+    end
+    self.travelDestinationsByCellId[sourceCellId] = nil
+end
+
+--- Rebuild only travel edges emitted by one cell after its active references change.
+---@param sourceCellId string
+function this:ResolveTravelDestinations(sourceCellId)
+    local removedEdgeIds = {}
+    for edgeId, edge in pairs(self.edges) do
+        if edge.kind == edgeKind.travel and edge.sourceCellId == sourceCellId then
             table.insert(removedEdgeIds, edgeId)
         end
-        for _, edgeId in ipairs(removedEdgeIds) do
-            self:RemoveEdge(edgeId)
+    end
+    for _, edgeId in ipairs(removedEdgeIds) do
+        self:RemoveEdge(edgeId)
+    end
+    if table.size(removedEdgeIds) > 0 then
+        self.logger:debug("Removed travel edges before rebuilding: sourceCell=%s edges=%d", sourceCellId, table.size(removedEdgeIds))
+    end
+    for _, destination in ipairs(self.travelDestinationsByCellId[sourceCellId] or {}) do
+        local sourceNode = self:FindNearestNodeByPosition(destination.sourceCellId, destination.doorPosition)
+        local destinationNode = self:FindNearestNodeByPosition(destination.destinationCellId, destination.markerPosition)
+        if sourceNode and destinationNode then
+            -- Door endpoints belong to unrelated coordinate spaces. Their direct distance is meaningless;
+            -- only the walk-in and walk-out distances contribute to the route cost.
+            local sourceHorizontal, sourceVertical = Distances(sourceNode.position, destination.doorPosition)
+            local destinationHorizontal, destinationVertical = Distances(destination.markerPosition, destinationNode.position)
+            local edge = self:ConnectDirected(sourceNode.id, destinationNode.id, edgeKind.travel, sourceHorizontal + destinationHorizontal, sourceVertical + destinationVertical, destination)
+            if edge then
+                self.logger:trace("Connected travel edge: edgeId=%d sourceCell=%s sourceNode=%d destinationCell=%s destinationNode=%d horizontal=%.1f vertical=%.1f", edge.id, destination.sourceCellId, sourceNode.id, destination.destinationCellId, destinationNode.id, edge.horizontalDistance, edge.verticalDistance)
+            end
+        else
+            self.logger:trace("Travel destination pending pathgrid: sourceCell=%s sourceNode=%s destinationCell=%s destinationNode=%s", destination.sourceCellId, tostring(sourceNode and sourceNode.id), destination.destinationCellId, tostring(destinationNode and destinationNode.id))
         end
-        self.nodes[nodeId] = nil
-        self.edgeIdByNeighborId[nodeId] = nil
     end
-    local cell = self.cells[cellId]
-    if cell and not cell.isInterior and cell.gridX and cell.gridY and self.gridCellIdByPosition[cell.gridX] then
-        self.gridCellIdByPosition[cell.gridX][cell.gridY] = nil
+end
+
+--- Resolve links from and into a cell once its pathgrid is available.
+---@param cellId string
+function this:ResolveTravelDestinationsForCell(cellId)
+    self:ResolveTravelDestinations(cellId)
+    local incomingSourceCount = 0
+    for sourceCellId in pairs(self.sourceCellIdsByDestinationCellId[cellId] or {}) do
+        incomingSourceCount = incomingSourceCount + 1
+        self:ResolveTravelDestinations(sourceCellId)
     end
-    self.nodeIdsByCellId[cellId] = nil
-    self.cells[cellId] = nil
+    self.logger:debug("Resolved travel destinations: cell=%s incomingSources=%d travelEdges=%d", cellId, incomingSourceCount, self.travelEdgeCount)
 end
 
 --- Return node IDs that are close enough to each exterior border to stitch.
@@ -295,7 +483,7 @@ function this:StitchBorderNodeIds(nodeIds, neighborNodeIds)
             local neighborNode = self.nodes[neighborNodeId]
             local horizontalDistance, verticalDistance = Distances(node.position, neighborNode.position)
             if horizontalDistance <= self.stitchMaxHorizontalDistance and verticalDistance <= self.stitchMaxVerticalDistance then
-                self:ConnectUndirected(nodeId, neighborNodeId, "walk")
+                self:ConnectUndirected(nodeId, neighborNodeId)
             end
         end
     end
@@ -334,10 +522,12 @@ function this:UpdateCell(cell)
         self.logger:debug("Skipping pathgrid snapshot because the cell is unavailable: cell=nil")
         return false
     end
-    if not cell.id then
-        self.logger:debug("Skipping pathgrid snapshot because the cell has no id.")
+    local cellId = GetCellId(cell)
+    if not cellId then
+        self.logger:debug("Skipping pathgrid snapshot because the cell has no usable graph key.")
         return false
     end
+    self:CollectTravelDestinations(cell)
     if not cell.pathGrid then
         self.logger:debug("Skipping pathgrid snapshot because the cell has no pathgrid: cell=%s", cell.id)
         return false
@@ -346,46 +536,49 @@ function this:UpdateCell(cell)
         self.logger:debug("Skipping pathgrid snapshot because the pathgrid is not loaded: cell=%s", cell.id)
         return false
     end
-    if self.cells[cell.id] then
-        self.logger:debug("Skipping pathgrid reconstruction because the cell is already snapshotted: cell=%s", cell.id)
+    if self.cells[cellId] then
+        self:ResolveTravelDestinationsForCell(cellId)
+        self.logger:debug("Skipping pathgrid reconstruction because the cell is already snapshotted: cell=%s key=%s", cell.id, cellId)
         return true
     end
-    self.cells[cell.id] = {
-        id = cell.id,
+    self.cells[cellId] = {
+        id = cellId,
         isInterior = cell.isInterior,
         gridX = cell.gridX,
         gridY = cell.gridY,
         waterLevel = cell.waterLevel,
         borderNodeIds = { west = {}, east = {}, south = {}, north = {} },
     }
-    self.nodeIdsByCellId[cell.id] = {}
+    self.nodeIdsByCellId[cellId] = {}
 
     ---@type table<tes3pathGridNode, integer>
     local nodeIdsByPathgridNode = {}
     for index, pathgridNode in ipairs(cell.pathGrid.nodes) do
         local nodeId = self.nextNodeId
         self.nextNodeId = self.nextNodeId + 1
-        self.nodes[nodeId] = { id = nodeId, cellId = cell.id, position = CopyPosition(pathgridNode.position) }
+        self.nodes[nodeId] = { id = nodeId, cellId = cellId, position = CopyPosition(pathgridNode.position) }
         self.edgeIdByNeighborId[nodeId] = {}
-        self.nodeIdsByCellId[cell.id][index] = nodeId
+        self.nodeIdsByCellId[cellId][index] = nodeId
         nodeIdsByPathgridNode[pathgridNode] = nodeId
     end
     for _, pathgridNode in ipairs(cell.pathGrid.nodes) do
         for _, connectedNode in ipairs(pathgridNode.connectedNodes) do
             local toId = nodeIdsByPathgridNode[connectedNode]
             if toId then
-                self:ConnectUndirected(nodeIdsByPathgridNode[pathgridNode], toId, "walk")
+                self:ConnectUndirected(nodeIdsByPathgridNode[pathgridNode], toId)
             end
         end
     end
-    local cellSnapshot = self.cells[cell.id]
+    local cellSnapshot = self.cells[cellId]
     cellSnapshot.borderNodeIds = self:CollectBorderNodeIds(cellSnapshot)
     if not cellSnapshot.isInterior then
         self.gridCellIdByPosition[cellSnapshot.gridX] = self.gridCellIdByPosition[cellSnapshot.gridX] or {}
         self.gridCellIdByPosition[cellSnapshot.gridX][cellSnapshot.gridY] = cellSnapshot.id
     end
-    self:StitchExteriorCell(cell.id)
-    self.logger:debug("Snapshotted pathgrid: cell=%s nodes=%d edges=%d", cell.id, table.size(self.nodeIdsByCellId[cell.id]), table.size(self.edges))
+    self:StitchExteriorCell(cellId)
+    self:ResolveTravelDestinationsForCell(cellId)
+    local grid = cellSnapshot.isInterior and "interior" or string.format("%d,%d", cellSnapshot.gridX, cellSnapshot.gridY)
+    self.logger:debug("Snapshotted pathgrid: cell=%s key=%s grid=%s nodes=%d edges=%d", cell.id, cellId, grid, table.size(self.nodeIdsByCellId[cellId]), table.size(self.edges))
     return true
 end
 
@@ -415,8 +608,11 @@ end
 ---@param cell tes3cell
 ---@return boolean started
 function this:StartPathgridPoll(cell)
-    -- Retain the cell ID as a Lua string because the cell userdata can become invalid before a timer callback runs.
-    local cellId = cell.id
+    -- Retain the graph key because the cell userdata can become invalid before a timer callback runs.
+    local cellId = GetCellId(cell)
+    if not cellId then
+        return false
+    end
     if self.pendingPathgridPolls[cellId] then
         return false
     end
@@ -480,6 +676,11 @@ function this:OnLoaded()
             end
         end
     end
+    -- Loading a save in the current cell may not emit cellActivated for unchanged references.
+    -- Refresh the player cell so its already-active teleport doors are still collected.
+    if tes3.player and tes3.player.cell then
+        self:UpdateCell(tes3.player.cell)
+    end
 end
 
 --- Find the nearest stored node in the locator's cell using a cheap brute-force scan.
@@ -487,7 +688,8 @@ end
 ---@param weights MCP.PathfindingNearestWeights?
 ---@return MCP.PathfindingNode?
 function this:FindNearestNode(locator, weights)
-    if not locator.cell or not locator.cell.id then
+    local cellId = GetCellId(locator.cell)
+    if not cellId then
         return nil
     end
     local position = LocatorPosition(locator)
@@ -499,7 +701,7 @@ function this:FindNearestNode(locator, weights)
     local verticalWeight = weights.vertical or 1
     local nearestNode = nil
     local nearestScore = nil
-    for _, nodeId in ipairs(self.nodeIdsByCellId[locator.cell.id] or {}) do
+    for _, nodeId in ipairs(self.nodeIdsByCellId[cellId] or {}) do
         local node = self.nodes[nodeId]
         local dx = node.position.x - position.x
         local dy = node.position.y - position.y
@@ -515,7 +717,7 @@ end
 
 --- Change learned terrain information without modifying the immutable pathgrid snapshot.
 ---@param edgeId integer
----@param surface string
+---@param surface MCP.PathfindingEdgeSurface
 ---@return boolean updated
 function this:SetEdgeSurface(edgeId, surface)
     local edge = self.edges[edgeId]
@@ -523,7 +725,7 @@ function this:SetEdgeSurface(edgeId, surface)
         return false
     end
     edge.surface = surface
-    self.logger:debug("Updated pathfinding edge surface: edgeId=%d surface=%s", edgeId, surface)
+    self.logger:debug("Updated pathfinding edge surface: edgeId=%d surface=%d", edgeId, surface)
     return true
 end
 
@@ -548,13 +750,13 @@ end
 function this:EdgeCost(edge, options)
     options = options or {}
     local surfaceWeight = 1
-    if edge.surface == "water" then
+    if edge.surface == edgeSurface.water then
         surfaceWeight = options.waterWalking and (options.waterWalkingWeight or 1) or (options.waterWeight or 2)
     end
     return (edge.horizontalDistance * (options.horizontalWeight or 1) + edge.verticalDistance * (options.verticalWeight or 1)) * surfaceWeight
 end
 
---- Return a distance-only heuristic; shortcut edges can disable it to retain optimality.
+--- Return a distance-only heuristic when all edges preserve world-space distance.
 ---@param node MCP.PathfindingNode
 ---@param destination MCP.PathfindingNode
 ---@param options MCP.PathfindingOptions?
@@ -564,8 +766,59 @@ function this:Heuristic(node, destination, options)
     if options.useHeuristic == false then
         return 0
     end
+    if self.travelEdgeCount > 0 then
+        -- Teleports are free transitions, so only walk-in and walk-out distance is charged.
+        -- Geometric A* can overestimate across them; use Dijkstra until a cell-graph lower bound exists.
+        return 0
+    end
     local horizontalDistance, verticalDistance = Distances(node.position, destination.position)
     return horizontalDistance * (options.horizontalWeight or 1) + verticalDistance * (options.verticalWeight or 1)
+end
+
+--- Insert an entry into a binary min-heap ordered by pathfinding score.
+---@param open MCP.PathfindingOpenEntry[]
+---@param entry MCP.PathfindingOpenEntry
+function this:PushOpenEntry(open, entry)
+    table.insert(open, entry)
+    local index = table.size(open)
+    while index > 1 do
+        local parentIndex = math.floor(index / 2)
+        if open[parentIndex].score <= entry.score then
+            break
+        end
+        open[index] = open[parentIndex]
+        index = parentIndex
+    end
+    open[index] = entry
+end
+
+--- Remove the lowest-score entry from a binary min-heap.
+---@param open MCP.PathfindingOpenEntry[]
+---@return MCP.PathfindingOpenEntry?
+function this:PopOpenEntry(open)
+    if table.size(open) == 0 then
+        return nil
+    end
+    local result = open[1]
+    local last = table.remove(open)
+    if table.size(open) > 0 then
+        local index = 1
+        while true do
+            local leftIndex = index * 2
+            local rightIndex = leftIndex + 1
+            local childIndex = leftIndex
+            if rightIndex <= table.size(open) and open[rightIndex].score < open[leftIndex].score then
+                childIndex = rightIndex
+            end
+            if childIndex > table.size(open) or last.score <= open[childIndex].score then
+                break
+            end
+            open[index] = open[childIndex]
+            index = childIndex
+        end
+        open[index] = last
+    end
+    return result
 end
 
 --- Find a route over the stored graph with A*, returning nil when no route is known.
@@ -588,14 +841,12 @@ function this:FindPath(start, destination, options)
     local previous = {}
     ---@type MCP.PathfindingClosed
     local closed = {}
+    -- Heap operations avoid quadratic open-set scans across connected cells.
     while table.size(open) > 0 do
-        local bestIndex = 1
-        for index = 2, #open do
-            if open[index].score < open[bestIndex].score then
-                bestIndex = index
-            end
+        local current = self:PopOpenEntry(open)
+        if not current then
+            break
         end
-        local current = table.remove(open, bestIndex)
         if not closed[current.nodeId] then
             closed[current.nodeId] = true
             if current.nodeId == destinationNode.id then
@@ -626,7 +877,7 @@ function this:FindPath(start, destination, options)
                         if not costs[neighborId] or nextCost < costs[neighborId] then
                             costs[neighborId] = nextCost
                             previous[neighborId] = { nodeId = current.nodeId, edgeId = edgeId }
-                            table.insert(open, { nodeId = neighborId, score = nextCost + self:Heuristic(self.nodes[neighborId], destinationNode, options) })
+                            self:PushOpenEntry(open, { nodeId = neighborId, score = nextCost + self:Heuristic(self.nodes[neighborId], destinationNode, options) })
                         end
                     end
                 end
@@ -641,10 +892,10 @@ end
 function this:RegisterEventHandlers()
     self.cellActivatedCallback = function(e)
         local updated = self:UpdateCell(e.cell)
-        if not e.cell or not e.cell.id then
+        local cellId = GetCellId(e.cell)
+        if not cellId then
             return
         end
-        local cellId = e.cell.id
         local pendingPoll = self.pendingPathgridPolls[cellId]
         if updated or self.cells[cellId] then
             if pendingPoll then
@@ -672,8 +923,9 @@ function this:RegisterEventHandlers()
         self:StartPathgridPoll(e.cell)
     end
     self.cellDeactivatedCallback = function(e)
-        if e.cell and e.cell.id then
-            self:StopPathgridPoll(e.cell.id, "cell deactivated")
+        local cellId = GetCellId(e.cell)
+        if cellId then
+            self:StopPathgridPoll(cellId, "cell deactivated")
         end
     end
     self.loadedCallback = function()
@@ -708,5 +960,9 @@ function this:UnregisterEventHandlers()
     end
     self.logger:debug("Unregistered pathfinding cell activation handler.")
 end
+
+this.edgeKind = edgeKind
+this.edgeSurface = edgeSurface
+this.GetCellId = GetCellId
 
 return this
