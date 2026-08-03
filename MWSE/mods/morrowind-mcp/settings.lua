@@ -30,6 +30,9 @@ this.defaultConfig = {
 
     indicator = {
         toolsCall = false,
+        cellBorder = false,
+        collisionBox = false,
+        pathGrid = false,
     },
 
     autoplay = {

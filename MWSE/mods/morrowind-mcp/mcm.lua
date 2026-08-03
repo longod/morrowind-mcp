@@ -71,7 +71,7 @@ local function OnModConfigReady(e)
     do
         local indicator = page:createCategory({
             label = "Indicator",
-            description = "Settings for visual indicators when features are invoked.",
+            description = "Settings for visual indicators.",
         })
         indicator:createOnOffButton({
             label = "Tools Called",
@@ -80,6 +80,39 @@ local function OnModConfigReady(e)
                 id = "toolsCall",
                 table = config.indicator,
             }),
+        })
+        indicator:createOnOffButton({
+            label = "Cell Borders",
+            description = "Show cell borders in the world.",
+            variable = mwse.mcm.createTableVariable({
+                id = "cellBorder",
+                table = config.indicator,
+            }),
+            callback = function(self)
+                tes3.worldController.menuController.bordersEnabled = self.variable.value
+            end
+        })
+        indicator:createOnOffButton({
+            label = "Collision Boxes",
+            description = "Show collision boxes in the world.",
+            variable = mwse.mcm.createTableVariable({
+                id = "collisionBox",
+                table = config.indicator,
+            }),
+            callback = function(self)
+                tes3.worldController.menuController.collisionBoxesEnabled = self.variable.value
+            end
+        })
+        indicator:createOnOffButton({
+            label = "Path Grid",
+            description = "Show path grids in the world. but there is a bug where only pathgrids that have already been loaded are rendered.",
+            variable = mwse.mcm.createTableVariable({
+                id = "pathGrid",
+                table = config.indicator,
+            }),
+            callback = function(self)
+                tes3.worldController.menuController.pathGridShown = self.variable.value
+            end
         })
     end
 

@@ -37,6 +37,7 @@ function this.new(params)
                 position_x = jsonrpc.NumberSchema("X", "X coordinate in world space.", nil, nil, 0),
                 position_y = jsonrpc.NumberSchema("Y", "Y coordinate in world space.", nil, nil, 0),
                 position_z = jsonrpc.NumberSchema("Z", "Z coordinate in world space.", nil, nil, 0),
+                cell_id = jsonrpc.StringSchema("Cell ID", "Cell ID to teleport to.", 1, 64),
             },
             jsonrpc.array({ "action", "position_x", "position_y", "position_z" })
         ),
@@ -57,12 +58,11 @@ end
 function this:Execute(arguments, context)
     local method = arguments["method"]
     local position = tes3vector3.new(arguments["position_x"], arguments["position_y"], arguments["position_z"])
+    local cell_id = arguments["cell_id"]
 
     local result = tes3.positionCell({
-        --      reference = tes3.mobilePlayer,
-        --      cell = tes3.getPlayerCell(),
+        cell = cell_id,
         position = position,
-
     })
 
     if not result then
