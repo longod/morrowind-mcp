@@ -27,9 +27,15 @@ local visitedCellsLink = document.Link(
 )
 
 --- Return a compact Tamriel timestamp suitable for repeated collection entries.
----@return string?
+---@return MCP.MemoryObservationTimestamp?
 local function ObservedAt()
-    return datetime.ToInGameShortText(datetime.InGameNow())
+    local inGameTime = datetime.InGameNow()
+    if not inGameTime then
+        return nil
+    end
+    return jsonrpc.object({
+        in_game_time_text = datetime.ToInGameShortText(inGameTime),
+    })
 end
 
 --- Sort exterior cells geographically and interior cells by stable display identity.

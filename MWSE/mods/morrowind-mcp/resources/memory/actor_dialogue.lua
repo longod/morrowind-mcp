@@ -92,12 +92,12 @@ local function AddTopics(observedActor, dialogueData, topics)
 end
 
 --- Build a compact observation timestamp; dialogue histories can repeat many times in one document.
----@return MCP.AnyMap
+---@return MCP.MemoryObservationTimestamp
 local function ObservationTimestamp()
     local timestamp = document.TimestampNow()
     return jsonrpc.object({
         system_time = timestamp.system_time,
-        in_game_time = datetime.ToInGameShortText(timestamp.in_game_time),
+        in_game_time_text = datetime.ToInGameShortText(timestamp.in_game_time),
     })
 end
 

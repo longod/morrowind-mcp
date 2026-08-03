@@ -54,6 +54,11 @@
 ---@field system_time string? UTC ISO 8601 time.
 ---@field in_game_time MCP.DateTimeInGame?
 
+--- Compact timestamp metadata used by repeated Memory observations.
+---@class MCP.MemoryObservationTimestamp
+---@field system_time string? UTC ISO 8601 time.
+---@field in_game_time_text string? Compact Tamriel time text.
+
 --- JSON envelope returned by Memory resources.
 ---@class MCP.MemoryDocument
 ---@field schema_version integer
@@ -100,8 +105,8 @@
 
 --- One current-loaded-game cell observation.
 ---@class MCP.MemoryVisitedCell: MCP.MemoryCell
----@field first_observed_at string? Compact in-game time when tracking first saw this cell.
----@field last_observed_at string? Compact in-game time when tracking last saw this cell.
+---@field first_observed_at MCP.MemoryObservationTimestamp? Time when tracking first saw this cell.
+---@field last_observed_at MCP.MemoryObservationTimestamp? Time when tracking last saw this cell.
 ---@field entry_count integer Number of tracked cell-change entries after initial load.
 
 --- Runtime state for one observed actor managed inside the Actor Memory module.

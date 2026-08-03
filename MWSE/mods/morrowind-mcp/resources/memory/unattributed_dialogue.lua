@@ -28,12 +28,12 @@ local rootLink = document.Link(
 )
 
 --- Return a compact observation timestamp for dialogue histories.
----@return MCP.AnyMap
+---@return MCP.MemoryObservationTimestamp
 local function ObservationTimestamp()
     local timestamp = document.TimestampNow()
     return jsonrpc.object({
         system_time = timestamp.system_time,
-        in_game_time = datetime.ToInGameShortText(timestamp.in_game_time),
+        in_game_time_text = datetime.ToInGameShortText(timestamp.in_game_time),
     })
 end
 

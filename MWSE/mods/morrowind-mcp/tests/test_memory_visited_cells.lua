@@ -72,7 +72,7 @@ function this.Test()
         unitwind:expect(firstDocument.data.cell_count).toBe(1)
         unitwind:expect(firstCell.id).toBe("Balmora")
         unitwind:expect(firstCell.entry_count).toBe(0)
-        unitwind:expect(firstCell.first_observed_at).toBe("3E 427-08-16 13:30")
+        unitwind:expect(firstCell.first_observed_at.in_game_time_text).toBe("3E 427-08-16 13:30")
 
         tes3.dataHandler.currentCell = seydaNeen
         module:OnLoaded({ newGame = false })
@@ -100,7 +100,7 @@ function this.Test()
 
         unitwind:expect(documentValue.data.cell_count).toBe(3)
         unitwind:expect(module.cellsById["Balmora"].entry_count).toBe(1)
-        unitwind:expect(module.cellsById["Balmora"].last_observed_at).toBe("3E 427-08-16 13:30")
+        unitwind:expect(module.cellsById["Balmora"].last_observed_at.in_game_time_text).toBe("3E 427-08-16 13:30")
         unitwind:expect(cells[1].id).toBe("Balmora")
         unitwind:expect(cells[1].grid_x).toBe(-3)
         unitwind:expect(cells[1].grid_y).toBe(-2)
