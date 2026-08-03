@@ -74,9 +74,12 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 
 - 単体テストやサーバーテストが必要な場合は、原則として Morrowind MCP Test Runner に委任して実行する。
 - 親エージェントや通常の作業エージェントは、テスト実行が必要だと判断した時点でこの子エージェントを呼び出す。
+- UnitWind テストで `event`、`timer`、`tes3` などの共有 MWSE API を mock する場合、各テスト後に `unitwind.afterEach` で `clearMocks()` と `clearSpies()` を呼び、必ず復元する。
+- 同じ共有 API の field を連続するテストで mock する場合、テストごとの cleanup を省略してはならない。UnitWind は mock 済みの値を次の復元先として記録するため、最後の cleanup だけでは元の MWSE API へ復元できなくなる。
 - 単体テスト対象になっているファイルのコードの変更後は、[tests/unit_test.ps1](../../tests/unit_test.ps1) を実行して、正しく動作することを確認する（スキル /unittest_run）。必要なら引数で対象ファイルを指定できる。
 - MCP Server の公開 surface や runtime 統合に影響する変更後は、[tests/server_test.ps1](../../tests/server_test.ps1) を実行する（/servertest_run）。対象例: `resources/list` / `resources/read` に出る resource の追加・削除・URI 変更、`prompts/list` / `tools/list` / `tools/call` の公開内容変更、`server/**` の protocol / HTTP / routing 変更、Memory module の登録・公開 entry・debug dump 出力変更、`settings` / `config` / path 解決の変更。
-- [tests/server_test.ps1](../../tests/server_test.ps1) は重いので、純粋な内部 helper、局所的な Lua 単体ロジック、既存 resource 内の表示文言だけの変更、ドキュメント・テストだけの変更では必須にしない。迷う場合は、変更が MCP client から観測できる公開 resource / prompt / tool / server 挙動を変えるかで判断する。
+- UnitWind テストで共有 MWSE API を mock する追加・変更後は、通常の unit test と必要な server test が成功した後の最後の検証として、[tests/unit_test.ps1](../../tests/unit_test.ps1) に `-VerifyRuntimeAfterTests` を付けて実行する。この opt-in 検証は全 UnitWind 実行後に通常 runtime へ遷移できることを確認するため、通常のテスト実行ごとには実行しない。
+- [tests/server_test.ps1](../../tests/server_test.ps1) は実行に時間を要するので、純粋な内部 helper、局所的な Lua 単体ロジック、既存 resource 内の表示文言だけの変更、ドキュメント・テストだけの変更では必須にしない。迷う場合は、変更が MCP client から観測できる公開 resource / prompt / tool / server 挙動を変えるかで判断する。
 
 ## 参考リンク
 

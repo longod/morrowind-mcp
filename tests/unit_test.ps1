@@ -1,7 +1,10 @@
 param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
     [string[]]$TestTargets,
-    [switch]$NoForeground
+    [switch]$NoForeground,
+    [switch]$VerifyRuntimeAfterTests,
+    [ValidateRange(1, 300)]
+    [int]$RuntimeReadyTimeoutSeconds = 60
 )
 
 $MaxWaitSeconds = 10
@@ -21,6 +24,7 @@ $FoundFailed = $false
 $MwseLogPath = $null
 $MwseLogStatus = ""
 $SavedMwseCopy = $false
+$RuntimeProbeStarted = $false
 
 function Convert-ToFileUri {
     param(
@@ -45,6 +49,11 @@ try {
     $SentinelPath = ".\..\MWSE\mods\morrowind-mcp\.unit-test-targets"
     $TargetLines = @($TestTargets | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
+    if ($VerifyRuntimeAfterTests -and $TargetLines.Count -gt 0) {
+        Write-Host "[ERROR] -VerifyRuntimeAfterTests requires the full unit test suite." -ForegroundColor Red
+        exit 1
+    }
+
     # start script is mandatory; stop script is optional fallback on timeout.
     if (-not (Test-Path -LiteralPath $StartScriptPath)) {
         Write-Host "[ERROR] $StartScriptPath was not found." -ForegroundColor Red
@@ -56,7 +65,11 @@ try {
     }
 
     $SentinelDir = Split-Path -Parent $SentinelPath
-    if (Test-Path -LiteralPath $SentinelDir) {
+    if ($VerifyRuntimeAfterTests -and (Test-Path -LiteralPath $SentinelPath)) {
+        Write-Host "[ERROR] -VerifyRuntimeAfterTests requires no existing sentinel: $SentinelPath" -ForegroundColor Red
+        exit 1
+    }
+    if (-not $VerifyRuntimeAfterTests -and (Test-Path -LiteralPath $SentinelDir)) {
         $SentinelAlreadyExists = Test-Path -LiteralPath $SentinelPath
         if ($SentinelAlreadyExists) {
             $SentinelOriginalContent = Get-Content -LiteralPath $SentinelPath -Raw
@@ -85,10 +98,19 @@ try {
         }
     }
     else {
-        Write-Host "[WARN] Sentinel directory was not found. Continue without sentinel: $SentinelDir" -ForegroundColor Yellow
+        if (-not $VerifyRuntimeAfterTests) {
+            Write-Host "[WARN] Sentinel directory was not found. Continue without sentinel: $SentinelDir" -ForegroundColor Yellow
+        }
     }
 
-    & $StartScriptPath
+    if ($VerifyRuntimeAfterTests) {
+        Write-Host "[INFO] Running full unit tests and verifying the subsequent runtime startup." -ForegroundColor DarkCyan
+        & $StartScriptPath -WaitForServer -ServerReadyTimeoutSeconds $RuntimeReadyTimeoutSeconds
+        $RuntimeProbeStarted = $true
+    }
+    else {
+        & $StartScriptPath
+    }
     $StartExitCode = [int]$LASTEXITCODE
     if ($StartExitCode -ne 0) {
         Write-Host "[WARN] $StartScriptPath exited non-zero: start=$StartExitCode" -ForegroundColor Yellow
@@ -106,7 +128,7 @@ try {
         Start-Sleep -Seconds 1
     }
 
-    if ($morrowindStarted) {
+    if ($morrowindStarted -and -not $VerifyRuntimeAfterTests) {
         Write-Host "[INFO] Waiting up to $MaxWaitSeconds seconds for Morrowind process to exit..." -ForegroundColor DarkCyan
         $stoppedInTime = $false
         for ($i = 0; $i -lt $MaxWaitSeconds; $i++) {
@@ -207,6 +229,15 @@ try {
     }
 }
 finally {
+    if ($VerifyRuntimeAfterTests -and $RuntimeProbeStarted -and $HasStopScript) {
+        Write-Host "[INFO] Stopping Morrowind after runtime verification." -ForegroundColor DarkCyan
+        & $StopScriptPath
+        if ([int]$LASTEXITCODE -ne 0) {
+            Write-Host "[WARN] $StopScriptPath exited non-zero: stop=$LASTEXITCODE" -ForegroundColor Yellow
+            $ExitCode = 1
+        }
+    }
+
     if (Test-Path -LiteralPath $ExtractOutputPath) {
         Write-Host "[INFO] Saved extracted results: $(Convert-ToFileUri -Path $ExtractOutputPath)" -ForegroundColor DarkCyan
     }

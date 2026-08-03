@@ -30,11 +30,17 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 
 4. 引数を付けずに実行した場合は、`.unit-test-targets` は空になり、全テストが実行される。
 
-5. `MWSE.log` を確認する。
+5. UnitWind の共有 API mock が通常ランタイムを壊していないことを確認する場合だけ、次を実行する。この opt-in mode は sentinel を作らず、全テスト後に MCP server の起動を待機してから Morrowind を停止するため、通常の単体テストより時間がかかる。
 
-6. `MWSE.log` からテスト結果を抽出する。
+```powershell
+.\tests\unit_test.ps1 -VerifyRuntimeAfterTests
+```
 
-7. 抽出結果ファイルと `MWSE.log` コピーを確認する。
+6. `MWSE.log` を確認する。
+
+7. `MWSE.log` からテスト結果を抽出する。
+
+8. 抽出結果ファイルと `MWSE.log` コピーを確認する。
 	- 抽出結果: `tests/logs/unit_test/unitwind_YYYYMMDD_HHMMSS.log`
 	- `MWSE.log` コピー: `tests/logs/unit_test/mwse_YYYYMMDD_HHMMSS.log`
 
@@ -46,6 +52,7 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 - 新規テスト追加時も同じパターンを使う。
 - `unittest.lua` は各テストモジュールの戻り値を集計するため、`Unit test <file> passed: tests_passed=<n> tests_failed=<n>` の行で件数が正しく出ていることを確認する。
 - `tests_passed=0 tests_failed=0` が並ぶ場合は、`test_*.lua` 側が `finish()` 後の値を直接返していないか確認する。
+- 回帰切り分けのために `test_*.lua` の UnitWind 設定を `enabled = false` にした場合も `tests_passed=0 tests_failed=0` になる。意図した一時無効化か、値の退避漏れかを区別して確認する。
 - 抽出対象パターンは `\[UnitWind\]|MORROWIND-MCP\..*(PASSED|FAILED)` である。
 - `FAILED` 行が抽出されると、`tests/unit_test.ps1` は non-zero を返す。
 - ただし、`start_server_mo2.ps1` が non-zero の場合も最終終了コードは non-zero になる。

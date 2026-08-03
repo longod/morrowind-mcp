@@ -3,6 +3,10 @@ local this = {}
 ---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({ enabled = true, highlight = false })
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
     local pathfinding = require("morrowind-mcp.util.pathfinding")
 
     --- Build a pathgrid node mock with a plain position table.
