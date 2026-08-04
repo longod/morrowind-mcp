@@ -1,3 +1,5 @@
+local cellutil = require("morrowind-mcp.tes3.cell")
+
 ---@class MCP.PathfindingLocator
 ---@field cell tes3cell?
 ---@field marker tes3reference?
@@ -10,7 +12,7 @@
 
 ---@class MCP.PathfindingNode
 ---@field id integer
----@field cellId string
+---@field cellId MCP.CellIdentityKey
 ---@field position MCP.PathfindingPosition
 
 ---@class MCP.PathfindingEdge
@@ -22,20 +24,20 @@
 ---@field verticalDistance number
 ---@field surface MCP.PathfindingEdgeSurface
 ---@field blocked boolean
----@field sourceCellId string?
----@field destinationCellId string?
+---@field sourceCellId MCP.CellIdentityKey?
+---@field destinationCellId MCP.CellIdentityKey?
 ---@field doorPosition MCP.PathfindingPosition?
 ---@field markerPosition MCP.PathfindingPosition?
 ---@field directed boolean?
 
 ---@class MCP.PathfindingTravelDestination
----@field sourceCellId string
----@field destinationCellId string
+---@field sourceCellId MCP.CellIdentityKey
+---@field destinationCellId MCP.CellIdentityKey
 ---@field doorPosition MCP.PathfindingPosition
 ---@field markerPosition MCP.PathfindingPosition
 
 ---@class MCP.PathfindingCell
----@field id string
+---@field id MCP.CellIdentityKey
 ---@field isInterior boolean
 ---@field gridX integer?
 ---@field gridY integer?
@@ -86,11 +88,11 @@
 ---@alias MCP.PathfindingNodes table<integer, MCP.PathfindingNode>
 ---@alias MCP.PathfindingEdges table<integer, MCP.PathfindingEdge>
 ---@alias MCP.PathfindingAdjacency table<integer, table<integer, integer>>
----@alias MCP.PathfindingGridCellIds table<integer, table<integer, string>>
+---@alias MCP.PathfindingGridCellIds table<integer, table<integer, MCP.CellIdentityKey>>
 ---@alias MCP.PathfindingCosts table<integer, number>
 ---@alias MCP.PathfindingPrevious table<integer, MCP.PathfindingPreviousEntry>
 ---@alias MCP.PathfindingClosed table<integer, boolean>
----@alias MCP.PathfindingTravelDestinationsByCellId table<string, MCP.PathfindingTravelDestination[]>
+---@alias MCP.PathfindingTravelDestinationsByCellId table<MCP.CellIdentityKey, MCP.PathfindingTravelDestination[]>
 
 ---@class MCP.PathfindingPoll
 ---@field cellHandle mwseSafeObjectHandle
@@ -99,14 +101,14 @@
 
 ---@class MCP.Pathfinding
 ---@field logger mwseLogger
----@field cells table<string, MCP.PathfindingCell>
+---@field cells table<MCP.CellIdentityKey, MCP.PathfindingCell>
 ---@field gridCellIdByPosition MCP.PathfindingGridCellIds
 ---@field nodes MCP.PathfindingNodes
----@field nodeIdsByCellId table<string, MCP.PathfindingNodeIds>
+---@field nodeIdsByCellId table<MCP.CellIdentityKey, MCP.PathfindingNodeIds>
 ---@field edges MCP.PathfindingEdges
 ---@field edgeIdByNeighborId MCP.PathfindingAdjacency
 ---@field travelDestinationsByCellId MCP.PathfindingTravelDestinationsByCellId
----@field sourceCellIdsByDestinationCellId table<string, table<string, boolean>>
+---@field sourceCellIdsByDestinationCellId table<MCP.CellIdentityKey, table<MCP.CellIdentityKey, boolean>>
 ---@field travelEdgeCount integer
 ---@field nextNodeId integer
 ---@field nextEdgeId integer
@@ -116,7 +118,7 @@
 ---@field stitchMaxVerticalDistance number
 ---@field pathgridPollInterval number
 ---@field pathgridPollDeadline number
----@field pendingPathgridPolls table<string, MCP.PathfindingPoll>
+---@field pendingPathgridPolls table<MCP.CellIdentityKey, MCP.PathfindingPoll>
 ---@field cellActivatedCallback fun(e: cellActivatedEventData)?
 ---@field cellDeactivatedCallback fun(e: cellDeactivatedEventData)?
 ---@field loadedCallback fun(e: loadedEventData)?
@@ -135,24 +137,6 @@ local edgeSurface = {
     unknown = 1,
     water = 2,
 }
-
---- Return a graph key that distinguishes exterior cells sharing a region ID.
----@param cell tes3cell
----@return string?
-local function GetCellId(cell)
-    if not cell or not cell.id then
-        return nil
-    end
-    if cell.isInterior then
-        -- Interior cell IDs are globally unique.
-        return cell.id
-    end
-    if cell.gridX == nil or cell.gridY == nil then
-        return nil
-    end
-    -- Exterior region IDs repeat across grid positions.
-    return string.format("exterior:%s:%d,%d", cell.id, cell.gridX, cell.gridY)
-end
 
 --- Copy a vector because pathfinding snapshots must not retain MWSE userdata.
 ---@param position tes3vector3|MCP.PathfindingPosition
@@ -329,7 +313,7 @@ function this:ConnectUndirected(fromId, toId)
 end
 
 --- Find a nearest node from a copied position in a known snapshotted cell.
----@param cellId string
+---@param cellId MCP.CellIdentityKey
 ---@param position MCP.PathfindingPosition
 ---@return MCP.PathfindingNode?
 function this:FindNearestNodeByPosition(cellId, position)
@@ -352,7 +336,7 @@ end
 --- Replace active-cell teleport door snapshots without retaining MWSE userdata.
 ---@param cell tes3cell
 function this:CollectTravelDestinations(cell)
-    local cellId = GetCellId(cell)
+    local cellId = cellutil.GetIdentityKey(cell)
     if not cellId then
         return
     end
@@ -365,7 +349,7 @@ function this:CollectTravelDestinations(cell)
         if reference:isValid() then
             local destination = reference.destination
             if destination and destination.cell and destination.cell.id and destination.marker and destination.marker.position then
-                local destinationCellId = GetCellId(destination.cell)
+                local destinationCellId = cellutil.GetIdentityKey(destination.cell)
                 if destinationCellId then
                     table.insert(destinations, {
                         sourceCellId = cellId,
@@ -388,7 +372,7 @@ function this:CollectTravelDestinations(cell)
 end
 
 --- Remove reverse-index entries for one source cell.
----@param sourceCellId string
+---@param sourceCellId MCP.CellIdentityKey
 function this:RemoveTravelDestinationSource(sourceCellId)
     for _, destination in ipairs(self.travelDestinationsByCellId[sourceCellId] or {}) do
         local sources = self.sourceCellIdsByDestinationCellId[destination.destinationCellId]
@@ -403,7 +387,7 @@ function this:RemoveTravelDestinationSource(sourceCellId)
 end
 
 --- Rebuild only travel edges emitted by one cell after its active references change.
----@param sourceCellId string
+---@param sourceCellId MCP.CellIdentityKey
 function this:ResolveTravelDestinations(sourceCellId)
     local removedEdgeIds = {}
     for edgeId, edge in pairs(self.edges) do
@@ -436,7 +420,7 @@ function this:ResolveTravelDestinations(sourceCellId)
 end
 
 --- Resolve links from and into a cell once its pathgrid is available.
----@param cellId string
+---@param cellId MCP.CellIdentityKey
 function this:ResolveTravelDestinationsForCell(cellId)
     self:ResolveTravelDestinations(cellId)
     local incomingSourceCount = 0
@@ -490,7 +474,7 @@ function this:StitchBorderNodeIds(nodeIds, neighborNodeIds)
 end
 
 --- Add eligible cross-border walk edges using the exterior coordinate index.
----@param cellId string
+---@param cellId MCP.CellIdentityKey
 function this:StitchExteriorCell(cellId)
     local cell = self.cells[cellId]
     if not cell or cell.isInterior then
@@ -522,7 +506,7 @@ function this:UpdateCell(cell)
         self.logger:debug("Skipping pathgrid snapshot because the cell is unavailable: cell=nil")
         return false
     end
-    local cellId = GetCellId(cell)
+    local cellId = cellutil.GetIdentityKey(cell)
     if not cellId then
         self.logger:debug("Skipping pathgrid snapshot because the cell has no usable graph key.")
         return false
@@ -583,7 +567,7 @@ function this:UpdateCell(cell)
 end
 
 --- Stop one pending poll and release its timer and cell references.
----@param cellId string
+---@param cellId MCP.CellIdentityKey
 ---@param reason string
 ---@return boolean stopped
 function this:StopPathgridPoll(cellId, reason)
@@ -608,8 +592,8 @@ end
 ---@param cell tes3cell
 ---@return boolean started
 function this:StartPathgridPoll(cell)
-    -- Retain the graph key because the cell userdata can become invalid before a timer callback runs.
-    local cellId = GetCellId(cell)
+    -- Retain the identity key because the cell userdata can become invalid before a timer callback runs.
+    local cellId = cellutil.GetIdentityKey(cell)
     if not cellId then
         return false
     end
@@ -688,7 +672,7 @@ end
 ---@param weights MCP.PathfindingNearestWeights?
 ---@return MCP.PathfindingNode?
 function this:FindNearestNode(locator, weights)
-    local cellId = GetCellId(locator.cell)
+    local cellId = cellutil.GetIdentityKey(locator.cell)
     if not cellId then
         return nil
     end
@@ -892,7 +876,7 @@ end
 function this:RegisterEventHandlers()
     self.cellActivatedCallback = function(e)
         local updated = self:UpdateCell(e.cell)
-        local cellId = GetCellId(e.cell)
+        local cellId = cellutil.GetIdentityKey(e.cell)
         if not cellId then
             return
         end
@@ -923,7 +907,7 @@ function this:RegisterEventHandlers()
         self:StartPathgridPoll(e.cell)
     end
     self.cellDeactivatedCallback = function(e)
-        local cellId = GetCellId(e.cell)
+        local cellId = cellutil.GetIdentityKey(e.cell)
         if cellId then
             self:StopPathgridPoll(cellId, "cell deactivated")
         end
@@ -963,6 +947,4 @@ end
 
 this.edgeKind = edgeKind
 this.edgeSurface = edgeSurface
-this.GetCellId = GetCellId
-
 return this

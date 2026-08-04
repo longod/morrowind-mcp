@@ -4,11 +4,12 @@ local document = require("morrowind-mcp.resources.memory.document")
 local datetime = require("morrowind-mcp.util.datetime")
 local player = require("morrowind-mcp.resources.memory.player")
 local cellmemory = require("morrowind-mcp.resources.memory.cell")
+local cellutil = require("morrowind-mcp.tes3.cell")
 
 --- Memory module for places the current player has entered during this loaded game.
 ---@class MCP.Resources.Memory.VisitedCells: MCP.Resources.MemoryModule
 ---@field entry MCP.MemoryResourceEntry
----@field cellsById table<string, MCP.AnyMap>
+---@field cellsByKey table<MCP.CellIdentityKey, MCP.AnyMap>
 ---@field cellChangedCallback fun(e: cellChangedEventData)?
 local this = {}
 setmetatable(this, { __index = base })
@@ -72,7 +73,7 @@ function this.new(params)
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_visited_cells" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.VisitedCells
-    instance.cellsById = {}
+    instance.cellsByKey = {}
     instance.entry = document.LiveEntry(descriptor, function()
         return instance:BuildDocument()
     end)
@@ -91,13 +92,17 @@ function this:ObserveCell(cell, countEntry)
         return false
     end
 
+    local identityKey = cellutil.GetIdentityKey(cell)
+    if not identityKey then
+        return false
+    end
     local observedAt = ObservedAt()
-    local observed = self.cellsById[serialized.id]
+    local observed = self.cellsByKey[identityKey]
     if not observed then
         serialized.first_observed_at = observedAt
         serialized.last_observed_at = observedAt
         serialized.entry_count = countEntry and 1 or 0
-        self.cellsById[serialized.id] = serialized
+        self.cellsByKey[identityKey] = serialized
         document.MarkDirty(self.entry)
         return true
     end
@@ -120,7 +125,7 @@ end
 ---@return MCP.MemoryDocument
 function this:BuildDocument()
     local cells = jsonrpc.array()
-    for _, cell in pairs(self.cellsById) do
+    for _, cell in pairs(self.cellsByKey) do
         table.insert(cells, cell)
     end
     table.sort(cells, IsBefore)
@@ -145,7 +150,7 @@ end
 --- Reset this non-persistent collection and observe the cell occupied after loading.
 ---@param e loadedEventData?
 function this:OnLoaded(e)
-    self.cellsById = {}
+    self.cellsByKey = {}
     self:ObserveCell(tes3.dataHandler and tes3.dataHandler.currentCell or nil, false)
     base.OnLoaded(self, e)
 end

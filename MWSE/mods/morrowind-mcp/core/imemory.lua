@@ -95,7 +95,7 @@
 
 --- Compact serialized facts for a TES3 cell used by player location Memory.
 ---@class MCP.MemoryCell
----@field id string Raw unique TES3 cell id.
+---@field id string Raw TES3 cell id. Exterior cells can share an ID across grid positions.
 ---@field display_name string? Gameplay-facing cell name.
 ---@field is_interior boolean
 ---@field grid_x number? Exterior cell X coordinate.

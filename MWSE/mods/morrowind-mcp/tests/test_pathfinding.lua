@@ -8,6 +8,14 @@ function this.Test()
         self:clearMocks()
     end
     local pathfinding = require("morrowind-mcp.util.pathfinding")
+    local cellutil = require("morrowind-mcp.tes3.cell")
+
+    --- Return the shared graph key used by the pathfinding implementation.
+    ---@param cell tes3cell
+    ---@return string
+    local function CellKey(cell)
+        return cellutil.GetIdentityKey(cell)
+    end
 
     --- Build a pathgrid node mock with a plain position table.
     local function Node(x, y, z)
@@ -75,7 +83,7 @@ function this.Test()
         unitwind:expect(table.size(graph.nodes)).toBe(2)
         unitwind:expect(table.size(graph.edges)).toBe(1)
         first.position.x = 999
-        unitwind:expect(graph.nodes[graph.nodeIdsByCellId[cell.id][1]].position.x).toBe(10)
+        unitwind:expect(graph.nodes[graph.nodeIdsByCellId[CellKey(cell)][1]].position.x).toBe(10)
     end)
 
     unitwind:test("FindPath uses A-Star and reroutes around a blocked edge", function()
@@ -85,10 +93,10 @@ function this.Test()
         graph:UpdateCell(cell)
         local start, destination = { cell = cell, position = { x = 0, y = 0, z = 0 } }, { cell = cell, position = { x = 200, y = 0, z = 0 } }
         unitwind:expect(table.size(graph:FindPath(start, destination).nodeIds)).toBe(3)
-        local secondNodeId = graph.nodeIdsByCellId[cell.id][2]
-        local thirdNodeId = graph.nodeIdsByCellId[cell.id][3]
+        local secondNodeId = graph.nodeIdsByCellId[CellKey(cell)][2]
+        local thirdNodeId = graph.nodeIdsByCellId[CellKey(cell)][3]
         unitwind:expect(graph:SetEdgeBlocked(graph.edgeIdByNeighborId[secondNodeId][thirdNodeId], true)).toBe(true)
-        unitwind:expect(graph:FindPath(start, destination).nodeIds[2]).toBe(graph.nodeIdsByCellId[cell.id][4])
+        unitwind:expect(graph:FindPath(start, destination).nodeIds[2]).toBe(graph.nodeIdsByCellId[CellKey(cell)][4])
     end)
 
     unitwind:test("FindNearestNode is limited to the requested cell and applies vertical weight", function()
@@ -97,8 +105,8 @@ function this.Test()
         graph:UpdateCell(cell)
         graph:UpdateCell(other)
         local locator = { cell = cell, position = { x = 9, y = 0, z = 0 } }
-        unitwind:expect(graph:FindNearestNode(locator).id).toBe(graph.nodeIdsByCellId[cell.id][1])
-        unitwind:expect(graph:FindNearestNode(locator, { vertical = 0 }).id).toBe(graph.nodeIdsByCellId[cell.id][2])
+        unitwind:expect(graph:FindNearestNode(locator).id).toBe(graph.nodeIdsByCellId[CellKey(cell)][1])
+        unitwind:expect(graph:FindNearestNode(locator, { vertical = 0 }).id).toBe(graph.nodeIdsByCellId[CellKey(cell)][2])
     end)
 
     unitwind:test("Exterior neighbors stitch nodes near their shared 8192-unit border", function()
@@ -106,10 +114,10 @@ function this.Test()
         local west, east = Cell("west", 0, 0, { Node(8180, 100, 0) }, false), Cell("east", 1, 0, { Node(8200, 100, 0) }, false)
         graph:UpdateCell(west)
         graph:UpdateCell(east)
-        local westNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(west)][1]
-        local eastNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(east)][1]
-        unitwind:expect(graph.cells[pathfinding.GetCellId(west)].borderNodeIds.east[1]).toBe(westNodeId)
-        unitwind:expect(graph.gridCellIdByPosition[1][0]).toBe(pathfinding.GetCellId(east))
+        local westNodeId = graph.nodeIdsByCellId[CellKey(west)][1]
+        local eastNodeId = graph.nodeIdsByCellId[CellKey(east)][1]
+        unitwind:expect(graph.cells[CellKey(west)].borderNodeIds.east[1]).toBe(westNodeId)
+        unitwind:expect(graph.gridCellIdByPosition[1][0]).toBe(CellKey(east))
         unitwind:expect(graph.edgeIdByNeighborId[westNodeId][eastNodeId] == nil).toBe(false)
     end)
 
@@ -120,11 +128,11 @@ function this.Test()
         west.references = { Door({ x = 0, y = 0, z = 0 }, east, { x = 8192, y = 0, z = 0 }) }
         graph:UpdateCell(west)
         graph:UpdateCell(east)
-        local westNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(west)][1]
-        local eastNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(east)][1]
+        local westNodeId = graph.nodeIdsByCellId[CellKey(west)][1]
+        local eastNodeId = graph.nodeIdsByCellId[CellKey(east)][1]
         unitwind:expect(table.size(graph.cells)).toBe(2)
-        unitwind:expect(graph.nodes[graph.nodeIdsByCellId[pathfinding.GetCellId(west)][1]].cellId).toBe("exterior:shared region:0,0")
-        unitwind:expect(graph.nodes[graph.nodeIdsByCellId[pathfinding.GetCellId(east)][1]].cellId).toBe("exterior:shared region:1,0")
+        unitwind:expect(graph.nodes[graph.nodeIdsByCellId[CellKey(west)][1]].cellId).toBe(CellKey(west))
+        unitwind:expect(graph.nodes[graph.nodeIdsByCellId[CellKey(east)][1]].cellId).toBe(CellKey(east))
         unitwind:expect(graph.edgeIdByNeighborId[westNodeId][eastNodeId] == nil).toBe(false)
     end)
 
@@ -134,7 +142,7 @@ function this.Test()
         local graph = pathfinding.new()
         local cell = Cell("water", 0, 0, { first, second })
         graph:UpdateCell(cell)
-        local edgeId = graph.edgeIdByNeighborId[graph.nodeIdsByCellId[cell.id][1]][graph.nodeIdsByCellId[cell.id][2]]
+        local edgeId = graph.edgeIdByNeighborId[graph.nodeIdsByCellId[CellKey(cell)][1]][graph.nodeIdsByCellId[CellKey(cell)][2]]
         graph:SetEdgeSurface(edgeId, pathfinding.edgeSurface.water)
         local edge = graph.edges[edgeId]
         unitwind:expect(graph:EdgeCost(edge, { waterWeight = 3 })).toBe(300)
@@ -148,8 +156,8 @@ function this.Test()
         local graph = pathfinding.new()
         local cell = Cell("persisted", 0, 0, { first, second })
         graph:UpdateCell(cell)
-        local firstNodeId = graph.nodeIdsByCellId[cell.id][1]
-        local secondNodeId = graph.nodeIdsByCellId[cell.id][2]
+        local firstNodeId = graph.nodeIdsByCellId[CellKey(cell)][1]
+        local secondNodeId = graph.nodeIdsByCellId[CellKey(cell)][2]
         local edgeId = graph.edgeIdByNeighborId[firstNodeId][secondNodeId]
         graph:SetEdgeBlocked(edgeId, true)
         graph:SetEdgeSurface(edgeId, pathfinding.edgeSurface.water)
@@ -166,8 +174,8 @@ function this.Test()
         local west, east = Cell("west", 0, 0, { Node(8180, 100, 0) }, false), Cell("east", 1, 0, { Node(8200, 100, 0) }, false)
         graph:UpdateCell(west)
         graph:UpdateCell(east)
-        local westNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(west)][1]
-        local eastNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(east)][1]
+        local westNodeId = graph.nodeIdsByCellId[CellKey(west)][1]
+        local eastNodeId = graph.nodeIdsByCellId[CellKey(east)][1]
         local stitchEdgeId = graph.edgeIdByNeighborId[westNodeId][eastNodeId]
         graph:UpdateCell(west)
         unitwind:expect(graph.edgeIdByNeighborId[westNodeId][eastNodeId]).toBe(stitchEdgeId)
@@ -182,9 +190,9 @@ function this.Test()
         graph:UpdateCell(south)
         graph:UpdateCell(north)
         graph:UpdateCell(diagonal)
-        local southNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(south)][1]
-        local northNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(north)][1]
-        local diagonalNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(diagonal)][1]
+        local southNodeId = graph.nodeIdsByCellId[CellKey(south)][1]
+        local northNodeId = graph.nodeIdsByCellId[CellKey(north)][1]
+        local diagonalNodeId = graph.nodeIdsByCellId[CellKey(diagonal)][1]
         unitwind:expect(graph.edgeIdByNeighborId[southNodeId][northNodeId] == nil).toBe(false)
         unitwind:expect(graph.edgeIdByNeighborId[southNodeId][diagonalNodeId] == nil).toBe(true)
     end)
@@ -196,8 +204,8 @@ function this.Test()
         graph:UpdateCell(west)
         graph:UpdateCell(east)
         unitwind:expect(graph.stitchBorderMargin).toBe(1)
-        local westNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(west)][1]
-        local eastNodeId = graph.nodeIdsByCellId[pathfinding.GetCellId(east)][1]
+        local westNodeId = graph.nodeIdsByCellId[CellKey(west)][1]
+        local eastNodeId = graph.nodeIdsByCellId[CellKey(east)][1]
         unitwind:expect(graph.edgeIdByNeighborId[westNodeId][eastNodeId] == nil).toBe(true)
     end)
 
@@ -213,13 +221,13 @@ function this.Test()
         local graph = pathfinding.new()
 
         graph:UpdateCell(source)
-        local sourceNodeId = graph.nodeIdsByCellId[source.id][2]
+        local sourceNodeId = graph.nodeIdsByCellId[CellKey(source)][2]
         unitwind:expect(table.size(graph.edges)).toBe(1)
         graph:UpdateCell(destination)
-        unitwind:expect(table.size(graph.travelDestinationsByCellId[source.id])).toBe(1)
+        unitwind:expect(table.size(graph.travelDestinationsByCellId[CellKey(source)])).toBe(1)
         unitwind:expect(graph.travelEdgeCount).toBe(1)
 
-        local destinationNodeId = graph.nodeIdsByCellId[destination.id][1]
+        local destinationNodeId = graph.nodeIdsByCellId[CellKey(destination)][1]
         local edgeId = graph.edgeIdByNeighborId[sourceNodeId][destinationNodeId]
         local edge = graph.edges[edgeId]
         unitwind:expect(edge.kind).toBe(pathfinding.edgeKind.travel)
@@ -234,7 +242,7 @@ function this.Test()
         cell.references = { InvalidDoor() }
         local graph = pathfinding.new()
         graph:UpdateCell(cell)
-        unitwind:expect(table.size(graph.travelDestinationsByCellId[cell.id])).toBe(0)
+        unitwind:expect(table.size(graph.travelDestinationsByCellId[CellKey(cell)])).toBe(0)
     end)
 
     unitwind:test("Travel destinations without an exterior grid are skipped", function()
@@ -243,7 +251,7 @@ function this.Test()
         source.references = { Door({ x = 0, y = 0, z = 0 }, destination, { x = 100, y = 0, z = 0 }) }
         local graph = pathfinding.new()
         graph:UpdateCell(source)
-        unitwind:expect(table.size(graph.travelDestinationsByCellId[pathfinding.GetCellId(source)])).toBe(0)
+        unitwind:expect(table.size(graph.travelDestinationsByCellId[CellKey(source)])).toBe(0)
     end)
 
     unitwind:test("Travel edges disable the geometric heuristic and respect blockage", function()
@@ -253,8 +261,8 @@ function this.Test()
         local graph = pathfinding.new()
         graph:UpdateCell(source)
         graph:UpdateCell(destination)
-        local sourceNodeId = graph.nodeIdsByCellId[source.id][1]
-        local destinationNodeId = graph.nodeIdsByCellId[destination.id][1]
+        local sourceNodeId = graph.nodeIdsByCellId[CellKey(source)][1]
+        local destinationNodeId = graph.nodeIdsByCellId[CellKey(destination)][1]
         local edgeId = graph.edgeIdByNeighborId[sourceNodeId][destinationNodeId]
         unitwind:expect(graph:Heuristic(graph.nodes[sourceNodeId], graph.nodes[destinationNodeId])).toBe(0)
         graph:SetEdgeBlocked(edgeId, true)
@@ -266,7 +274,7 @@ function this.Test()
         unitwind:mock(tes3, "player", { cell = playerCell })
         local graph = pathfinding.new()
         graph:OnLoaded()
-        unitwind:expect(graph.cells[playerCell.id] == nil).toBe(false)
+        unitwind:expect(graph.cells[CellKey(playerCell)] == nil).toBe(false)
     end)
 
     unitwind:test("Reactivating a cell replaces travel destinations and removes stale edges", function()
@@ -278,9 +286,9 @@ function this.Test()
         graph:UpdateCell(source)
         graph:UpdateCell(firstDestination)
         graph:UpdateCell(secondDestination)
-        local sourceNodeId = graph.nodeIdsByCellId[source.id][1]
-        local firstNodeId = graph.nodeIdsByCellId[firstDestination.id][1]
-        local secondNodeId = graph.nodeIdsByCellId[secondDestination.id][1]
+        local sourceNodeId = graph.nodeIdsByCellId[CellKey(source)][1]
+        local firstNodeId = graph.nodeIdsByCellId[CellKey(firstDestination)][1]
+        local secondNodeId = graph.nodeIdsByCellId[CellKey(secondDestination)][1]
         unitwind:expect(graph.edgeIdByNeighborId[sourceNodeId][firstNodeId] == nil).toBe(false)
 
         source.references = { Door({ x = 0, y = 0, z = 0 }, secondDestination, { x = 2000, y = 0, z = 0 }) }
@@ -329,7 +337,7 @@ function this.Test()
         registeredCallbacks[tes3.event.cellActivated]({ cell = replacementCell })
         unitwind:expect(startedTimers[1].instance.cancelled).toBe(true)
         unitwind:expect(table.size(startedTimers)).toBe(2)
-        unitwind:expect(graph.pendingPathgridPolls[replacementCell.id].cellHandle:getObject()).toBe(replacementCell)
+        unitwind:expect(graph.pendingPathgridPolls[CellKey(replacementCell)].cellHandle:getObject()).toBe(replacementCell)
         registeredCallbacks[tes3.event.cellDeactivated]({ cell = replacementCell })
         unitwind:expect(startedTimers[2].instance.cancelled).toBe(true)
         unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
@@ -351,7 +359,7 @@ function this.Test()
         polledCell.pathGrid.isLoaded = true
         startedTimers[4].params.callback()
         unitwind:expect(startedTimers[4].instance.cancelled).toBe(true)
-        unitwind:expect(graph.cells[polledCell.id] == nil).toBe(false)
+        unitwind:expect(graph.cells[CellKey(polledCell)] == nil).toBe(false)
         unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
 
         local loadedCell = Cell("loaded", 2, 0, { Node(0, 0, 0) })
@@ -361,7 +369,7 @@ function this.Test()
         startedTimers[5].instance.cancelled = true
         loadedCell.pathGrid.isLoaded = true
         registeredCallbacks[tes3.event.loaded]({})
-        unitwind:expect(graph.cells[loadedCell.id] == nil).toBe(false)
+        unitwind:expect(graph.cells[CellKey(loadedCell)] == nil).toBe(false)
         unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
 
         local deadlineCell = Cell("deadline", 3, 0, { Node(0, 0, 0) })
@@ -416,7 +424,7 @@ function this.Test()
         pollingCell.id = nil
         startedTimers[1].params.callback()
         unitwind:expect(startedTimers[1].instance.cancelled).toBe(true)
-        unitwind:expect(graph.cells["invalidated-polling"] == nil).toBe(true)
+        unitwind:expect(graph.cells["interior:invalidated-polling"] == nil).toBe(true)
         unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
 
         local loadedCell = Cell("invalidated-loaded", 1, 0, { Node(0, 0, 0) })
@@ -427,7 +435,7 @@ function this.Test()
         loadedCell.pathGrid = nil
         loadedCell.id = nil
         registeredCallbacks[tes3.event.loaded]({})
-        unitwind:expect(graph.cells["invalidated-loaded"] == nil).toBe(true)
+        unitwind:expect(graph.cells["interior:invalidated-loaded"] == nil).toBe(true)
         unitwind:expect(table.size(graph.pendingPathgridPolls)).toBe(0)
 
         graph:UnregisterEventHandlers()

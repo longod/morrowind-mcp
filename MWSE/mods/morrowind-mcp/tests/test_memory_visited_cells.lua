@@ -12,6 +12,7 @@ function this.Test()
     local visitedCells = require("morrowind-mcp.resources.memory.visited_cells")
     local document = require("morrowind-mcp.resources.memory.document")
     local datetime = require("morrowind-mcp.util.datetime")
+    local cellutil = require("morrowind-mcp.tes3.cell")
 
     unitwind:start("morrowind-mcp.resources.memory.visited_cells")
 
@@ -81,7 +82,7 @@ function this.Test()
         unitwind:expect(secondDocument.data.cells[1].id).toBe("Seyda Neen")
     end)
 
-    unitwind:test("Visited Cells updates an id-keyed entry and sorts exterior cells geographically", function()
+    unitwind:test("Visited Cells updates an identity-keyed entry and sorts exterior cells geographically", function()
         local balmora = Cell("Balmora", false, -3, -2)
         local seydaNeen = Cell("Seyda Neen", false, -2, -9)
         local forbiddenInn = Cell("Forbidden Inn", true)
@@ -99,8 +100,9 @@ function this.Test()
         local cells = documentValue.data.cells
 
         unitwind:expect(documentValue.data.cell_count).toBe(3)
-        unitwind:expect(module.cellsById["Balmora"].entry_count).toBe(1)
-        unitwind:expect(module.cellsById["Balmora"].last_observed_at.in_game_time_text).toBe("3E 427-08-16 13:30")
+        local balmoraKey = cellutil.GetIdentityKey(balmora)
+        unitwind:expect(module.cellsByKey[balmoraKey].entry_count).toBe(1)
+        unitwind:expect(module.cellsByKey[balmoraKey].last_observed_at.in_game_time_text).toBe("3E 427-08-16 13:30")
         unitwind:expect(cells[1].id).toBe("Balmora")
         unitwind:expect(cells[1].grid_x).toBe(-3)
         unitwind:expect(cells[1].grid_y).toBe(-2)
@@ -113,6 +115,27 @@ function this.Test()
         unitwind:expect(cells[3].grid_y == nil).toBe(true)
     end)
 
+    unitwind:test("Visited Cells retains exterior cells that share a region ID but differ by grid", function()
+        local west = Cell("West Gash", false, 0, 0)
+        local east = Cell("West Gash", false, 1, 0)
+        unitwind:mock(tes3, "onMainMenu", function() return false end)
+        unitwind:mock(tes3, "player", { objectType = tes3.objectType.npc })
+        unitwind:mock(tes3, "dataHandler", { currentCell = west })
+        unitwind:mock(datetime, "InGameNow", function() return { year = 427, month = 8, day = 16, hour = 13.5 } end)
+
+        local module = CreateModule()
+        module:OnLoaded({})
+        module:OnCellChanged({ cell = east })
+        module:OnCellChanged({ cell = west })
+        local cells = ReadDocument(module).data.cells
+
+        unitwind:expect(table.size(module.cellsByKey)).toBe(2)
+        unitwind:expect(module.cellsByKey[cellutil.GetIdentityKey(west)].entry_count).toBe(1)
+        unitwind:expect(module.cellsByKey[cellutil.GetIdentityKey(east)].entry_count).toBe(1)
+        unitwind:expect(cells[1].grid_x).toBe(0)
+        unitwind:expect(cells[2].grid_x).toBe(1)
+    end)
+
     unitwind:test("Visited Cells ignores unavailable cells and registers cell transitions", function()
         local registered = {}
         local unregistered = {}
@@ -123,7 +146,7 @@ function this.Test()
         module:RegisterEvent()
         module:UnregisterEvent()
 
-        unitwind:expect(table.size(module.cellsById)).toBe(0)
+        unitwind:expect(table.size(module.cellsByKey)).toBe(0)
         unitwind:expect(registered[tes3.event.loaded]).toBe(true)
         unitwind:expect(registered[tes3.event.cellChanged]).toBe(true)
         unitwind:expect(unregistered[tes3.event.loaded]).toBe(true)
