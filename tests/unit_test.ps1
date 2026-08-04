@@ -247,7 +247,7 @@ finally {
     }
 
     # Restore or clean up the sentinel after the run.
-    if ($SentinelOriginalContent -ne $null) {
+    if ($null -ne $SentinelOriginalContent) {
         Set-Content -LiteralPath $SentinelPath -Value $SentinelOriginalContent -Encoding UTF8 -ErrorAction SilentlyContinue
     }
     elseif ($CreatedSentinel) {

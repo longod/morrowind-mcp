@@ -11,6 +11,8 @@ local config = require("morrowind-mcp.config")
 local resourceManager = require("morrowind-mcp.resources.resource")
 local target = require("morrowind-mcp.util.target")
 local pathfinding = require("morrowind-mcp.util.pathfinding")
+local navigator = require("morrowind-mcp.util.navigator")
+local cellutil = require("morrowind-mcp.tes3.cell")
 
 -- TODO split implementations, such as session manager?
 
@@ -116,6 +118,7 @@ end
 ---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
 ---@field debugKeyCallback fun(e : keyDownEventData)?
+---@field debugNavigationKeyCallback fun(e : keyDownEventData)?
 ---@field hostname string
 ---@field port integer
 ---@field httpHeaders table<string, string> must headers
@@ -131,6 +134,7 @@ end
 ---@field lastPollingPromptsInterval number
 ---@field lastPollingToolsInterval number
 ---@field pathfinding MCP.Pathfinding
+---@field activeNavigator MCP.Navigator?
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -147,6 +151,7 @@ function this.new(params)
     instance.httpHeaders = {}
     instance.resource = resourceManager.new()
     instance.pathfinding = pathfinding.new()
+    instance.activeNavigator = nil
     instance.sessions = {}
     instance.nextSessionIndex = 0
     instance.lastPollingPromptsInterval = 0
@@ -178,6 +183,26 @@ function this.new(params)
     instance:LoadPrompts()
     instance:LoadTools()
     return instance
+end
+
+--- Replace any active route and begin navigation through the shared pathfinding graph.
+---@param destination MCP.PathfindingLocator
+---@return boolean
+---@return string?
+---@return MCP.NavigatorStartResult?
+function this:StartPlayerNavigation(destination)
+    if self.activeNavigator then
+        self.activeNavigator:Release()
+        self.activeNavigator = nil
+    end
+    local instance = navigator.new({ pathfinding = self.pathfinding })
+    local ok, message, navigation = instance:Start(destination)
+    if not ok then
+        instance:Release()
+        return false, message
+    end
+    self.activeNavigator = instance
+    return true, nil, navigation
 end
 
 ---@return string
@@ -989,6 +1014,9 @@ function this:OnToolsCall(params, request)
         NotifyProgress = function(progress, total, message)
             return self:NotifyProgress(sessionId, progressToken, progress, total, message)
         end,
+        NavigatePlayer = function(destination)
+            return self:StartPlayerNavigation(destination)
+        end,
     }
 
     if config.indicator.toolsCall and tes3.isInitialized() then
@@ -1648,6 +1676,71 @@ function this:DebugMemory(e)
     self.resource.memory:SaveDebugDocuments()
 end
 
+---@param e keyDownEventData
+function this:DebugNavigation(e)
+    local player = tes3.player
+    if not player or not player.cell then
+        self.logger:warn("Navigation debug menu requires an active player cell")
+        return
+    end
+    local cellId = cellutil.GetIdentityKey(player.cell)
+    local nodeIds = cellId and self.pathfinding.nodeIdsByCellId[cellId] or nil
+    if not nodeIds or table.size(nodeIds) == 0 then
+        self.logger:warn("Navigation debug menu found no pathgrid nodes in the current cell")
+        return
+    end
+
+    local candidates = {}
+    local missingNodes = 0
+    for _, nodeId in ipairs(nodeIds) do
+        local node = self.pathfinding.nodes[nodeId]
+        if node then
+            -- Nearby nodes can belong to disconnected pathgrid components, so only offer routes that A* can traverse.
+            local path = self.pathfinding:FindPath({ cell = player.cell, position = player.position },
+                { cell = player.cell, position = node.position })
+            if path and table.size(path.nodeIds) > 1 then
+                local dx = node.position.x - player.position.x
+                local dy = node.position.y - player.position.y
+                table.insert(candidates, { node = node, distance = dx * dx + dy * dy })
+            end
+        else
+            missingNodes = missingNodes + 1
+        end
+    end
+    self.logger:info("Navigation debug candidates: cell=%s total=%d reachable=%d missing=%d", cellId,
+        table.size(nodeIds), table.size(candidates), missingNodes)
+    if table.size(candidates) == 0 then
+        self.logger:warn("Navigation debug menu found no reachable pathgrid nodes in the current cell")
+        tes3.messageBox("No reachable pathgrid destination is available in the current cell.")
+        return
+    end
+    table.sort(candidates, function(first, second) return first.distance < second.distance end)
+
+    local buttons = table.new(math.min(table.size(candidates), 8), 0)
+    for index = 1, math.min(table.size(candidates), 8) do
+        local candidate = candidates[index]
+        local node = candidate.node
+        buttons[index] = {
+            text = string.format("Node %d: %.0f, %.0f, %.0f", node.id, node.position.x, node.position.y, node.position.z),
+            callback = function()
+                local ok, message, navigation = self:StartPlayerNavigation({ cell = player.cell, position = node.position })
+                if not ok then
+                    tes3.messageBox("Navigation failed: %s", tostring(message))
+                elseif navigation then
+                    self.logger:info("Navigation debug started: routeNodes=%d waypoints=%d", navigation.routeNodeCount,
+                        navigation.waypointCount)
+                end
+            end,
+        }
+    end
+    tes3ui.showMessageMenu({
+        header = "Pathgrid Navigation",
+        message = "Choose a nearby pathgrid destination.",
+        cancels = true,
+        buttons = buttons,
+    })
+end
+
 function this:Start()
     if self.server then
         self.logger:warn("MCP server is already running")
@@ -1681,6 +1774,10 @@ function this:Start()
             self:DebugMemory(e)
         end
         event.register(tes3.event.keyDown, self.debugKeyCallback, { filter = tes3.scanCode.F4 })
+        self.debugNavigationKeyCallback = function(e)
+            self:DebugNavigation(e)
+        end
+        event.register(tes3.event.keyDown, self.debugNavigationKeyCallback, { filter = tes3.scanCode.F2 })
     end
     if config.indicator.cellBorder then
         tes3.worldController.menuController.bordersEnabled = true
@@ -1704,6 +1801,10 @@ function this:Shutdown()
         event.unregister(tes3.event.keyDown, self.debugKeyCallback)
         self.debugKeyCallback = nil
     end
+    if self.debugNavigationKeyCallback then
+        event.unregister(tes3.event.keyDown, self.debugNavigationKeyCallback)
+        self.debugNavigationKeyCallback = nil
+    end
 
     if self.enterFrameCallback then
         event.unregister(tes3.event.enterFrame, self.enterFrameCallback)
@@ -1718,6 +1819,11 @@ function this:Shutdown()
     self:ReleaseTools()
     self.resource:Release()
     self.resource = nil
+
+    if self.activeNavigator then
+        self.activeNavigator:Release()
+        self.activeNavigator = nil
+    end
 
     self.pathfinding:UnregisterEventHandlers()
     target:UnregisterEvent()

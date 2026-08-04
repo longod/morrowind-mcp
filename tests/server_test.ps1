@@ -465,9 +465,11 @@ $TargetPort = [int]$Config.Connection.port
 $StartScriptPath = ".\start_server_mo2.ps1"
 $StopScriptPath = ".\stop_server.ps1"
 $ServerTestSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.server-test-running"
+$UnitTestSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.unit-test-targets"
 
 $ExitCode = 0
 $CreatedServerTestSentinel = $false
+$UnitTestSentinelOriginalContent = $null
 
 Push-Location $ScriptDir
 try {
@@ -481,6 +483,12 @@ try {
         Write-Host "[ERROR] $StopScriptPath was not found." -ForegroundColor Red
         $ExitCode = 1
         return
+    }
+
+    if (Test-Path -LiteralPath $UnitTestSentinelPath) {
+        $UnitTestSentinelOriginalContent = Get-Content -LiteralPath $UnitTestSentinelPath -Raw
+        Remove-Item -LiteralPath $UnitTestSentinelPath -Force
+        Write-Host "[INFO] Temporarily removed unit test sentinel: $UnitTestSentinelPath" -ForegroundColor DarkCyan
     }
 
     $ServerTestSentinelDir = Split-Path -Parent $ServerTestSentinelPath
@@ -561,7 +569,23 @@ try {
         }),
         (New-ServerTestCase -Name "tools list after continue" -Arguments @("--method", "tools/list") -Validate { param($result) if ($null -eq $result.tools) { throw "Missing tools." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) } -RetryUntil { param($result, $context) $context.ToolNames -contains "mw-player-fetch" } -RetryAttempts $MaxTry -RetryIntervalSeconds $IntervalSeconds),
         (New-ServerTestCase -Name "prompts list after continue" -Arguments @("--method", "prompts/list") -Validate { param($result) if ($null -eq $result.prompts) { throw "Missing prompts." } } -Capture { param($result, $context) $context.PromptNames = @($result.prompts | ForEach-Object { $_.name }) }),
-        (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($null -eq $result.structuredContent.player.position -or [string]::IsNullOrWhiteSpace($result.structuredContent.player.cell.id) -or $null -eq $result.structuredContent.mobilePlayer) { throw "Player reference or mobile state is missing." } } -Capture { param($result, $context) $context.PlayerNavigationPosition = $result.structuredContent.player.position; $context.PlayerNavigationCellId = $result.structuredContent.player.cell.id }),
+        (New-ServerTestCase -Name "player navigate reachable location" -Arguments {
+            param($context)
+            New-ToolCallArguments -ToolName "mw-player-navigate" -ToolArguments @{
+                action = "navigate"
+                position_x = 456
+                position_y = 484
+                position_z = -256
+                cell_id = $context.PlayerNavigationCellId
+            }
+        } -When { param($context) $context.ToolNames -contains "mw-player-navigate" -and -not [string]::IsNullOrWhiteSpace($context.PlayerNavigationCellId) } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            if ($result.structuredContent.route_node_count -lt 2) { throw "Navigation route did not contain multiple pathgrid nodes." }
+            $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
+            if ($text -ne "Player navigation started.") { throw "Navigation did not report a successful start." }
+        }),
         (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
@@ -637,6 +661,10 @@ finally {
 
     if ($CreatedServerTestSentinel) {
         Remove-Item -LiteralPath $ServerTestSentinelPath -ErrorAction SilentlyContinue
+    }
+
+    if ($null -ne $UnitTestSentinelOriginalContent) {
+        Set-Content -LiteralPath $UnitTestSentinelPath -Value $UnitTestSentinelOriginalContent -Encoding UTF8 -NoNewline
     }
 
     Pop-Location

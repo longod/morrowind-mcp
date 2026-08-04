@@ -20,4 +20,15 @@ function this.GetIdentityKey(cell)
     return string.format("exterior:%s:%d,%d", cell.id, cell.gridX, cell.gridY)
 end
 
+--- Resolve an optional logical cell ID, falling back to the supplied current player cell.
+---@param cellId string?
+---@param fallbackCell tes3cell?
+---@return tes3cell?
+function this.ResolveOptionalId(cellId, fallbackCell)
+    if cellId == nil or cellId:match("^%s*$") then
+        return fallbackCell
+    end
+    return tes3.getCell({ id = cellId })
+end
+
 return this

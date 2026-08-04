@@ -43,6 +43,8 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@field gridY integer?
 ---@field waterLevel number?
 ---@field borderNodeIds MCP.PathfindingBorderNodeIds
+---@field unresolvedConnectionCount integer
+---@field ambiguousConnectionCount integer
 
 ---@class MCP.PathfindingBorderNodeIds
 ---@field west MCP.PathfindingNodeIds
@@ -143,6 +145,39 @@ local edgeSurface = {
 ---@return MCP.PathfindingPosition
 local function CopyPosition(position)
     return { x = position.x, y = position.y, z = position.z }
+end
+
+---@alias MCP.PathfindingNodeIdsByZ table<number, integer[]>
+---@alias MCP.PathfindingNodeIdsByY table<number, MCP.PathfindingNodeIdsByZ>
+---@alias MCP.PathfindingNodeIdsByX table<number, MCP.PathfindingNodeIdsByY>
+
+---@param nodeIdsByPosition MCP.PathfindingNodeIdsByX
+---@param position tes3vector3|MCP.PathfindingPosition
+---@param nodeId integer
+local function IndexNodePosition(nodeIdsByPosition, position, nodeId)
+    nodeIdsByPosition[position.x] = nodeIdsByPosition[position.x] or {}
+    local nodeIdsByY = nodeIdsByPosition[position.x]
+    nodeIdsByY[position.y] = nodeIdsByY[position.y] or {}
+    local nodeIdsByZ = nodeIdsByY[position.y]
+    nodeIdsByZ[position.z] = nodeIdsByZ[position.z] or {}
+    table.insert(nodeIdsByZ[position.z], nodeId)
+end
+
+---@param nodeIdsByPosition MCP.PathfindingNodeIdsByX
+---@param position tes3vector3|MCP.PathfindingPosition
+---@return integer?
+---@return boolean ambiguous
+local function ResolveNodePosition(nodeIdsByPosition, position)
+    local nodeIdsByY = nodeIdsByPosition[position.x]
+    local nodeIdsByZ = nodeIdsByY and nodeIdsByY[position.y] or nil
+    local nodeIds = nodeIdsByZ and nodeIdsByZ[position.z] or nil
+    if not nodeIds then
+        return nil, false
+    end
+    if table.size(nodeIds) ~= 1 then
+        return nil, true
+    end
+    return nodeIds[1], false
 end
 
 --- Return horizontal and vertical components of the distance between positions.
@@ -532,24 +567,35 @@ function this:UpdateCell(cell)
         gridY = cell.gridY,
         waterLevel = cell.waterLevel,
         borderNodeIds = { west = {}, east = {}, south = {}, north = {} },
+        unresolvedConnectionCount = 0,
+        ambiguousConnectionCount = 0,
     }
     self.nodeIdsByCellId[cellId] = {}
 
-    ---@type table<tes3pathGridNode, integer>
-    local nodeIdsByPathgridNode = {}
+    ---@type MCP.PathfindingNodeIdsByX
+    local nodeIdsByPosition = {}
     for index, pathgridNode in ipairs(cell.pathGrid.nodes) do
         local nodeId = self.nextNodeId
         self.nextNodeId = self.nextNodeId + 1
         self.nodes[nodeId] = { id = nodeId, cellId = cellId, position = CopyPosition(pathgridNode.position) }
         self.edgeIdByNeighborId[nodeId] = {}
         self.nodeIdsByCellId[cellId][index] = nodeId
-        nodeIdsByPathgridNode[pathgridNode] = nodeId
+        IndexNodePosition(nodeIdsByPosition, pathgridNode.position, nodeId)
     end
-    for _, pathgridNode in ipairs(cell.pathGrid.nodes) do
+    for index, pathgridNode in ipairs(cell.pathGrid.nodes) do
+        local fromId = self.nodeIdsByCellId[cellId][index]
         for _, connectedNode in ipairs(pathgridNode.connectedNodes) do
-            local toId = nodeIdsByPathgridNode[connectedNode]
+            local position = connectedNode and connectedNode.position
+            local toId, ambiguous = nil, false
+            if position then
+                toId, ambiguous = ResolveNodePosition(nodeIdsByPosition, position)
+            end
             if toId then
-                self:ConnectUndirected(nodeIdsByPathgridNode[pathgridNode], toId)
+                self:ConnectUndirected(fromId, toId)
+            elseif ambiguous then
+                self.cells[cellId].ambiguousConnectionCount = self.cells[cellId].ambiguousConnectionCount + 1
+            else
+                self.cells[cellId].unresolvedConnectionCount = self.cells[cellId].unresolvedConnectionCount + 1
             end
         end
     end
@@ -562,7 +608,11 @@ function this:UpdateCell(cell)
     self:StitchExteriorCell(cellId)
     self:ResolveTravelDestinationsForCell(cellId)
     local grid = cellSnapshot.isInterior and "interior" or string.format("%d,%d", cellSnapshot.gridX, cellSnapshot.gridY)
-    self.logger:debug("Snapshotted pathgrid: cell=%s key=%s grid=%s nodes=%d edges=%d", cell.id, cellId, grid, table.size(self.nodeIdsByCellId[cellId]), table.size(self.edges))
+    if cellSnapshot.ambiguousConnectionCount > 0 then
+        self.logger:warn("Dropped ambiguous copied pathgrid connections: cell=%s count=%d", cell.id,
+            cellSnapshot.ambiguousConnectionCount)
+    end
+    self.logger:debug("Snapshotted pathgrid: cell=%s key=%s grid=%s nodes=%d edges=%d unresolvedConnections=%d ambiguousConnections=%d", cell.id, cellId, grid, table.size(self.nodeIdsByCellId[cellId]), table.size(self.edges), cellSnapshot.unresolvedConnectionCount, cellSnapshot.ambiguousConnectionCount)
     return true
 end
 

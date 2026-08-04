@@ -15,7 +15,9 @@ $SseLogPath = Join-Path $LogsRoot "sse_$RunTimestamp.log"
 $MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
 $MwseLogSourcePath = $null
 $ServerTestSentinelPath = Join-Path $ScriptDir "..\MWSE\mods\morrowind-mcp\.server-test-running"
+$UnitTestSentinelPath = Join-Path $ScriptDir "..\MWSE\mods\morrowind-mcp\.unit-test-targets"
 $CreatedServerTestSentinel = $false
+$UnitTestSentinelOriginalContent = $null
 
 function Convert-ToFileUri {
     param(
@@ -175,6 +177,12 @@ $StopScriptPath = Join-Path $ScriptDir "stop_server.ps1"
 $ExitCode = 0
 
 try {
+    if (Test-Path -LiteralPath $UnitTestSentinelPath) {
+        $UnitTestSentinelOriginalContent = Get-Content -LiteralPath $UnitTestSentinelPath -Raw
+        Remove-Item -LiteralPath $UnitTestSentinelPath -Force
+        Write-SseLog "[INFO] Temporarily removed unit test sentinel: $UnitTestSentinelPath" -ForegroundColor Cyan
+    }
+
     $ServerTestSentinelDir = Split-Path -Parent $ServerTestSentinelPath
     if (Test-Path -LiteralPath $ServerTestSentinelDir) {
         $ServerTestSentinelAlreadyExists = Test-Path -LiteralPath $ServerTestSentinelPath
@@ -434,6 +442,10 @@ finally {
 
     if ($CreatedServerTestSentinel) {
         Remove-Item -LiteralPath $ServerTestSentinelPath -ErrorAction SilentlyContinue
+    }
+
+    if ($null -ne $UnitTestSentinelOriginalContent) {
+        Set-Content -LiteralPath $UnitTestSentinelPath -Value $UnitTestSentinelOriginalContent -Encoding UTF8 -NoNewline
     }
 }
 

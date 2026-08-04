@@ -73,13 +73,14 @@ local function HasAutomatedServerTestFlag()
 end
 
 function this.Run()
-    if HasAutomatedServerTestFlag() then
-        return
-    end
-
     local settings = require("morrowind-mcp.settings")
     local sentinelPath = settings.modDir .. ".unit-test-targets"
     local hasTestSentinel, testTargets = LoadTestTargets(sentinelPath)
+
+    -- Unit-test runs must finish even if a stale server-test sentinel remains.
+    if not hasTestSentinel and HasAutomatedServerTestFlag() then
+        return
+    end
 
     -- Log the planned targets before any test module starts executing.
     LogTestTargets(testTargets)

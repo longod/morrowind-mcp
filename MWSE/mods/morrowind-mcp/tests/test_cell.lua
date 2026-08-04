@@ -4,6 +4,10 @@ local this = {}
 ---@return MCP.UnitWindResult
 function this.Test()
     local unitwind = require("unitwind").new({ enabled = true, highlight = false })
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
     local cellutil = require("morrowind-mcp.tes3.cell")
 
     unitwind:start("morrowind-mcp.tes3.cell")
@@ -23,6 +27,22 @@ function this.Test()
         unitwind:expect(cellutil.GetIdentityKey({ isInterior = true })).toBe(nil)
         unitwind:expect(cellutil.GetIdentityKey({ id = "West Gash", isInterior = false, gridX = 0 })).toBe(nil)
         unitwind:expect(cellutil.GetIdentityKey({ id = "West Gash", isInterior = false, gridY = 0 })).toBe(nil)
+    end)
+
+    unitwind:test("ResolveOptionalId uses the fallback for missing IDs and resolves explicit IDs", function()
+        local fallback = { id = "Current Cell", isInterior = true }
+        local requested = { id = "Destination Cell", isInterior = true }
+        unitwind:mock(tes3, "getCell", function(params)
+            if params.id == "Destination Cell" then
+                return requested
+            end
+            return nil
+        end)
+
+        unitwind:expect(cellutil.ResolveOptionalId(nil, fallback)).toBe(fallback)
+        unitwind:expect(cellutil.ResolveOptionalId("   ", fallback)).toBe(fallback)
+        unitwind:expect(cellutil.ResolveOptionalId("Destination Cell", fallback)).toBe(requested)
+        unitwind:expect(cellutil.ResolveOptionalId("Missing Cell", fallback)).toBe(nil)
     end)
 
     local testsPassed = unitwind.testsPassed

@@ -10,7 +10,7 @@ local function HasAutomatedServerTestFlag()
     return lfs.attributes(flagPath, "mode") == "file"
 end
 
-if config.development.unitTest and not HasAutomatedServerTestFlag() then
+if config.development.unitTest then
     unittest.Run()
 end
 
@@ -639,7 +639,7 @@ local function RegisterTestEvents()
             end
         end
     end
-    event.register(tes3.event.enterFrame, enterFrameCallback)
+    -- event.register(tes3.event.enterFrame, enterFrameCallback)
 end
 
 if config.development.debug then

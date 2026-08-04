@@ -86,6 +86,48 @@ function this.Test()
         unitwind:expect(graph.nodes[graph.nodeIdsByCellId[CellKey(cell)][1]].position.x).toBe(10)
     end)
 
+    unitwind:test("UpdateCell resolves copied connectedNodes by position", function()
+        local first, second = Node(10, 20, 30), Node(110, 20, 30)
+        -- MWSE generates independent node values for connectedNodes instead of returning the original grid node.
+        first.connectedNodes = { Node(110, 20, 30) }
+        local graph, cell = pathfinding.new(), Cell("copied-connections", 0, 0, { first, second })
+        unitwind:expect(graph:UpdateCell(cell)).toBe(true)
+        unitwind:expect(table.size(graph.edges)).toBe(1)
+        local firstNodeId = graph.nodeIdsByCellId[CellKey(cell)][1]
+        local secondNodeId = graph.nodeIdsByCellId[CellKey(cell)][2]
+        unitwind:expect(graph.edgeIdByNeighborId[firstNodeId][secondNodeId] == nil).toBe(false)
+    end)
+
+    unitwind:test("UpdateCell resolves copied nodes with negative fractional coordinates", function()
+        local first, second = Node(-123.5, 8192.25, -0.5), Node(10.75, -2.5, 3.125)
+        first.connectedNodes = { Node(10.75, -2.5, 3.125) }
+        local graph, cell = pathfinding.new(), Cell("fractional-connections", 0, 0, { first, second })
+        unitwind:expect(graph:UpdateCell(cell)).toBe(true)
+        unitwind:expect(table.size(graph.edges)).toBe(1)
+    end)
+
+    unitwind:test("UpdateCell counts copied connections without a matching node", function()
+        local first = Node(10, 20, 30)
+        first.connectedNodes = { Node(110, 20, 30) }
+        local graph, cell = pathfinding.new(), Cell("unresolved-connections", 0, 0, { first })
+        unitwind:expect(graph:UpdateCell(cell)).toBe(true)
+        unitwind:expect(table.size(graph.edges)).toBe(0)
+        unitwind:expect(graph.cells[CellKey(cell)].unresolvedConnectionCount).toBe(1)
+    end)
+
+    unitwind:test("UpdateCell does not guess between nodes at the same position", function()
+        local source = Node(0, 0, 0)
+        local firstDuplicate = Node(100, 0, 0)
+        local secondDuplicate = Node(100, 0, 0)
+        source.connectedNodes = { Node(100, 0, 0) }
+        local graph, cell = pathfinding.new(), Cell("ambiguous-connections", 0, 0,
+            { source, firstDuplicate, secondDuplicate })
+        unitwind:expect(graph:UpdateCell(cell)).toBe(true)
+        unitwind:expect(table.size(graph.edges)).toBe(0)
+        unitwind:expect(graph.cells[CellKey(cell)].unresolvedConnectionCount).toBe(0)
+        unitwind:expect(graph.cells[CellKey(cell)].ambiguousConnectionCount).toBe(1)
+    end)
+
     unitwind:test("FindPath uses A-Star and reroutes around a blocked edge", function()
         local first, second, third, detour = Node(0, 0, 0), Node(100, 0, 0), Node(200, 0, 0), Node(100, 100, 0)
         first.connectedNodes, second.connectedNodes, third.connectedNodes, detour.connectedNodes = { second, detour }, { first, third }, { second, detour }, { first, third }
@@ -301,6 +343,7 @@ function this.Test()
     unitwind:test("Pathgrid polling follows cell, load, and shutdown lifecycles", function()
         local registeredCallbacks = {}
         local startedTimers = {}
+        unitwind:mock(tes3, "player", nil)
         unitwind:mock(tes3, "makeSafeObjectHandle", SafeObjectHandle)
         unitwind:mock(event, "register", function(eventId, callback)
             registeredCallbacks[eventId] = callback
@@ -394,6 +437,7 @@ function this.Test()
     unitwind:test("Pathgrid polling drops invalidated cells before touching pathgrid state", function()
         local registeredCallbacks = {}
         local startedTimers = {}
+        unitwind:mock(tes3, "player", nil)
         unitwind:mock(tes3, "makeSafeObjectHandle", SafeObjectHandle)
         unitwind:mock(event, "register", function(eventId, callback)
             registeredCallbacks[eventId] = callback
