@@ -45,6 +45,13 @@ function this.Test()
             .application_octet_stream)
     end)
 
+    unitwind:test("IsTextMimeType identifies supported text resource types", function()
+        unitwind:expect(mimeutil.IsTextMimeType(mcp.mimeType.text_plain)).toBe(true)
+        unitwind:expect(mimeutil.IsTextMimeType(mcp.mimeType.application_json)).toBe(true)
+        unitwind:expect(mimeutil.IsTextMimeType(mcp.mimeType.image_png)).toBe(false)
+        unitwind:expect(mimeutil.IsTextMimeType(mcp.mimeType.application_octet_stream)).toBe(false)
+    end)
+
     local testsPassed = unitwind.testsPassed
     local testsFailed = unitwind.testsFailed
     unitwind:finish()

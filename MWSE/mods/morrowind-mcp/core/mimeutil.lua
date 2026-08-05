@@ -46,4 +46,11 @@ function this.ResolveMimeTypeFromResourcePath(resourcePath)
     return this.ResolveMimeTypeFromExtension(extension)
 end
 
+--- Returns whether a MIME type should be read as text rather than binary data.
+---@param mimeType MCP.MimeType
+---@return boolean
+function this.IsTextMimeType(mimeType)
+    return mimeType == mcp.mimeType.application_json or mimeType == mcp.mimeType.text_plain
+end
+
 return this

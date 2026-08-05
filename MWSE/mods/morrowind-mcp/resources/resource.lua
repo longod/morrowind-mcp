@@ -10,7 +10,7 @@ local datetime = require("morrowind-mcp.util.datetime")
 local memory = require("morrowind-mcp.resources.memory.manager")
 
 
----@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]
+---@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]?
 
 ---@class MCP.ResourceEntry
 ---@field descriptor MCP.Resource
@@ -66,6 +66,41 @@ function this:Release()
     self.changed = 0
 end
 
+---@param currentDir string
+---@param relativeDir string
+---@param resources MCP.Resource[]
+local function CollectResources(currentDir, relativeDir, resources)
+    for file in lfs.dir(currentDir) do
+        if file ~= "." and file ~= ".." then
+            local currentPath = currentDir .. file
+            local mode = lfs.attributes(currentPath, "mode")
+            if mode == "directory" then
+                CollectResources(currentPath .. "\\", relativeDir .. file .. "/", resources)
+            elseif mode == "file" then
+                local relativePath = relativeDir .. file
+                local resourceUri = pathutil.ToUri(relativePath, settings.uriScheme)
+                if resourceUri then
+                    -- UTC, ISO 8601
+                    local modification = lfs.attributes(currentPath, "modification")
+                    local utcISO8601 = os.date("!%Y-%m-%dT%H:%M:%SZ", modification)
+
+                    ---@type MCP.Resource
+                    local resource = {
+                        name = relativePath,
+                        uri = resourceUri,
+                        mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
+                        size = lfs.attributes(currentPath, "size"),
+                        annotations = jsonrpc.Annotations(nil, nil, utcISO8601),
+                    }
+                    table.insert(resources, resource)
+                else
+                    -- self.logger:warn("Skip invalid resource path: %s", relativePath)
+                end
+            end
+        end
+    end
+end
+
 ---@param params MCP.PaginatedRequestParams
 ---@return MCP.MethodResult
 function this:OnResourcesList(params)
@@ -81,51 +116,15 @@ function this:OnResourcesList(params)
         table.insert(result.resources, r.descriptor)
     end
 
-    self.logger:debug("List resources count=%d, virutal=%d", #result.resources, table.size(self.resources))
+    -- persistent file resources are not available. no need for agent.
+    -- local rootDir = settings.resourceRootDir
+    -- CollectResources(rootDir, "", result.resources)
 
-    -- I concern about security, putting some wrong file in resource directory...
-    -- allow only virtual resources?
-
-    ---@param currentDir string
-    ---@param relativeDir string
-    local function CollectResources(currentDir, relativeDir)
-        for file in lfs.dir(currentDir) do
-            if file ~= "." and file ~= ".." then
-                local currentPath = currentDir .. file
-                local mode = lfs.attributes(currentPath, "mode")
-                if mode == "directory" then
-                    CollectResources(currentPath .. "\\", relativeDir .. file .. "/")
-                elseif mode == "file" then
-                    local relativePath = relativeDir .. file
-                    local resourceUri = pathutil.ToUri(relativePath, settings.uriScheme)
-                    if resourceUri then
-                        -- UTC, ISO 8601
-                        local modification = lfs.attributes(currentPath, "modification")
-                        local utcISO8601 = os.date("!%Y-%m-%dT%H:%M:%SZ", modification)
-
-                        ---@type MCP.Resource
-                        local resource = {
-                            name = relativePath,
-                            uri = resourceUri,
-                            mimeType = mimeutil.ResolveMimeTypeFromResourcePath(relativePath),
-                            size = lfs.attributes(currentPath, "size"),
-                            annotations = jsonrpc.Annotations(nil, nil, utcISO8601),
-                        }
-                        table.insert(result.resources, resource)
-                    else
-                        self.logger:warn("Skip invalid resource path: %s", relativePath)
-                    end
-                end
-            end
-        end
-    end
-
-    -- Memory debug dumps are written outside resourceRootDir, so resources/list does not expose them.
-    local rootDir = settings.resourceRootDir
-    CollectResources(rootDir, "")
     table.sort(result.resources, function(a, b)
         return a.uri < b.uri
     end)
+
+    self.logger:debug("List resources count=%d", #result.resources)
 
     ---@type MCP.MethodResult
     return {
@@ -150,6 +149,45 @@ function this:OnResourcesTemplatesList(params)
     }
 end
 
+---@param desc MCP.Resource
+---@return MCP.ResourceContent?
+function this:LoadFileContent(desc)
+    local resourcePath = pathutil.FromUri(desc.uri, settings.uriScheme)
+    if not resourcePath then
+        self.logger:warn("Cannot read resource with an invalid URI: %s", tostring(desc.uri))
+        return nil
+    end
+
+    local resourceFilePath = pathutil.ToResourceFilePath(resourcePath, settings.resourceRootDir)
+    if not resourceFilePath then
+        self.logger:warn("Cannot resolve resource file path: %s", tostring(desc.uri))
+        return nil
+    end
+
+    local mimeType = desc.mimeType or mimeutil.ResolveMimeTypeFromResourcePath(resourcePath)
+    if not mimeType then
+        self.logger:warn("Cannot resolve resource MIME type: %s", tostring(desc.uri))
+        return nil
+    end
+    local textType = mimeutil.IsTextMimeType(mimeType)
+    local mode = textType and "r" or "rb"
+
+    local file = io.open(resourceFilePath, mode)
+    if not file then
+        self.logger:warn("Cannot open resource file: uri=%s path=%s", tostring(desc.uri), resourceFilePath)
+        return nil
+    end
+
+    local data = file:read("*a")
+    file:close()
+
+    if textType then
+        return jsonrpc.TextResourceContents(desc.uri, data, mimeType)
+    else
+        return jsonrpc.BlobResourceContents(desc.uri, base64.encode(data), mimeType)
+    end
+end
+
 ---@param params MCP.ReadResourceRequestParams
 ---@return MCP.MethodResult
 function this:OnResourcesRead(params)
@@ -161,67 +199,36 @@ function this:OnResourcesRead(params)
         }
     end
 
-    -- try read virtual resources
     local entry = self.resources[params.uri]
+    local contents = nil
     if entry then
-        -- handler for virtual resource access
-        -- or cache
-        -- TODO current datetime in game
-        local contents = entry.handler(entry.descriptor)
-        if not contents or #contents == 0 then
-            ---@type MCP.MethodResult
-            return {
-                http_response = http.response_code.not_found, -- ?
-                error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
-                    string.format("Resource is unavailable: %s. Call %s to confirm current availability.",
-                        tostring(params.uri), mcp.method.resources_list)),
-            }
+        -- Registered resources control their descriptor and may generate their contents lazily.
+        self.logger:debug("Read registered resource: %s", params.uri)
+        contents = entry.handler(entry.descriptor)
+    else
+        -- File-backed resources remain readable without being exposed by resources/list.
+        self.logger:debug("Read file resource fallback: %s", params.uri)
+        local content = self:LoadFileContent({ name = params.uri, uri = params.uri })
+        if content then
+            contents = { content }
         end
-        return {
-            http_response = http.response_code.ok,
-            result = jsonrpc.ReadResourceResult(contents),
-        }
     end
 
-    local resourcePath = pathutil.FromUri(params.uri, settings.uriScheme)
-    if not resourcePath then
+    if not contents or table.size(contents) == 0 then
+        self.logger:warn("Resource is unavailable: %s", params.uri)
         ---@type MCP.MethodResult
         return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
-        }
-    end
-
-    local resourceFilePath = pathutil.ToResourceFilePath(resourcePath, settings.resourceRootDir)
-    if not resourceFilePath then
-        ---@type MCP.MethodResult
-        return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.error_code.invalid_params,
-        }
-    end
-
-    local file = io.open(resourceFilePath, "rb")
-    if not file then
-        ---@type MCP.MethodResult
-        return {
-            http_response = http.response_code.bad_request,
+            http_response = http.response_code.not_found,
             error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
                 string.format("Resource is unavailable: %s. Call %s to confirm current availability.",
                     tostring(params.uri), mcp.method.resources_list)),
         }
     end
 
-    local data = file:read("*a")
-    file:close()
-
-    local mimeType = mimeutil.ResolveMimeTypeFromResourcePath(resourcePath)
-    local content = jsonrpc.BlobResourceContents(params.uri, base64.encode(data), mimeType)
-
     ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
-        result = jsonrpc.ReadResourceResult({ content }),
+        result = jsonrpc.ReadResourceResult(contents),
     }
 end
 

@@ -13,3 +13,6 @@
 -- This interactive Player does not use the paper's Level 5 Observer, where the user can only stop the agent.
 
 -- how to use resources.
+
+-- player agent, game progress skill.
+

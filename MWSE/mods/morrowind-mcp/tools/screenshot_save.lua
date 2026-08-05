@@ -3,12 +3,15 @@ local inputvalidator = require("morrowind-mcp.core.inputvalidator")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local pathutil = require("morrowind-mcp.core.pathutil")
+local datetime = require("morrowind-mcp.util.datetime")
+local settings = require("morrowind-mcp.settings")
 
 local minMenuNameLength = 1
 local maxMenuNameLength = 255
 
 ---@class MCP.Tools.ScreenshotSave: MCP.ITool
 ---@field logger mwseLogger
+---@field resource MCP.ResourceManager
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -85,10 +88,10 @@ function this:Execute(arguments, context)
         name = filename
     end
     local extension = arguments["extension"]
-    local settings = require("morrowind-mcp.settings")
     local dir = settings.resourceRootDir .. "screenshot\\"
     pcall(lfs.mkdir, dir)
-    local path = dir .. name .. extension
+    local file = name .. extension
+    local path = dir .. file
     if lfs.attributes(path) then
         self.logger:warn("Screenshot file already exists: %s.", path)
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Screenshot file already exists: " .. path), nil, true)
@@ -117,8 +120,33 @@ function this:Execute(arguments, context)
     self.logger:info("Screenshot taken: path=%s, uri=%s", path, resourceUri)
 
     local mimeType = mimeutil.ResolveMimeTypeFromExtension(extension)
-    local content = jsonrpc.ResourceLink(name .. extension, resourceUri,
-        "Screenshot taken at " .. os.date("%Y-%m-%d %H:%M:%S"), nil, mimeType)
+    local now = datetime.ToISO8601(datetime.UTCNow())
+    local res = {
+        name = file,
+        title = file,
+        uri = resourceUri,
+        description = "Screenshot taken at " .. now,
+        mimeType = mimeType,
+        annotations = jsonrpc.Annotations(nil, nil, now),
+    }
+
+    if self.resource then
+        ---@type MCP.ResourceEntry
+        local entry = {
+            descriptor = res,
+            handler = function(desc)
+                local resourceContent = self.resource:LoadFileContent(desc)
+                if not resourceContent then
+                    return nil
+                end
+                return { resourceContent }
+            end,
+        }
+        self.resource:PublishResource(entry)
+        self.logger:debug("Published screenshot resource entry: %s", resourceUri)
+    end
+
+    local content = jsonrpc.ResourceLink(res.name, res.uri, res.title, res.description, res.mimeType, res.annotations)
     return jsonrpc.CallToolResult(content)
 end
 
