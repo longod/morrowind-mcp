@@ -10,9 +10,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scenario import EvaluateAssertions, ResolveTerminationPolicy, ScenarioValidationError, ValidateScenario
-from diagnostics import SuggestDiagnosticProbes
+from diagnostics import IsToolPublished, SuggestDiagnosticProbes
 from inspector import FormatToolArgument, InspectorError, InspectorResponse
-from run import RecordDiagnosticProbes, RecordWaitResponse, WaitUntil, WaitUntilTimeout
+from run import RecordDiagnosticProbes, RecordMemoryDebugDump, RecordWaitResponse, WaitUntil, WaitUntilTimeout
 
 
 def NewScenario() -> dict:
@@ -204,6 +204,24 @@ class DiagnosticProbeTests(unittest.TestCase):
 
         self.assertEqual(len(run["diagnostic_probes"]), 2)
         self.assertEqual(run["diagnostic_probes"][0]["error"], "server stopped")
+
+    def test_detects_published_memory_debug_tool(self) -> None:
+        document = {"result": {"tools": [{"name": "mw-debug-action"}]}}
+
+        self.assertTrue(IsToolPublished(document, "mw-debug-action"))
+        self.assertFalse(IsToolPublished(document, "mw-player-action"))
+
+    def test_records_unavailable_memory_debug_dump(self) -> None:
+        run: dict = {}
+        configuration = {"Paths": {"modDataDir": "C:/overwrite/MWSE/mods/morrowind-mcp"}}
+        catalog = type("Response", (), {"document": {"result": {"tools": []}}})()
+
+        with patch("run.InvokeInspector", return_value=catalog) as invoke:
+            RecordMemoryDebugDump(run, "http://localhost", configuration, 10)
+
+        self.assertEqual(invoke.call_count, 1)
+        self.assertEqual(run["memory_debug_dump"]["status"], "unavailable")
+        self.assertTrue(run["memory_debug_dump"]["dump_directory"].endswith("memory-dump"))
 
 
 if __name__ == "__main__":

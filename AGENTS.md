@@ -57,6 +57,9 @@ host/port を含む設定は [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1) �
 
 ## 開発規約
 
+- 不明なことがある場合、不明なままにせず、必ず質問すること
+- バグを見つけた場合、原因を特定して修正すること。原因や原因の特定方法が不明な場合は、必ず指示を仰ぐこと
+
 ## MCP Server
 
 - MCP Protocol Version: `2025-11-25`

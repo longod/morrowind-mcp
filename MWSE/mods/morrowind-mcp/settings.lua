@@ -29,10 +29,11 @@ this.defaultConfig = {
     },
 
     indicator = {
-        toolsCall = false,
+        toolsCall = false, -- notification
         cellBorder = false,
         collisionBox = false,
         pathGrid = false,
+        navigation = false, -- TODO notification start end
     },
 
     autoplay = {

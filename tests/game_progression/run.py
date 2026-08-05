@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from diagnostics import SuggestDiagnosticProbes
+from diagnostics import IsToolPublished, MEMORY_DEBUG_DUMP_OPERATION, SuggestDiagnosticProbes
 from inspector import InspectorError, InvokeInspector
 from lifecycle import CreateServerTestSentinel, GetConfiguration, LifecycleError, StartServer, StopServer, WaitForServer
 from scenario import EvaluateAssertions, LoadScenario, ResolveTerminationPolicy, ScenarioValidationError
@@ -83,6 +83,31 @@ def RecordDiagnosticProbes(run: dict[str, Any], endpoint: str, operation: dict[s
             record["error"] = str(error)
         records.append(record)
     run["diagnostic_probes"] = records
+
+
+def RecordMemoryDebugDump(run: dict[str, Any], endpoint: str, configuration: dict[str, Any], timeout_seconds: int) -> None:
+    """Capture a Memory dump only when the terminal tool remains publicly available."""
+    record: dict[str, Any] = {
+        "operation": MEMORY_DEBUG_DUMP_OPERATION,
+        "dump_directory": str(Path(configuration["Paths"]["modDataDir"]) / "memory-dump"),
+    }
+    try:
+        catalog = InvokeInspector(endpoint, {"method": "tools/list"}, timeout_seconds).document
+        if not IsToolPublished(catalog, MEMORY_DEBUG_DUMP_OPERATION["tool_name"]):
+            record["status"] = "unavailable"
+        else:
+            response = InvokeInspector(endpoint, MEMORY_DEBUG_DUMP_OPERATION, timeout_seconds)
+            record["response"] = response.document
+            result = response.result
+            if result.get("isError") is True:
+                record["status"] = "failed"
+            else:
+                record["status"] = "succeeded"
+    except Exception as error:
+        # The dump is terminal diagnostic evidence and cannot replace the progression outcome.
+        record["status"] = "failed"
+        record["error"] = str(error)
+    run["memory_debug_dump"] = record
 
 
 def VerifyStepResult(response: Any, step: dict[str, Any]) -> None:
@@ -158,11 +183,13 @@ def Main() -> int:
         expected_outcome = scenario.get("outcome", "completed")
         if expected_outcome in {"failed", "stalled"}:
             RecordDiagnosticProbes(run, endpoint, last_operation, policy["max_retries_per_step"] * 10)
+            RecordMemoryDebugDump(run, endpoint, configuration, policy["max_retries_per_step"] * 10)
         run["outcome"] = {"status": expected_outcome, "message": "All recorded steps completed."}
         return 0
     except (InspectorError, LifecycleError, RuntimeError) as error:
         if endpoint is not None:
             RecordDiagnosticProbes(run, endpoint, last_operation, policy["max_retries_per_step"] * 10)
+            RecordMemoryDebugDump(run, endpoint, configuration, policy["max_retries_per_step"] * 10)
         run["outcome"] = {"status": "failed", "message": str(error)}
         print(f"[ERROR] {error}", file=sys.stderr)
         return 1

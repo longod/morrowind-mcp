@@ -171,6 +171,22 @@ Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Ins
 
 This automatically resolves the server configuration and opens the Inspector at the configured connection URL.
 
+#### MCP Discovery
+
+Run [tests/mcp_discover.ps1](tests/mcp_discover.ps1) to create an independent Streamable HTTP session and write the current `initialize`, `tools/list`, `resources/list`, and `prompts/list` results:
+
+```powershell
+.\tests\mcp_discover.ps1 -OutputPath .\tests\logs\mcp_discovery\initial.json
+```
+
+Use `-WatchSeconds` to keep its session-scoped SSE connection open. On a `*_list_changed` notification it automatically refreshes the corresponding list and appends the evidence to the JSON record:
+
+```powershell
+.\tests\mcp_discover.ps1 -WatchSeconds 60 -OutputPath .\tests\logs\mcp_discovery\watch.json
+```
+
+The script connects to an already running server and deletes its independent session when it exits; it does not launch or stop Morrowind.
+
 ### Transport behavior
 
 | HTTP Method | Behavior | Notes |
