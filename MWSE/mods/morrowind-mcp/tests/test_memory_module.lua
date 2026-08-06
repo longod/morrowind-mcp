@@ -15,7 +15,9 @@ function this.Test()
     local imodule = require("morrowind-mcp.resources.memory.imodule")
     local manager = require("morrowind-mcp.resources.memory.manager")
     local actor = require("morrowind-mcp.resources.memory.actor")
+    local unattributed = require("morrowind-mcp.resources.memory.unattributed")
     local unattributedDialogue = require("morrowind-mcp.resources.memory.unattributed_dialogue")
+    local notification = require("morrowind-mcp.resources.memory.notification")
     local document = require("morrowind-mcp.resources.memory.document")
     local datetime = require("morrowind-mcp.util.datetime")
 
@@ -507,11 +509,11 @@ function this.Test()
         serviceActor = { reference = {} }
         module:OnInfoGetText(infoGetTextEvent(tes3.dialogueType.voice, "104", nil))
 
-        local rootLinks = module:GetLinksForParent(nil)
+        local rootLinks = module:GetLinksForParent(unattributed.uri)
         local memoryDocument = module:BuildDocument()
 
         unitwind:expect(published[1]).toBe("morrowind://memory/unattributed/dialogue.json")
-        unitwind:expect(rootLinks[1].rel).toBe("unattributed")
+        unitwind:expect(rootLinks[1].rel).toBe("dialogue")
         unitwind:expect(rootLinks[1].uri).toBe("morrowind://memory/unattributed/dialogue.json")
         unitwind:expect(memoryDocument.data_type).toBe("unattributed_dialogue_notes")
         unitwind:expect(memoryDocument.subject.id).toBe("dialogue")
@@ -531,6 +533,90 @@ function this.Test()
         module.data.text_count = 99
         unitwind:expect(module.entry.handler(module.entry.descriptor)[1].text).toBe(snapshotJson)
         unitwind:expect(string.find(snapshotJson, '"text_count":1') ~= nil).toBe(true)
+    end)
+
+    testMemoryModule("Memory Unattributed index groups dialogue and notification observations", function()
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local fakeManager = {
+            GetScope = function(self) return document.Scope(1) end,
+            GetLinksForParent = function(self, parentUri)
+                if parentUri == unattributed.uri then
+                    return { document.Link(document.linkRel.dialogue, "morrowind://memory/unattributed/dialogue.json") }
+                end
+                return {}
+            end,
+            OnModuleVisibilityChanged = function(self, module) end,
+        }
+        local module = unattributed.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+
+        local memoryDocument = module:BuildDocument()
+
+        unitwind:expect(module:GetLinksForParent(nil)[1].rel).toBe("unattributed")
+        unitwind:expect(memoryDocument.data_type).toBe("unattributed_observations")
+        unitwind:expect(memoryDocument.data.observation_count).toBe(1)
+        unitwind:expect(memoryDocument.links[1].rel).toBe("dialogue")
+    end)
+
+    testMemoryModule("Memory Notification module records non-MCP MenuNotify text", function()
+        local published = {}
+        local resource = {
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local fakeManager = {
+            GetScope = function(self) return document.Scope(1) end,
+            OnModuleVisibilityChanged = function(self, module) end,
+        }
+        local notificationMessageId = tes3ui.registerID("MenuNotify_message")
+        local function Element(name, text)
+            local message = {
+                text = text,
+                visible = true,
+                isValid = function() return true end,
+            }
+            return {
+                name = name,
+                visible = true,
+                children = {},
+                isValid = function() return true end,
+                findChild = function(self, id)
+                    if id == notificationMessageId then
+                        return message
+                    end
+                    return nil
+                end,
+            }
+        end
+        local function UiActivatedEvent(name, text)
+            return {
+                claim = false,
+                newlyCreated = true,
+                element = Element(name, text),
+            }
+        end
+        local module = notification.new({ resource = resource, manager = fakeManager })
+
+        module:OnUiActivated(UiActivatedEvent("MenuNotify3", "Wake up."))
+        module:OnUiActivated(UiActivatedEvent("MenuNotify3", "Wake up."))
+        module:OnUiActivated(UiActivatedEvent("MenuNotify2", "Morrowind MCP: Running tool"))
+        module:OnUiActivated(UiActivatedEvent("MenuMessage", "Ignore"))
+
+        local memoryDocument = module:BuildDocument()
+        unitwind:expect(published[1]).toBe("morrowind://memory/unattributed/notifications.json")
+        unitwind:expect(module.parentUri).toBe(unattributed.uri)
+        unitwind:expect(module:GetLinksForParent(unattributed.uri)[1].rel).toBe("notifications")
+        unitwind:expect(memoryDocument.data_type).toBe("unattributed_notification_notes")
+        unitwind:expect(memoryDocument.data.notification_count).toBe(1)
+        unitwind:expect(memoryDocument.data.observations[1].source_menu).toBe("MenuNotify3")
+        unitwind:expect(memoryDocument.data.observations[1].text).toBe("Wake up.")
+        unitwind:expect(memoryDocument.data.observations[1].repeat_count).toBe(2)
     end)
 
     testMemoryModule("Memory Actor module manages observed actor instances internally", function()

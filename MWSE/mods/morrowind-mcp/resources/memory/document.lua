@@ -108,7 +108,9 @@ local dataType = {
     actorInventoryItems = "actor_inventory_items",
     actorBarterItems = "actor_barter_items",
     actorDialogueNotes = "actor_dialogue_notes",
+    unattributedObservations = "unattributed_observations",
     unattributedDialogueNotes = "unattributed_dialogue_notes",
+    unattributedNotificationNotes = "unattributed_notification_notes",
     -- Expected future examples: inventory_items, dialogue_topics, container_items, reference_location.
 }
 this.dataType = dataType
@@ -131,6 +133,7 @@ local linkRel = {
     barter = "barter",
     dialogue = "dialogue",
     unattributed = "unattributed",
+    notifications = "notifications",
     -- Expected future examples: inventory, dialogue, container, reference, location.
 }
 this.linkRel = linkRel

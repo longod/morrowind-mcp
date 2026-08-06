@@ -50,8 +50,7 @@ meta.ini
 .unit-test-targets
 .exit-after-tests
 .server-test-running
-*.log
-tests/logs/game_progression/
+tests/logs/
 mwmcp.local.json
 .agents/mcp_config.json
 .mcp.json

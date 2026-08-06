@@ -62,6 +62,35 @@ function this.ResolvePath(root, menuPath)
     return target, nil
 end
 
+--- Return visible text in display order without repeating text inherited by nested UI elements.
+---@param element tes3uiElement?
+---@return string? text
+function this.ExtractVisibleText(element)
+    local textParts = {}
+    local seen = {}
+
+    local function Visit(current)
+        if not current or not current:isValid() or not current.visible then
+            return
+        end
+
+        if type(current.text) == "string" and current.text ~= "" and not seen[current.text] then
+            seen[current.text] = true
+            table.insert(textParts, current.text)
+        end
+
+        for _, child in ipairs(current.children or {}) do
+            Visit(child)
+        end
+    end
+
+    Visit(element)
+    if table.size(textParts) == 0 then
+        return nil
+    end
+    return table.concat(textParts, "\n")
+end
+
 ---@param i tes3uiElement
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?

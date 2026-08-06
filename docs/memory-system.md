@@ -50,7 +50,7 @@ Read policy values:
 Current read policies:
 
 - Root, player, journal, quest, inventory, equipment, and actor collection indexes are `live` entries.
-- Actor entity, actor-local dialogue, actor inventory, actor barter inventory, and unattributed dialogue documents are `snapshot` entries.
+- Actor entity, actor-local dialogue, actor inventory, actor barter inventory, unattributed dialogue, and notification documents are `snapshot` entries.
 - Snapshot capture timing belongs to the feature module. The generic document helper only stores a completed `MCP.MemoryDocument`; it does not know actor ids, observation events, or feature-specific update boundaries.
 
 ## Player Memory
@@ -96,6 +96,9 @@ Data type values currently used:
 - `actor_inventory_items`: actual inventory observed directly from one actor.
 - `actor_barter_items`: merchant inventory filtered by its item-record trade eligibility.
 - `actor_dialogue_notes`: actor-local conversation notes observed from dialogue events.
+- `unattributed_observations`: traversal index for observations without a stable domain subject.
+- `unattributed_dialogue_notes`: dialogue text whose actor source was not resolved.
+- `unattributed_notification_notes`: transient notification text observed from UI activation.
 
 Link relation values currently used:
 
@@ -108,6 +111,8 @@ Link relation values currently used:
 - `actor`: one observed actor document.
 - `barter`: one observed actor merchant barter-inventory snapshot.
 - `dialogue`: actor-local dialogue notes.
+- `unattributed`: traversal index for observations without a stable domain subject.
+- `notifications`: unattributed notification history.
 
 Index documents should avoid duplicating links inside `data`. The canonical traversal list is `links`; `data` may contain counts or summary metadata such as `root_count` or `actor_count`.
 
@@ -230,7 +235,15 @@ Actor `interaction` includes:
 
 Actor `senses` stores weak sensory evidence when the actor source is known. The initial sound-backed case is `addSound`/`addTempSound` with `isVoiceover == true` and an actor `reference`. This writes `heard`, `heard_voiceover`, `voiceover_count`, and a compact `last_voiceover` object. Sounds without a source actor, non-voiceover sounds, and ambiguous environmental sounds should not be attached to Actor Memory. `infoGetText` can also expose subtitle text for `tes3.dialogueType.voice`; when actor resolution is directly available, those events should update `heard_dialogue_subtitle`, `dialogue_subtitle_count`, optional per-kind counts, and `last_dialogue_subtitle`. Actor-unresolved voice subtitles are intentionally not attached to Actor Memory because nearby actors can speak unsolicited voice lines. `tes3.dialogueType.greeting` text is kept in actor dialogue notes when actor-resolvable, but it is not duplicated into `senses` because greeting lines already represent ordinary dialogue content. This subtitle record is sensory evidence only and should not imply a direct relationship to a sound event.
 
-Actor-unresolved voice subtitles are stored separately at `morrowind://memory/unattributed/dialogue.json`. This document records `infoGetText` events for `tes3.dialogueType.voice` only when neither `tes3ui.getServiceActor()` nor `info.actor` exposes a direct actor source. The payload uses the same compact dialogue observation style as actor dialogue notes: lower-case linked `topics`, unique `text_count`, ordered `observations`, compact observation timestamps, and runtime-only duplicate aggregation by `event + info_id`. `tes3.dialogueType.greeting` is not stored here because greetings are ordinary dialogue content when actor-resolvable, and actor-unresolved greetings are too ambiguous to keep by default. Actor-unresolved sound events are also ignored for now because sound identity alone has low memory value.
+Actor-unresolved voice subtitles are stored at `morrowind://memory/unattributed/dialogue.json`, a child of `morrowind://memory/unattributed/index.json`. This document records `infoGetText` events for `tes3.dialogueType.voice` only when neither `tes3ui.getServiceActor()` nor `info.actor` exposes a direct actor source. The payload uses the same compact dialogue observation style as actor dialogue notes: lower-case linked `topics`, unique `text_count`, ordered `observations`, compact observation timestamps, and runtime-only duplicate aggregation by `event + info_id`. `tes3.dialogueType.greeting` is not stored here because greetings are ordinary dialogue content when actor-resolvable, and actor-unresolved greetings are too ambiguous to keep by default. Actor-unresolved sound events are also ignored for now because sound identity alone has low memory value.
+
+## Unattributed Observation Memory
+
+`morrowind://memory/unattributed/index.json` groups observation resources whose facts cannot be assigned to a stable existing entity or domain subject at observation time. It is not a holding area for unimplemented domains: a state with a natural player, cell, world, or actor subject belongs under that subject when its Memory module exists.
+
+Notification Memory is the snapshot resource `morrowind://memory/unattributed/notifications.json`. It records visible text from `MenuNotify1`, `MenuNotify2`, and `MenuNotify3` `uiActivated` events without associating the text with sounds, actors, or dialogue. Each observation includes `event`, opaque MWSE `source_menu`, `text`, `observed_at`, and `repeat_count`; `source_menu` is provenance only and does not imply that a later `menu-fetch` can read the transient menu. Exact repeated `source_menu + text` observations aggregate their count in the current loaded-game scope.
+
+Morrowind MCP-owned tool indicators are emitted through `mcpui.showNotifyMenu`, which prefixes their visible text with `Morrowind MCP: `. Notification Memory excludes text with that exact prefix. This is deliberately stateless; a third-party notification that begins with the reserved prefix is also excluded.
 
 Actor `risk` stores danger-oriented evidence separately from social or sensory evidence. `combatStarted` sets `risk.present`, `risk.combat`, `risk_count`, `combat_risk_count`, and `last_risk`. More ambiguous risks such as projectiles near the player should only be attached to an actor when the source actor is known.
 

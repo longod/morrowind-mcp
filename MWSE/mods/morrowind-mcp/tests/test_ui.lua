@@ -6,7 +6,12 @@ function this.Test()
         enabled = true,
         highlight = false,
     })
+    unitwind.afterEach = function(self)
+        self:clearSpies()
+        self:clearMocks()
+    end
     local ui = require("morrowind-mcp.tes3.ui")
+    local mcpui = require("morrowind-mcp.util.mcpui")
 
     unitwind:start("morrowind-mcp.tes3.ui")
 
@@ -141,6 +146,50 @@ function this.Test()
         unitwind:expect(propertyError).toBe("menu_path may only traverse children arrays.")
         unitwind:expect(missingTarget).toBe(nil)
         unitwind:expect(missingError).toBe("menu_path points to a missing child.")
+    end)
+
+    unitwind:test("ExtractVisibleText returns ordered unique visible text", function()
+        local function ValidElement(properties)
+            properties.isValid = function()
+                return true
+            end
+            properties.children = properties.children or {}
+            return properties
+        end
+
+        local root = ValidElement({
+            visible = true,
+            text = "First",
+            children = {
+                ValidElement({ visible = false, text = "Hidden" }),
+                ValidElement({ visible = true, text = "Second" }),
+                ValidElement({ visible = true, text = "First" }),
+            },
+        })
+
+        unitwind:expect(ui.ExtractVisibleText(root)).toBe("First\nSecond")
+    end)
+
+    unitwind:test("mcpui marks and safely formats owned notifications", function()
+        local receivedFormat = nil
+        local receivedText = nil
+        local expectedElement = {}
+        unitwind:mock(tes3ui, "showNotifyMenu", function(format, text)
+            receivedFormat = format
+            receivedText = text
+            return expectedElement
+        end)
+
+        local element = mcpui.showNotifyMenu("Status: %s", "100%")
+
+        unitwind:expect(element).toBe(expectedElement)
+        unitwind:expect(receivedFormat).toBe("%s")
+        unitwind:expect(receivedText).toBe("Morrowind MCP: Status: 100%")
+        unitwind:expect(mcpui.isOwnNotify(receivedText)).toBe(true)
+        unitwind:expect(mcpui.isOwnNotify("Morrowind MCPX: Status")).toBe(false)
+
+        mcpui.showNotifyMenu("Already formatted: 100%")
+        unitwind:expect(receivedText).toBe("Morrowind MCP: Already formatted: 100%")
     end)
 
     local testsPassed = unitwind.testsPassed

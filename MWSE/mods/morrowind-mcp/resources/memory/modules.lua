@@ -10,5 +10,7 @@ return {
     require("morrowind-mcp.resources.memory.journal"),
     require("morrowind-mcp.resources.memory.quest"),
     require("morrowind-mcp.resources.memory.actor"),
+    require("morrowind-mcp.resources.memory.unattributed"),
     require("morrowind-mcp.resources.memory.unattributed_dialogue"),
+    require("morrowind-mcp.resources.memory.notification"),
 }

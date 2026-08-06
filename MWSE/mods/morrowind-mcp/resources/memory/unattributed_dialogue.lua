@@ -3,6 +3,7 @@ local base = require("morrowind-mcp.resources.memory.imodule")
 local document = require("morrowind-mcp.resources.memory.document")
 local dialogue = require("morrowind-mcp.util.dialogue")
 local datetime = require("morrowind-mcp.util.datetime")
+local unattributed = require("morrowind-mcp.resources.memory.unattributed")
 
 --- Memory module for dialogue text that should not be assigned to an actor.
 ---@class MCP.Resources.Memory.UnattributedDialogue: MCP.Resources.MemoryModule
@@ -20,8 +21,8 @@ local descriptor = document.Descriptor(
     "Dialogue text observed without a resolved actor."
 )
 
-local rootLink = document.Link(
-    document.linkRel.unattributed,
+local childLink = document.Link(
+    document.linkRel.dialogue,
     descriptor.uri,
     descriptor.title,
     descriptor.description
@@ -218,13 +219,14 @@ end
 ---@return MCP.Resources.Memory.UnattributedDialogue
 function this.new(params)
     params.publishOnLoaded = true
+    params.parentUri = unattributed.uri
     params.logger = require("morrowind-mcp.logger").Get({ moduleName = "memory_unattributed_dialogue" })
     local instance = base.new(params)
     setmetatable(instance, { __index = this }) ---@cast instance MCP.Resources.Memory.UnattributedDialogue
     instance:ClearData()
     instance.entry = document.SnapshotEntry(descriptor, instance:BuildDocument())
     instance.entries = jsonrpc.array({ instance.entry })
-    instance.links = jsonrpc.array({ rootLink })
+    instance.links = jsonrpc.array({ childLink })
     return instance
 end
 

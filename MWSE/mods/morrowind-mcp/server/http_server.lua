@@ -12,6 +12,7 @@ local resourceManager = require("morrowind-mcp.resources.resource")
 local target = require("morrowind-mcp.util.target")
 local pathfinding = require("morrowind-mcp.util.pathfinding")
 local navigator = require("morrowind-mcp.util.navigator")
+local mcpui = require("morrowind-mcp.util.mcpui")
 local cellutil = require("morrowind-mcp.tes3.cell")
 
 -- TODO split implementations, such as session manager?
@@ -985,11 +986,11 @@ function this:OnToolsCall(params, request)
 
     if config.indicator.toolsCall and tes3.isInitialized() then
         -- Insert clear visual indicators when tools are invoked
-        local notify = string.format("%s is running %s", settings.modName, params.name)
+        local notify = string.format("Running %s", params.name)
         for key, value in pairs(params.arguments) do
             notify = notify .. string.format("\n%s=%s", key, tostring(value))
         end
-        tes3ui.showNotifyMenu(notify)
+        mcpui.showNotifyMenu(notify)
     end
 
     -- Tools only receive normalized arguments; request-level metadata is exposed through the execution context.
@@ -1782,3 +1783,4 @@ function this:Shutdown()
 end
 
 return this
+

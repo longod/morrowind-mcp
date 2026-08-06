@@ -220,6 +220,11 @@
 ---@field text_count integer Unique text observations in this loaded-game scope.
 ---@field observations MCP.AnyMap[] Ordered unattributed dialogue observations.
 
+--- Runtime payload for transient notification text without a stable domain subject.
+---@class MCP.MemoryNotificationData
+---@field notification_count integer Unique notification observations in this loaded-game scope.
+---@field observations MCP.AnyMap[] Ordered notification observations.
+
 --- File written by a debug-only Memory dump operation.
 ---@class MCP.MemoryDebugSaveResult
 ---@field uri MCP.ResourceUri Source Memory resource URI.
