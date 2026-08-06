@@ -1,4 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
+local availability = require("morrowind-mcp.core.toolavailability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local input_action = require("morrowind-mcp.util.input_action")
 
@@ -109,10 +110,24 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(params)
-    -- can get on main menu?
+function this:GetCapabilityConditions()
+    return "A game must be active and the player must be loaded. Individual actions can have additional menu or input-binding requirements."
+end
+
+function this:CanExecute(arguments, context)
     if tes3.onMainMenu() then
-        return false
+        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
+    end
+    if not tes3.player then
+        return false, availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+    end
+    local action = arguments["action"]
+    local key = tes3.keybind[action]
+    if key == nil or tes3.getInputBinding(key) == nil then
+        return false, availability.Unavailable(
+            availability.reason.inputBindingUnavailable,
+            "Configure a key binding for the requested player action."
+        )
     end
     return true
 end

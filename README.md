@@ -113,6 +113,10 @@ This MCP server does not modify the game or generate and execute new code; it on
 
 [FEATURES.md](FEATURES.md)
 
+### Runtime Availability
+
+Tools and prompts remain listed while their runtime prerequisites are unavailable. The tool catalog is fixed when the server starts; tools excluded by startup configuration are not registered. Call `mw-capabilities-fetch` to read each published tool's general `conditions`; this is guidance rather than a current-state guarantee. Each `tools/call` and `prompts/get` validates the normalized arguments and current game state immediately before execution. Runtime tool failures return `isError: true` with a machine-readable reason and recovery guidance.
+
 ## Development
 
 ### Naming Convention

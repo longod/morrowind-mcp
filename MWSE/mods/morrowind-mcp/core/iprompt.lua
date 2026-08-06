@@ -22,9 +22,10 @@ function this:Release()
 end
 
 ---@public
----@param params table
+---@param arguments table<string, string>
+---@param context table?
 ---@return boolean
-function this:CanExecute(params)
+function this:CanExecute(arguments, context)
     return true
 end
 

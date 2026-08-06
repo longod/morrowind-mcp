@@ -1,6 +1,7 @@
 local playerController = require("morrowind-mcp.util.player_controller")
 
-local waypointReachedDistance = 96
+-- Keep the player near pathgrid turns before advancing to the next route segment.
+local waypointReachedDistance = 32
 local edgeRecoveryDistance = 192
 local obstaclePadding = 32
 local cancelKeyCode = tes3.scanCode.escape
@@ -188,7 +189,36 @@ function this:OnSimulate(e)
         return
     end
 
-    if HorizontalDistance(player.position, waypoint.position) <= waypointReachedDistance then
+    local waypointDistance = HorizontalDistance(player.position, waypoint.position)
+    if waypointDistance <= waypointReachedDistance then
+        local mobilePlayer = tes3.mobilePlayer
+        local boundSize = mobilePlayer and mobilePlayer.boundSize2D or nil
+        local velocity = mobilePlayer and mobilePlayer.velocity or nil
+        local nextWaypoint = self.waypoints[self.waypointIndex + 1]
+        local nextWaypointDistance = nextWaypoint and HorizontalDistance(waypoint.position, nextWaypoint.position) or 0
+        local edgeKind = waypoint.edge and waypoint.edge.kind or nil
+        -- Log the physical margin at each waypoint so collision size and route geometry can calibrate the threshold.
+        self.logger:debug(
+            "Navigation waypoint reached: index=%d/%d distance=%.2f threshold=%.2f player=(%.2f, %.2f, %.2f) waypoint=(%.2f, %.2f, %.2f) boundSize2D=(%.2f, %.2f) velocity=(%.2f, %.2f, %.2f) nextDistance=%.2f edgeKind=%s final=%s",
+            self.waypointIndex,
+            table.size(self.waypoints),
+            waypointDistance,
+            waypointReachedDistance,
+            player.position.x,
+            player.position.y,
+            player.position.z,
+            waypoint.position.x,
+            waypoint.position.y,
+            waypoint.position.z,
+            boundSize and boundSize.x or 0,
+            boundSize and boundSize.y or 0,
+            velocity and velocity.x or 0,
+            velocity and velocity.y or 0,
+            velocity and velocity.z or 0,
+            nextWaypointDistance,
+            tostring(edgeKind),
+            tostring(nextWaypoint == nil)
+        )
         self.waypointIndex = self.waypointIndex + 1
         waypoint = self.waypoints[self.waypointIndex]
         if not waypoint then

@@ -27,10 +27,11 @@ Morrowind MCP を使ってゲームをプレイします。開始時に自立レ
 - 探索モードでは `tests/game_progression/run.py --validate-only` を使い、出力 JSON の構造を確認してよい。ソースコード、設定、既存テストの変更は行わない。
 
 ## 常にやること
-1. Memory resource が利用可能な場合は、開始時と目的判断が必要な状態変化後に、まず `morrowind://memory/index.json` を `resources/read` で読みます。index の `links` を正規の階層として辿り、目的に関係する player、journal、quest、actor、dialogue などの下位 resource を `resources/read` で本文まで読みます。`resources/subscribe` が利用可能な場合は root index を常時 subscribe し、目的に関係する上位 index または collection だけを基本 subscribe 対象にします。actor dialogue や個別 quest などの leaf resource は、現在の話者または目的に直接関係する間だけ一時 subscribe します。目的達成、会話終了、対象変更、またはセル移動で leaf が不要になったときは、`resources/unsubscribe` が利用可能なら unsubscribe します。`notifications/resources/updated` を受けた URI を `resources/read` で再読し、root index の更新時は links を再評価して必要な上位 index と一時的な leaf だけを差し替えます。通知監視、subscribe、または unsubscribe が利用できない場合は、重要な状態変化の後に root index と関連する下位 resource を再読します。NPC 発話、通知、クエスト更新、または操作結果の意味が曖昧な場合は、root index と関連する下位 resource を再読して、話者、指示、目的、次の候補行動を本文から判断します。UI の名前、target、位置だけで目的を推測しません。Memory resource または本文を取得できない場合は、その不在を根拠として記録します。
-2. 進行探索では最新の `mcp_discover.ps1` 記録、resources、読み取り用 tools で現在の状態を確認してから行動します。
-3. 指定レベルのユーザー関与を越えず、目的に必要な操作を行います。
-4. 操作後は結果を確認し、失敗した場合は状態を再取得して、指定レベルに許される範囲で次の手段を選びます。
+1. `morrowind://memory/index.json` は Memory resource hierarchy の root として、任意の時点で `resources/read` してよい。その `links` を正規の階層として辿り、目的に関係する player、journal、quest、actor、dialogue、notification、objective などの linked resource を `resources/read` で本文まで読む。root の `links` が空、または目標に無関係でも、それは読取時点の状態だけを示し、以後の Memory read を不要にはしない。ゲーム内状態、cell、dialogue、quest、target、notification、または目的判断に必要な状態が変化した後は、次の状態依存操作を選ぶ前に root を再読し、必要な linked resource を改めて読む。`resources/subscribe` が利用可能な場合は root index を常時 subscribe し、目的に関係する上位 index または collection だけを基本 subscribe 対象にする。actor dialogue や個別 quest などの leaf resource は、現在の話者または目的に直接関係する間だけ一時 subscribe する。目的達成、会話終了、対象変更、またはセル移動で leaf が不要になったときは、`resources/unsubscribe` が利用可能なら unsubscribe する。`notifications/resources/updated` を受けた URI を `resources/read` で再読し、root の更新時は links を再評価して必要な上位 index と一時的な leaf だけを差し替える。通知監視、subscribe、または unsubscribe が利用できない場合も、重要な状態変化の後に root と関連する linked resource を再読する。NPC 発話、通知、クエスト更新、または操作結果の意味が曖昧な場合は、本文から話者、指示、目的、次の候補行動を判断し、UI の名前、target、位置だけで目的を推測しない。Memory 本文を取得できない場合は、その不在を根拠として記録する。
+2. 最初のゲーム内状態依存操作を選ぶ前と、game state、cell、dialogue、quest、target、notification、または tool/resource capability surface の変化後に、`mw-capabilities-fetch` で候補 tool の general `conditions` を確認する。これは現在状態での実行可否を保証しない助言なので、最新の discovery、resources、読み取り用 tools と各 tool の即時 validation を併用する。
+3. 進行探索では最新の `mcp_discover.ps1` 記録、resources、読み取り用 tools で現在の状態を確認してから行動する。
+4. 指定レベルのユーザー関与を越えず、目的に必要な操作を行う。
+5. 操作後は結果を確認する。操作がエラーになったら、同じ操作を繰り返す前にエラー内容と現在の観測を確認する。menu、入力欄、または選択対象の指定が誤っていることを示すエラーなら、対応する UI と tool の公開 inputSchema を読み直す。ゲーム内の状況、目的、対象、会話、クエスト、または操作可否が変化・不明確であれば、読み取り用 tool と `mw-capabilities-fetch` を再度呼ぶ。必要なら `morrowind://memory/index.json` を再読し、`links` から現在の目的に関係する resource を読む。再観測しても同じ候補しかなく根拠が増えない場合は、同じ失敗操作を繰り返さない。指定レベルに許される範囲で次の手段を選ぶ。
 
 ## 確認すべきこと
 - 自立レベル、目的、現在のゲーム状態が明確か。

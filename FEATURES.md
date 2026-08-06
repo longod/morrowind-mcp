@@ -26,6 +26,7 @@
 
 | Name | Title | Description | Input | Output | Annotations |
 |---|---|---|---|---|---|
+| `mw-capabilities-fetch` | | Fetch general conditions for published tools. | <ul><li>`tool_name` (string, optional) - Optional published tool name to filter by.</li></ul> | <ul><li>`tools` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-activator-fetch` | | Fetch active activators in current cells. | | <ul><li>`activators` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-actor-fetch` | | Fetch active actors in current cells. | | <ul><li>`actors` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-debug-action` | | Perform a debug command. | <ul><li>`action` (string, required) - Dump all Memory documents to Data Files\MWSE\mods\morrowind-mcp\memory-dump\</li></ul> | | |

@@ -27,8 +27,6 @@ local memory = require("morrowind-mcp.resources.memory.manager")
 local this = {}
 setmetatable(this, { __index = base })
 
--- TODO cache resource list and resources.
-
 ---@param params table?
 ---@return MCP.ResourceManager
 function this.new(params)
@@ -104,8 +102,6 @@ end
 ---@param params MCP.PaginatedRequestParams
 ---@return MCP.MethodResult
 function this:OnResourcesList(params)
-    -- crawl files from resource directory, or maybe only registered resources
-    -- TODO implementation to resources/
     -- TODO pagenation support
 
     ---@type MCP.ListResourcesResult

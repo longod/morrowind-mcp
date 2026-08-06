@@ -40,7 +40,7 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(params)
+function this:IsPublished()
     return config.development.debug
 end
 

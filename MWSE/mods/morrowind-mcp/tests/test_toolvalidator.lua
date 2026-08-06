@@ -133,6 +133,14 @@ function this.Test()
         unitwind:expect(HasErrorPath(invalidResult, "name")).toBe(true)
     end)
 
+    unitwind:test("ITool provides static publication and capability conditions", function()
+        local tool = itool.new()
+
+        unitwind:expect(tool:IsPublished()).toBe(true)
+        unitwind:expect(tool:GetCapabilityConditions()).toBe("This tool has no additional runtime conditions.")
+        unitwind:expect(tool:CanExecute({}, nil)).toBe(true)
+    end)
+
     local testsPassed = unitwind.testsPassed
     local testsFailed = unitwind.testsFailed
     unitwind:finish()

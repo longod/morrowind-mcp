@@ -135,7 +135,7 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(params)
+function this:CanExecute(arguments, context)
     return true
 end
 

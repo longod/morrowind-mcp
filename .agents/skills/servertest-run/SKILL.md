@@ -70,7 +70,7 @@ Inspector集約ログのJSONは既定でpretty-printされる。エージェン�
 - `tests/server_test.ps1` は実行終了時に `MWSE.log` を `mwse_<timestamp>.log` としてコピー保存する。サーバー側検証はこのコピーを優先利用できる。
 - `tests/server_test.ps1` の既定動作では接続確認後に foreground 化を試行する。バックグラウンドではキーボードのキー入力やマウスのボタン入力が送られないため、入力を使う検証では foreground 化が必要。入力送信が不要な検証は `-NoForeground` を使ってよい。
 - `tools/list` は prefixed name（例: `mw_...`）と prefixed title/description を確認し、`tools/call` も公開後の prefixed name で呼び出す
-- Continueメニューの`mouseClick`後は、`mw-player-fetch`が公開されるまで`tools/list`を再試行し、後続ケースで使うtool一覧を更新する。続けて`prompts/list`も再取得し、prompt一覧を現在のゲーム状態へ同期する。
+- tools と prompts は固定カタログとして常時公開される。Continueメニューの`mouseClick`後に一覧を再取得する場合も、公開可否の同期ではなく schema 変更がないことの確認として扱う。
 - screenshot resource の検証では巨大な blob 全体をログに出さず、URI / mimeType / blob length と形式シグネチャだけ確認する
 - 正常な JPEG blob は base64 先頭が `/9j/` で始まる
 

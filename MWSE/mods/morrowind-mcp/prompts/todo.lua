@@ -26,7 +26,7 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(params)
+function this:CanExecute(arguments, context)
     -- if tes3.onMainMenu() then
     --     return false
     -- end

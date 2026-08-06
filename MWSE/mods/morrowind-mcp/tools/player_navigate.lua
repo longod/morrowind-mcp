@@ -1,4 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
+local availability = require("morrowind-mcp.core.toolavailability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local cellutil = require("morrowind-mcp.tes3.cell")
 
@@ -48,10 +49,22 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(params)
-    -- can get on main menu?
+function this:GetCapabilityConditions()
+    return "A game must be active and the player must be loaded. Navigation also requires a reachable destination."
+end
+
+function this:CanExecute(arguments, context)
     if tes3.onMainMenu() then
-        return false
+        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
+    end
+    if not tes3.player then
+        return false, availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+    end
+    if arguments["action"] == "navigate" and (not context or not context.NavigatePlayer) then
+        return false, availability.Unavailable(
+            availability.reason.navigationUnavailable,
+            "Use a server that provides player navigation."
+        )
     end
     return true
 end

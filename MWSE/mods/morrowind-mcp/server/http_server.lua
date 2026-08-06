@@ -24,7 +24,6 @@ local maxNotificationQueueSize = 128
 local serverPingIntervalSeconds = 60
 local serverPingTimeoutSeconds = 30
 local sessionIdleTimeoutSeconds = 300
-local pollingIntervalSeconds = 10.0
 local protocolVersion = "2025-11-25"
 
 ---@param response string?
@@ -126,13 +125,9 @@ end
 ---@field methodHandlers table<string, fun(self: MCP.MwseHttpServer, params: MCP.RequestParams, request: MCP.ClientRequest?): MCP.MethodResult>
 ---@field prompts table<string, MCP.IPrompt>
 ---@field tools table<string, MCP.ITool>
----@field promptsStatus table<string, boolean>
----@field toolsStatus table<string, boolean>
 ---@field resource MCP.ResourceManager
 ---@field sessions table<string, MCP.HttpSession>
 ---@field nextSessionIndex integer
----@field lastPollingPromptsInterval number
----@field lastPollingToolsInterval number
 ---@field pathfinding MCP.Pathfinding
 ---@field activeNavigator MCP.Navigator?
 local this = {}
@@ -154,9 +149,6 @@ function this.new(params)
     instance.activeNavigator = nil
     instance.sessions = {}
     instance.nextSessionIndex = 0
-    instance.lastPollingPromptsInterval = 0
-    instance.lastPollingToolsInterval = pollingIntervalSeconds /
-    2.0                                                              -- cycle prompts and tools polling to avoid simultaneous polling
     instance.requestHandlers = {
         [http.method.POST] = instance.OnPOST,
         [http.method.GET] = instance.OnGET,
@@ -678,7 +670,6 @@ function this:LoadPrompts()
             end
         end
     end
-    self.promptsStatus = table.new(0, table.size(self.prompts))
 end
 
 function this:LoadTools()
@@ -686,6 +677,10 @@ function this:LoadTools()
     local dir = settings.modDir .. "tools\\"
     local params = {
         resource = self.resource,
+        -- Capability discovery reads static metadata through this callback without depending on the server type.
+        GetPublishedTools = function()
+            return self.tools
+        end,
     }
 
     for file in lfs.dir(dir) do
@@ -695,7 +690,11 @@ function this:LoadTools()
             if tool and type(tool) == "table" then
                 local success, instance = pcall(tool.new, params)
                 if success and instance and instance.definition then
-                    self.tools[instance.definition.name] = instance
+                    -- Freeze the public catalog at server startup. Runtime checks belong to CanExecute,
+                    -- so later configuration changes do not silently require a list_changed notification.
+                    if instance:IsPublished() then
+                        self.tools[instance.definition.name] = instance
+                    end
                 else
                     self.logger:error("Failed to initialize tool from file: %s", file)
                 end
@@ -704,7 +703,6 @@ function this:LoadTools()
             end
         end
     end
-    self.toolsStatus = table.new(0, table.size(self.tools))
 end
 
 function this:ReleasePrompts()
@@ -807,46 +805,15 @@ function this:OnInitialize(params)
     }
 end
 
-function this:CanExecuteAllPrompts()
-    local changed = false
-    for name, prompt in pairs(self.prompts) do
-        local can = prompt:CanExecute({})
-        if self.promptsStatus[name] ~= can then
-            changed = true
-            self.promptsStatus[name] = can
-            self.logger:trace("Prompt executable changed: %s is %s", name, tostring(can))
-        end
-    end
-    return changed
-end
-
-function this:CanExecuteAllTools()
-    local changed = false
-    for name, tool in pairs(self.tools) do
-        local can = tool:CanExecute({})
-        if self.toolsStatus[name] ~= can then
-            changed = true
-            self.toolsStatus[name] = can
-            self.logger:trace("Tool executable changed: %s is %s", name, tostring(can))
-        end
-    end
-    return changed
-end
-
 ---@param params MCP.PaginatedRequestParams
 ---@return MCP.MethodResult
 function this:OnPromptsList(params)
     ---@type MCP.ListPromptsResult
     local result = jsonrpc.ListPromptsResult(table.size(self.prompts))
 
-    for name, prompt in spairs(self.prompts) do
-        local can = prompt:CanExecute({})
-        if can then
-            table.insert(result.prompts, prompt.definition)
-        end
-        self.promptsStatus[name] = can
+    for _, prompt in spairs(self.prompts) do
+        table.insert(result.prompts, prompt.definition)
     end
-    self.lastPollingPromptsInterval = 0
 
     ---@type MCP.MethodResult
     return {
@@ -939,14 +906,9 @@ function this:OnToolsList(params)
     ---@type MCP.ListToolsResult
     local result = jsonrpc.ListToolsResult(table.size(self.tools))
 
-    for name, tool in spairs(self.tools) do
-        local can = tool:CanExecute({})
-        if can then
-            table.insert(result.tools, tool.definition)
-        end
-        self.toolsStatus[name] = can
+    for _, tool in spairs(self.tools) do
+        table.insert(result.tools, tool.definition)
     end
-    self.lastPollingToolsInterval = 0
 
     ---@type MCP.MethodResult
     return {
@@ -973,22 +935,7 @@ function this:OnToolsCall(params, request)
         return {
             http_response = http.response_code.bad_request,
             error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.method_not_found,
-                string.format("Tool is unavailable or unknown: %s. Call %s to confirm current availability.",
-                    tostring(params.name), mcp.method.tools_call)),
-        }
-    end
-
-
-    if not tool:CanExecute(params) then
-        -- Runtime availability is not an authorization failure. Keep the HTTP transport successful so
-        -- clients do not attempt OAuth discovery, and surface the condition through the MCP tool result.
-        local message = string.format(
-            "Tool is unavailable in the current game state: %s. Call %s to confirm current availability.",
-            tostring(params.name), mcp.method.tools_call)
-        ---@type MCP.MethodResult
-        return {
-            http_response = http.response_code.ok,
-            result = jsonrpc.CallToolResult(jsonrpc.TextContent(message), nil, true),
+                string.format("Tool is unavailable or unknown: %s.", tostring(params.name))),
         }
     end
 
@@ -1018,6 +965,23 @@ function this:OnToolsCall(params, request)
             return self:StartPlayerNavigation(destination)
         end,
     }
+
+    local canExecute, availability = tool:CanExecute(params.arguments, context)
+    if not canExecute then
+        -- Runtime availability is not an authorization failure. Keep the HTTP transport successful so
+        -- clients do not attempt OAuth discovery, and surface the condition through the MCP tool result.
+        local guidance = availability and availability.guidance or "The current game state does not permit this tool."
+        local message = string.format("%s Call mw-capabilities-fetch to inspect general tool conditions.", guidance)
+        local structuredContent = availability and jsonrpc.object({
+            reason = availability.reason,
+            guidance = availability.guidance,
+        }) or nil
+        ---@type MCP.MethodResult
+        return {
+            http_response = http.response_code.ok,
+            result = jsonrpc.CallToolResult(jsonrpc.TextContent(message), structuredContent, true),
+        }
+    end
 
     if config.indicator.toolsCall and tes3.isInitialized() then
         -- Insert clear visual indicators when tools are invoked
@@ -1059,18 +1023,6 @@ function this:OnPromptsGet(params)
                     tostring(params.name), mcp.method.prompts_list)),
         }
     end
-    if not prompt:CanExecute(params) then
-        -- Prompt availability depends on the current game state, not client authorization.
-        ---@type MCP.MethodResult
-        return {
-            http_response = http.response_code.bad_request,
-            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
-                string.format(
-                    "Prompt is unavailable in the current game state: %s. Call %s to confirm current availability.",
-                    tostring(params.name), mcp.method.prompts_list)),
-        }
-    end
-
     params.arguments = promptvalidator.NormalizeArguments(params.arguments)
     -- prompts/get has string-only arguments, so reject malformed values before prompt templates interpolate them.
     local validationResult = prompt:Validate(params)
@@ -1084,8 +1036,20 @@ function this:OnPromptsGet(params)
         }
     end
 
-    -- TODO maybe need more context table (world, player, etc...)
-    local result = prompt:Execute(params.arguments)
+    ---@type table
+    local context = {}
+    local canExecute = prompt:CanExecute(params.arguments, context)
+    if not canExecute then
+        -- Prompt availability depends on the current game state, not client authorization.
+        ---@type MCP.MethodResult
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
+                string.format("Prompt is unavailable in the current game state: %s.", tostring(params.name))),
+        }
+    end
+
+    local result = prompt:Execute(params.arguments, context)
 
     ---@type MCP.MethodResult
     return {
@@ -1590,24 +1554,7 @@ end
 
 --- @param e enterFrameEventData
 function this:PollPrimitiveCondition(e)
-    self.lastPollingPromptsInterval = self.lastPollingPromptsInterval + e.delta
-    self.lastPollingToolsInterval = self.lastPollingToolsInterval + e.delta
-    if self.lastPollingToolsInterval >= pollingIntervalSeconds then
-        if self:CanExecuteAllTools() then
-            self:NotifyToolListChanged()
-        end
-        self.logger:trace("Polling tools for executable changes (interval=%f seconds)", self.lastPollingToolsInterval)
-        self.lastPollingToolsInterval = 0
-    elseif self.lastPollingPromptsInterval >= pollingIntervalSeconds then
-        if self:CanExecuteAllPrompts() then
-            self:NotifyPromptListChanged()
-        end
-        self.logger:trace("Polling prompts for executable changes (interval=%f seconds)", self
-        .lastPollingPromptsInterval)
-        self.lastPollingPromptsInterval = 0
-    end
-
-    -- no polling time?
+    -- Resource changes remain dynamic even though the tool and prompt catalogs are static.
     if self.resource:IsChangedResourceList() then
         self:NotifyResourceListChanged()
         self.resource:ResetChangedResourceList()

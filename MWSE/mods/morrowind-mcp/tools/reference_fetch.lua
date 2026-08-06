@@ -1,4 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
+local availability = require("morrowind-mcp.core.toolavailability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
 local iter = require("morrowind-mcp.tes3.iterator")
@@ -49,9 +50,16 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(params)
+function this:GetCapabilityConditions()
+    return "A game must be active and at least one cell must be loaded."
+end
+
+function this:CanExecute(arguments, context)
     if tes3.onMainMenu() then
-        return false
+        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
+    end
+    if not tes3.getActiveCells() then
+        return false, availability.Unavailable(availability.reason.noActiveCells, "Wait until the player has entered a cell.")
     end
     return true
 end

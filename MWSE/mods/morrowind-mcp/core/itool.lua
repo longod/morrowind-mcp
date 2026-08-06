@@ -28,10 +28,26 @@ end
 function this:Release()
 end
 
+--- Return whether this tool belongs to the server's static public API.
 ---@public
----@param params table
 ---@return boolean
-function this:CanExecute(params)
+function this:IsPublished()
+    return true
+end
+
+--- Describe the general conditions under which this tool can be used.
+---@public
+---@return string
+function this:GetCapabilityConditions()
+    return "This tool has no additional runtime conditions."
+end
+
+---@public
+---@param arguments MCP.AnyMap
+---@param context MCP.ToolExecutionContext?
+---@return boolean
+---@return MCP.ToolAvailability?
+function this:CanExecute(arguments, context)
     return true
 end
 
