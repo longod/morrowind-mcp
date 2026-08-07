@@ -295,10 +295,11 @@ function Invoke-MCPInspector {
 function Assert-InspectorSuccess {
     param(
         [Parameter(Mandatory = $true)]
-        [pscustomobject]$Response
+        [pscustomobject]$Response,
+        [bool]$AllowToolError = $false
     )
 
-    if ($Response.ExitCode -ne 0) {
+    if ($Response.ExitCode -ne 0 -and -not $AllowToolError) {
         throw "Inspector exited with code $($Response.ExitCode)."
     }
     if ($Response.ParseError) {
@@ -323,6 +324,17 @@ function Assert-ToolSuccess {
     }
 }
 
+function Assert-ToolError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Result
+    )
+
+    if ($Result.isError -ne $true) {
+        throw "Tool did not return isError=true."
+    }
+}
+
 function New-ServerTestCase {
     param(
         [Parameter(Mandatory = $true)]
@@ -334,7 +346,8 @@ function New-ServerTestCase {
         [scriptblock]$Capture,
         [scriptblock]$RetryUntil,
         [int]$RetryAttempts = 1,
-        [int]$RetryIntervalSeconds = 0
+        [int]$RetryIntervalSeconds = 0,
+        [bool]$AllowToolError = $false
     )
 
     return [pscustomobject]@{
@@ -346,6 +359,7 @@ function New-ServerTestCase {
         RetryUntil = $RetryUntil
         RetryAttempts = $RetryAttempts
         RetryIntervalSeconds = $RetryIntervalSeconds
+        AllowToolError = $AllowToolError
     }
 }
 
@@ -374,10 +388,11 @@ function New-ToolCallTestCase {
         [hashtable]$ToolArguments,
         [scriptblock]$When,
         [scriptblock]$Validate,
-        [scriptblock]$Capture
+        [scriptblock]$Capture,
+        [bool]$AllowToolError = $false
     )
 
-    return New-ServerTestCase -Name $Name -Arguments (New-ToolCallArguments -ToolName $ToolName -ToolArguments $ToolArguments) -When $When -Validate $Validate -Capture $Capture
+    return New-ServerTestCase -Name $Name -Arguments (New-ToolCallArguments -ToolName $ToolName -ToolArguments $ToolArguments) -When $When -Validate $Validate -Capture $Capture -AllowToolError $AllowToolError
 }
 
 function New-PromptGetTestCase {
@@ -436,7 +451,7 @@ function Invoke-ServerTestCase {
         for ($attempt = 1; $attempt -le $TestCase.RetryAttempts; $attempt++) {
             $arguments = if ($TestCase.Arguments -is [scriptblock]) { & $TestCase.Arguments $Context } else { $TestCase.Arguments }
             $response = Invoke-MCPInspector $arguments
-            Assert-InspectorSuccess -Response $response
+            Assert-InspectorSuccess -Response $response -AllowToolError $TestCase.AllowToolError
             if ($TestCase.Validate) {
                 & $TestCase.Validate $response.Result $Context
             }
@@ -551,7 +566,7 @@ try {
     # New-ToolCallTestCase for tools/call. Validate receives ($result, $context).
     $TestCases = @(
         (New-ServerTestCase -Name "initialize" -Arguments @("--method", "initialize") -Validate { param($result) if ([string]::IsNullOrWhiteSpace($result.protocolVersion) -or -not $result.serverInfo -or -not $result.capabilities) { throw "Initialize response is incomplete." } }),
-        (New-ServerTestCase -Name "tools list" -Arguments @("--method", "tools/list") -Validate { param($result) $names = @($result.tools | ForEach-Object { $_.name }); foreach ($name in @("mw-capabilities-fetch", "mw-menu-fetch", "mw-player-fetch", "mw-screenshot-save", "mw-debug-action")) { if ($names -notcontains $name) { throw "Missing tool: $name" } }; if (@($result.tools | Where-Object { $_.name -notmatch '^mw-' }).Count -gt 0) { throw "Tool name is missing the mw- prefix." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) }),
+        (New-ServerTestCase -Name "tools list" -Arguments @("--method", "tools/list") -Validate { param($result) $names = @($result.tools | ForEach-Object { $_.name }); foreach ($name in @("mw-capabilities-fetch", "mw-menu-fetch", "mw-player-fetch", "mw-player-look", "mw-screenshot-save", "mw-debug-action")) { if ($names -notcontains $name) { throw "Missing tool: $name" } }; if (@($result.tools | Where-Object { $_.name -notmatch '^mw-' }).Count -gt 0) { throw "Tool name is missing the mw- prefix." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) }),
         (New-ToolCallTestCase -Name "capabilities fetch" -ToolName "mw-capabilities-fetch" -Validate { param($result) Assert-ToolSuccess $result; $reference = @($result.structuredContent.tools | Where-Object { $_.name -eq "mw-reference-fetch" }); if ($reference.Count -ne 1 -or [string]::IsNullOrWhiteSpace($reference[0].conditions)) { throw "Reference fetch conditions are missing." } }),
         (New-ServerTestCase -Name "resources list" -Arguments @("--method", "resources/list") -Validate { param($result) if (@($result.resources | Where-Object { $_.uri -eq "morrowind://memory/index.json" -and $_.mimeType -eq "application/json" }).Count -ne 1) { throw "Memory root resource is missing." } } -Capture { param($result, $context) $context.ResourceUris = @($result.resources | ForEach-Object { $_.uri }) }),
         (New-ServerTestCase -Name "prompts list" -Arguments @("--method", "prompts/list") -Validate { param($result) $names = @($result.prompts | ForEach-Object { $_.name }); foreach ($name in @("mw-loar", "mw-todo", "mw-translate", "mw-walkthrough")) { if ($names -notcontains $name) { throw "Missing prompt: $name" } } } -Capture { param($result, $context) $context.PromptNames = @($result.prompts | ForEach-Object { $_.name }) }),
@@ -587,16 +602,37 @@ try {
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
             if ($text -ne "Player navigation started.") { throw "Navigation did not report a successful start." }
         }),
-        (New-ToolCallTestCase -Name "player navigate cancel active route" -ToolName "mw-player-navigate" -ToolArguments @{ action = "cancel_navigation" } -When { param($context) $context.ToolNames -contains "mw-player-navigate" } -Validate {
+        (New-ToolCallTestCase -Name "player look cancels active navigation" -ToolName "mw-player-look" -ToolArguments @{ mode = "angles"; yaw = 90; pitch = 0 } -When { param($context) $context.ToolNames -contains "mw-player-look" } -Validate {
             param($result)
             Assert-ToolSuccess $result
+            if ($result.structuredContent.navigation_cancelled -ne $true) { throw "Player look did not cancel active navigation." }
+            if ($result.structuredContent.yaw -ne 90 -or $result.structuredContent.pitch -ne 0) { throw "Player look did not apply the requested absolute angles." }
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
-            if ($text -ne "Player navigation cancelled.") { throw "Navigation cancellation did not report success." }
+            if ($text -ne "Player view updated.") { throw "Player look did not report success." }
         }),
+        (New-ToolCallTestCase -Name "player look rejects incomplete angles" -ToolName "mw-player-look" -ToolArguments @{ mode = "angles"; yaw = 90 } -When { param($context) $context.ToolNames -contains "mw-player-look" } -Validate {
+            param($result)
+            Assert-ToolError $result
+        } -AllowToolError $true),
+        (New-ToolCallTestCase -Name "player look rejects unknown target" -ToolName "mw-player-look" -ToolArguments @{ mode = "target"; target_id = "mwmcp_missing_look_target" } -When { param($context) $context.ToolNames -contains "mw-player-look" } -Validate {
+            param($result)
+            Assert-ToolError $result
+            $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
+            if ($text -ne "The requested target was not found in active cells.") { throw "Unknown look target returned an unexpected error." }
+        } -AllowToolError $true),
         (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
-        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } } -Capture { param($result, $context) $actor = @($result.structuredContent.actors | Select-Object -First 1)[0]; if ($actor -and -not [string]::IsNullOrWhiteSpace($actor.id)) { $context.PlayerLookTargetId = $actor.id } }),
+        (New-ServerTestCase -Name "player look target active reference" -Arguments {
+            param($context)
+            New-ToolCallArguments -ToolName "mw-player-look" -ToolArguments @{ mode = "target"; target_id = $context.PlayerLookTargetId }
+        } -When { param($context) $context.ToolNames -contains "mw-player-look" -and -not [string]::IsNullOrWhiteSpace($context.PlayerLookTargetId) } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            if ($result.structuredContent.navigation_cancelled -ne $false) { throw "Player look unexpectedly cancelled navigation." }
+            if ([string]::IsNullOrWhiteSpace($result.structuredContent.target_point_kind)) { throw "Player look target mode did not report a target point kind." }
+        }),
         (New-ToolCallTestCase -Name "target fetch" -ToolName "mw-target-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "world fetch" -ToolName "mw-world-fetch" -When { param($context) $context.ToolNames -contains "mw-world-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "activate action" -ToolName "mw-player-action" -ToolArguments @{ action = "activate"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
