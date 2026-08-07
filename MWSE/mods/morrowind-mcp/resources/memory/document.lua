@@ -71,6 +71,15 @@ local readPolicy = {
 }
 this.readPolicy = readPolicy
 
+--- Coarse game lifecycle state exposed by the root Memory index.
+---@enum MCP.MemoryGameState
+local gameState = {
+    mainMenu = "main_menu",
+    characterGeneration = "character_generation",
+    inGame = "in_game",
+}
+this.gameState = gameState
+
 --- Boundary kind that identifies which loaded-game context a Memory document belongs to.
 ---@enum MCP.MemoryScopeKind
 local scopeKind = {

@@ -15,6 +15,7 @@ function this.Test()
     local imodule = require("morrowind-mcp.resources.memory.imodule")
     local manager = require("morrowind-mcp.resources.memory.manager")
     local actor = require("morrowind-mcp.resources.memory.actor")
+    local index = require("morrowind-mcp.resources.memory.index")
     local unattributed = require("morrowind-mcp.resources.memory.unattributed")
     local unattributedDialogue = require("morrowind-mcp.resources.memory.unattributed_dialogue")
     local notification = require("morrowind-mcp.resources.memory.notification")
@@ -295,6 +296,90 @@ function this.Test()
 
         unitwind:expect(table.size(published)).toBe(1)
         unitwind:expect(published[1]).toBe("morrowind://memory/index.json")
+    end)
+
+    testMemoryModule("Memory root index reports exclusive game lifecycle state", function()
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local fakeManager = {
+            GetScope = function(self) return document.Scope(1) end,
+            GetRootLinks = function(self) return {} end,
+            OnModuleVisibilityChanged = function(self, module) end,
+        }
+        local onMainMenu = true
+        local charGenRunning = false
+        unitwind:mock(tes3, "onMainMenu", function() return onMainMenu end)
+        unitwind:mock(tes3, "isCharGenRunning", function() return charGenRunning end)
+        local module = index.new({ resource = resource, manager = fakeManager })
+
+        unitwind:expect(module:BuildDocument().data.game_state).toBe(document.gameState.mainMenu)
+
+        local initialJson = module.entry.handler(module.entry.descriptor)[1].text
+        unitwind:expect(string.find(initialJson, '"game_state":"main_menu"', 1, true) ~= nil).toBe(true)
+
+        onMainMenu = false
+        charGenRunning = true
+        unitwind:expect(module:BuildDocument().data.game_state).toBe(document.gameState.characterGeneration)
+
+        charGenRunning = false
+        unitwind:expect(module:BuildDocument().data.game_state).toBe(document.gameState.inGame)
+        unitwind:expect(module.entry.handler(module.entry.descriptor)[1].text).toBe(initialJson)
+
+        module:OnCharGenFinished()
+        local refreshedJson = module.entry.handler(module.entry.descriptor)[1].text
+        unitwind:expect(string.find(refreshedJson, '"game_state":"in_game"', 1, true) ~= nil).toBe(true)
+    end)
+
+    testMemoryModule("Memory root index invalidates after lifecycle transitions", function()
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local fakeManager = {
+            GetScope = function(self) return document.Scope(1) end,
+            GetRootLinks = function(self) return {} end,
+            OnModuleVisibilityChanged = function(self, module) end,
+        }
+        local registered = {}
+        local unregistered = {}
+        unitwind:mock(event, "register", function(eventName, callback, options)
+            table.insert(registered, { eventName = eventName, callback = callback, options = options })
+        end)
+        unitwind:mock(event, "unregister", function(eventName, callback, options)
+            table.insert(unregistered, { eventName = eventName, callback = callback, options = options })
+        end)
+        local module = index.new({ resource = resource, manager = fakeManager })
+
+        module:RegisterEvent()
+        module.entry.cache.dirty = false
+        module:OnMainMenuActivated()
+        unitwind:expect(module.entry.cache.dirty).toBe(true)
+
+        module.entry.cache.dirty = false
+        module:OnCharGenFinished()
+        unitwind:expect(module.entry.cache.dirty).toBe(true)
+        unitwind:expect(table.size(registered)).toBe(3)
+        unitwind:expect(registered[1].eventName).toBe(tes3.event.loaded)
+        unitwind:expect(registered[2].eventName).toBe(tes3.event.uiActivated)
+        unitwind:expect(registered[2].options.filter).toBe("MenuMain")
+        unitwind:expect(registered[3].eventName).toBe(tes3.event.charGenFinished)
+
+        module.entry.cache.dirty = false
+        registered[2].callback({})
+        unitwind:expect(module.entry.cache.dirty).toBe(true)
+
+        module.entry.cache.dirty = false
+        registered[3].callback({})
+        unitwind:expect(module.entry.cache.dirty).toBe(true)
+
+        module:UnregisterEvent()
+        unitwind:expect(table.size(unregistered)).toBe(3)
+        unitwind:expect(unregistered[1].eventName).toBe(tes3.event.uiActivated)
+        unitwind:expect(unregistered[1].options.filter).toBe("MenuMain")
+        unitwind:expect(unregistered[2].eventName).toBe(tes3.event.charGenFinished)
+        unitwind:expect(unregistered[3].eventName).toBe(tes3.event.loaded)
     end)
 
     testMemoryModule("Memory manager saves current debug documents once per URI", function()

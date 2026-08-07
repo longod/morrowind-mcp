@@ -83,6 +83,11 @@
 ---@field updated_at MCP.MemoryTimestamp? Explicit document update timestamp.
 ---@field in_game_time MCP.DateTimeInGame? In-game time used when generating the default update timestamp.
 
+--- Payload written by the root Memory index.
+---@class MCP.MemoryRootIndexData
+---@field root_count integer Number of visible top-level Memory resources.
+---@field game_state MCP.MemoryGameState Current coarse game lifecycle state.
+
 --- Per-resource cache for either lazy live documents or eagerly serialized snapshots.
 ---@class MCP.MemoryCacheState
 ---@field read_policy MCP.MemoryReadPolicy

@@ -12,6 +12,7 @@ local reason = {
     playerUnavailable = "player_unavailable",
     inputBindingUnavailable = "input_binding_unavailable",
     navigationUnavailable = "navigation_unavailable",
+    noActiveNavigation = "no_active_navigation",
 }
 
 this.reason = reason

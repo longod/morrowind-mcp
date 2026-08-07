@@ -587,6 +587,12 @@ try {
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
             if ($text -ne "Player navigation started.") { throw "Navigation did not report a successful start." }
         }),
+        (New-ToolCallTestCase -Name "player navigate cancel active route" -ToolName "mw-player-navigate" -ToolArguments @{ action = "cancel_navigation" } -When { param($context) $context.ToolNames -contains "mw-player-navigate" } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
+            if ($text -ne "Player navigation cancelled.") { throw "Navigation cancellation did not report success." }
+        }),
         (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),

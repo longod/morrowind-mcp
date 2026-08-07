@@ -86,6 +86,48 @@ function this.Test()
         unitwind:expect(instance.result.message).toBe("Cancelled by local Escape key.")
     end)
 
+    unitwind:test("Navigation fails after the configured duration without sufficient movement", function()
+        local registered = {}
+        local released = 0
+        unitwind:mock(tes3, "player", { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } })
+        unitwind:mock(tes3, "getInputBinding", function() return { device = 0, code = 17 } end)
+        unitwind:mock(tes3, "pushKey", function() end)
+        unitwind:mock(tes3, "releaseKey", function() released = released + 1 end)
+        unitwind:mock(tes3, "rayTest", function() return nil end)
+        unitwind:mock(event, "register", function(eventId, callback) registered[eventId] = callback end)
+        unitwind:mock(event, "unregister", function() end)
+
+        local instance = navigator.new({ pathfinding = Graph({ walk = 1 }) })
+        unitwind:expect(instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })).toBe(true)
+        registered[tes3.event.simulate]({ delta = 4.99 })
+        unitwind:expect(instance.isActive).toBe(true)
+        registered[tes3.event.simulate]({ delta = 0.01 })
+        unitwind:expect(instance.isActive).toBe(false)
+        unitwind:expect(instance.result.status).toBe("failed")
+        unitwind:expect(instance.result.message:find("player position", 1, true) ~= nil).toBe(true)
+        unitwind:expect(released).toBe(1)
+    end)
+
+    unitwind:test("Sufficient movement resets the navigation stuck timer", function()
+        local registered = {}
+        local player = { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } }
+        unitwind:mock(tes3, "player", player)
+        unitwind:mock(tes3, "getInputBinding", function() return { device = 0, code = 17 } end)
+        unitwind:mock(tes3, "pushKey", function() end)
+        unitwind:mock(tes3, "releaseKey", function() end)
+        unitwind:mock(tes3, "rayTest", function() return nil end)
+        unitwind:mock(event, "register", function(eventId, callback) registered[eventId] = callback end)
+        unitwind:mock(event, "unregister", function() end)
+
+        local instance = navigator.new({ pathfinding = Graph({ walk = 1 }) })
+        unitwind:expect(instance:Start({ cell = player.cell, position = { x = 200, y = 0, z = 0 } })).toBe(true)
+        registered[tes3.event.simulate]({ delta = 4 })
+        player.position.x = 16
+        registered[tes3.event.simulate]({ delta = 0.01 })
+        registered[tes3.event.simulate]({ delta = 4.99 })
+        unitwind:expect(instance.isActive).toBe(true)
+    end)
+
     local testsPassed = unitwind.testsPassed
     local testsFailed = unitwind.testsFailed
     unitwind:finish()

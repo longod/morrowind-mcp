@@ -10,6 +10,8 @@ local this = {}
 ---@field NotifyProgress fun(progress: number, total: number?, message: string?): boolean
 -- TODO: Move runtime operations into an MCP.ToolExecutionServices interface so the generic tool context does not depend on concrete game actions.
 ---@field NavigatePlayer fun(destination: MCP.PathfindingLocator): boolean, string?, MCP.NavigatorStartResult?
+---@field CancelPlayerNavigation fun(): boolean
+---@field HasActivePlayerNavigation fun(): boolean
 
 ---@param params table?
 ---@return MCP.ITool

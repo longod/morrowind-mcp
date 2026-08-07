@@ -198,6 +198,25 @@ function this:StartPlayerNavigation(destination)
     return true, nil, navigation
 end
 
+--- Return whether the server currently owns a running player navigation route.
+---@return boolean
+function this:HasActivePlayerNavigation()
+    return self.activeNavigator ~= nil and self.activeNavigator.isActive
+end
+
+--- Cancel the server-owned route and discard it so a later request starts from a clean state.
+---@return boolean cancelled
+function this:CancelPlayerNavigation()
+    if not self:HasActivePlayerNavigation() then
+        self.activeNavigator = nil
+        return false
+    end
+
+    self.activeNavigator:Cancel("Cancelled by tool request.")
+    self.activeNavigator = nil
+    return true
+end
+
 ---@return string
 function this:GenerateSessionId()
     -- The MCP session id must be visible ASCII; uniqueness only needs to hold for this local process.
@@ -964,6 +983,12 @@ function this:OnToolsCall(params, request)
         end,
         NavigatePlayer = function(destination)
             return self:StartPlayerNavigation(destination)
+        end,
+        CancelPlayerNavigation = function()
+            return self:CancelPlayerNavigation()
+        end,
+        HasActivePlayerNavigation = function()
+            return self:HasActivePlayerNavigation()
         end,
     }
 

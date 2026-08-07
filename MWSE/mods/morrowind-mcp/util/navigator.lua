@@ -1,10 +1,14 @@
 local playerController = require("morrowind-mcp.util.player_controller")
 
 -- Keep the player near pathgrid turns before advancing to the next route segment.
-local waypointReachedDistance = 32
+-- player boudning box is roughly 59x57.
+local waypointReachedDistance = 32 + 16
 local edgeRecoveryDistance = 192
 local obstaclePadding = 32
 local cancelKeyCode = tes3.scanCode.escape
+-- Treat persistent obstruction as a terminal failure instead of holding synthetic movement indefinitely.
+local stuckTimeoutSeconds = 5
+local stuckMovementDistance = 16
 
 ---@class MCP.NavigatorWaypoint
 ---@field position MCP.PathfindingPosition
@@ -28,10 +32,12 @@ local cancelKeyCode = tes3.scanCode.escape
 ---@field result MCP.NavigatorResult?
 ---@field simulateCallback fun(e: simulateEventData)?
 ---@field keyDownCallback fun(e: keyDownEventData)?
+---@field lastProgressPosition MCP.PathfindingPosition?
+---@field stuckElapsedSeconds number
 local this = {}
 
 --- Copy a position so navigation remains valid if the graph is refreshed during movement.
----@param position MCP.PathfindingPosition
+---@param position MCP.PathfindingPosition|tes3vector3
 ---@return MCP.PathfindingPosition
 local function CopyPosition(position)
     return { x = position.x, y = position.y, z = position.z }
@@ -78,6 +84,8 @@ function this.new(params)
         result = nil,
         simulateCallback = nil,
         keyDownCallback = nil,
+        lastProgressPosition = nil,
+        stuckElapsedSeconds = 0,
     }
     setmetatable(instance, { __index = this })
     return instance
@@ -97,6 +105,8 @@ function this:Finish(status, message)
     end
     self.controller:Release()
     self.isActive = false
+    self.lastProgressPosition = nil
+    self.stuckElapsedSeconds = 0
     self.result = { status = status, message = message }
     self.logger:info("Navigation %s: %s", status, message)
 end
@@ -155,6 +165,8 @@ function this:Start(destination)
     self.waypoints = waypoints
     self.waypointIndex = 1
     self.result = nil
+    self.lastProgressPosition = CopyPosition(player.position)
+    self.stuckElapsedSeconds = 0
     self.isActive = true
     self.keyDownCallback = function(e)
         if self:IsCancelKey(e.keyCode) then
@@ -187,6 +199,18 @@ function this:OnSimulate(e)
     if not player or not waypoint then
         self:Finish("failed", "Player or waypoint became unavailable.")
         return
+    end
+
+    local lastProgressPosition = self.lastProgressPosition
+    if lastProgressPosition and HorizontalDistance(player.position, lastProgressPosition) >= stuckMovementDistance then
+        self.lastProgressPosition = CopyPosition(player.position)
+        self.stuckElapsedSeconds = 0
+    else
+        self.stuckElapsedSeconds = self.stuckElapsedSeconds + (e.delta or 0)
+        if self.stuckElapsedSeconds >= stuckTimeoutSeconds then
+            self:Finish("failed", "Navigation stopped because the player position did not change enough.")
+            return
+        end
     end
 
     local waypointDistance = HorizontalDistance(player.position, waypoint.position)
