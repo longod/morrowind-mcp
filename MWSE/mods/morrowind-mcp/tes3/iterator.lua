@@ -2,17 +2,18 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
 local this = {}
 
+--- Iterates references while accepting MWSE lists whose empty head is nil.
 ---@param list tes3referenceList
----@return fun(): tes3reference
+---@return fun(): tes3reference?
 function this.ForEachReferenceList(list)
     local function iterator()
         local ref = list.head
 
-        if list.size ~= 0 then
+        if ref then
             coroutine.yield(ref)
         end
 
-        while ref.nextNode do
+        while ref and ref.nextNode do
             ref = ref.nextNode
             coroutine.yield(ref)
         end

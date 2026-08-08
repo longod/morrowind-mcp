@@ -43,10 +43,21 @@ function this.Test()
     unitwind:test("ForEachReferenceList returns nothing for empty list", function()
         local emptyList = {
             size = 0,
-            head = {},
+            head = nil,
         } ---@type any
 
         local iter = iterator.ForEachReferenceList(emptyList)
+
+        unitwind:expect(iter()).toBe(nil)
+    end)
+
+    unitwind:test("ForEachReferenceList treats a nil head as empty when size is stale", function()
+        local staleList = {
+            size = 1,
+            head = nil,
+        } ---@type any
+
+        local iter = iterator.ForEachReferenceList(staleList)
 
         unitwind:expect(iter()).toBe(nil)
     end)

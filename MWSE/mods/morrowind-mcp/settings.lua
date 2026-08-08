@@ -28,20 +28,28 @@ this.defaultConfig = {
         port = 33427, -- 3E427
     },
 
-    indicator = {
-        toolsCall = false, -- notification
-        cellBorder = false,
-        collisionBox = false,
-        pathGrid = false,
+    notification = {
+        showSubtitles = true,
         navigation = false, -- TODO notification start end
+        toolsCall = false,
+        resourcesRead = false,
+        resourcesSubscribe = false,
+        resourcesUnsubscribe = false,
+        promptsGet = false,
+        errors = false,
     },
 
     autoplay = {
+        vanityDisabled = true,
         skipMainMenu = false,
-        -- ok modal dialog
+        -- ok modal dialog?
     },
 
     development = {
+        -- if option is useful for agents, then it should be in the other menu.
+        cellBorder = false,
+        collisionBox = false,
+        pathGrid = false,
         logLevel = mwse.logLevel.info, ---@type mwseLogger.logLevel
         logToConsole = false,
         unitTest = false,

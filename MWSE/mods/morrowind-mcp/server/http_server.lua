@@ -785,14 +785,14 @@ function this:OnInitialize(params)
     result.capabilities = {
         ["logging"] = jsonrpc.object(),
         ["prompts"] = {
-            ["listChanged"] = true,
+            ["listChanged"] = false,
         },
         ["resources"] = {
             ["subscribe"] = true,
             ["listChanged"] = true,
         },
         ["tools"] = {
-            ["listChanged"] = true,
+            ["listChanged"] = false,
         },
         ["tasks"] = {
             ["list"] = jsonrpc.object(),
@@ -1009,7 +1009,7 @@ function this:OnToolsCall(params, request)
         }
     end
 
-    if config.indicator.toolsCall and tes3.isInitialized() then
+    if config.notification.toolsCall and tes3.isInitialized() then
         -- Insert clear visual indicators when tools are invoked
         local notify = string.format("Running %s", params.name)
         for key, value in pairs(params.arguments) do
@@ -1752,14 +1752,20 @@ function this:Start()
         end
         event.register(tes3.event.keyDown, self.debugNavigationKeyCallback, { filter = tes3.scanCode.F2 })
     end
-    if config.indicator.cellBorder then
+    if config.development.cellBorder then
         tes3.worldController.menuController.bordersEnabled = true
     end
-    if config.indicator.collisionBox then
+    if config.development.collisionBox then
         tes3.worldController.menuController.collisionBoxesEnabled = true
     end
-    if config.indicator.pathGrid then
+    if config.development.pathGrid then
         tes3.worldController.menuController.pathGridShown = true
+    end
+    if config.notification.showSubtitles then
+        tes3.showSubtitles = true
+    end
+    if config.autoplay.vanityDisabled then
+        tes3.vanityDisabled = true
     end
     return true
 end

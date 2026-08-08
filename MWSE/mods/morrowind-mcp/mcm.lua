@@ -36,11 +36,11 @@ local function OnModConfigReady(e)
     do
         local server = page:createCategory({
             label = "Server",
-            description = "Settings for the MCP server.",
+            description = "Settings for this MCP server.",
         })
         server:createTextField({
             label = "Address",
-            description = "The address the server will listen on.",
+            description = "The address this server will listen on.",
             variable = mwse.mcm.createTableVariable({
                 id = "address",
                 table = config.server,
@@ -49,7 +49,7 @@ local function OnModConfigReady(e)
         })
         server:createTextField({
             label = "Port",
-            description = "The port the server will listen on.",
+            description = "The port this server will listen on.",
             variable = mwse.mcm.createTableVariable({
                 id = "port",
                 table = config.server,
@@ -69,61 +69,114 @@ local function OnModConfigReady(e)
     end
 
     do
-        local indicator = page:createCategory({
-            label = "Indicator",
-            description = "Settings for visual indicators.",
+        local notification = page:createCategory({
+            label = "Notification",
+            description = "Features for notifications.",
         })
-        indicator:createOnOffButton({
-            label = "Tools Called",
-            description = "Show a notification when a tool is called.",
+        notification:createOnOffButton({
+            label = "Show Subtitles (Recommended)",
+            description =
+            "Since the agent will be able to capture the speech as text, it will be able to recognize it.",
+            variable = mwse.mcm.createTableVariable({
+                id = "showSubtitles",
+                table = config.notification,
+            }),
+            callback = function(self)
+                -- no restore, original value is unknown.
+                if self.variable.value then
+                    tes3.showSubtitles = true
+                end
+            end
+        })
+        notification:createOnOffButton({
+            label = "Navigation",
+            description =
+            "Notifies when navigation starts, ends, or is canceled. While this is meaningful to the player, agents may misinterpret it.",
+            variable = mwse.mcm.createTableVariable({
+                id = "navigation",
+                table = config.notification,
+            }),
+        })
+        notification:createOnOffButton({
+            label = "Tools Call",
+            description =
+            "Notifies when a tool is called and executed. While this is meaningful to the player, agents may misinterpret it.",
             variable = mwse.mcm.createTableVariable({
                 id = "toolsCall",
-                table = config.indicator,
+                table = config.notification,
             }),
         })
-        indicator:createOnOffButton({
-            label = "Cell Borders",
-            description = "Show cell borders in the world.",
+        notification:createOnOffButton({
+            label = "Resources Read",
+            description =
+            "Notifies when a resource is read. While this is meaningful to the player, agents may misinterpret it.",
             variable = mwse.mcm.createTableVariable({
-                id = "cellBorder",
-                table = config.indicator,
+                id = "resourcesRead",
+                table = config.notification,
             }),
-            callback = function(self)
-                tes3.worldController.menuController.bordersEnabled = self.variable.value
-            end
         })
-        indicator:createOnOffButton({
-            label = "Collision Boxes",
-            description = "Show collision boxes in the world.",
+        notification:createOnOffButton({
+            label = "Resources Subscribe",
+            description =
+            "Notifies when a resource is subscribed. While this is meaningful to the player, agents may misinterpret it.",
             variable = mwse.mcm.createTableVariable({
-                id = "collisionBox",
-                table = config.indicator,
+                id = "resourcesSubscribe",
+                table = config.notification,
             }),
-            callback = function(self)
-                tes3.worldController.menuController.collisionBoxesEnabled = self.variable.value
-            end
         })
-        indicator:createOnOffButton({
-            label = "Path Grid",
-            description = "Show path grids in the world. but there is a bug where only pathgrids that have already been loaded are rendered.",
+        notification:createOnOffButton({
+            label = "Resources Unsubscribe",
+            description =
+            "Notifies when a resource is unsubscribed. While this is meaningful to the player, agents may misinterpret it.",
             variable = mwse.mcm.createTableVariable({
-                id = "pathGrid",
-                table = config.indicator,
+                id = "resourcesUnsubscribe",
+                table = config.notification,
             }),
-            callback = function(self)
-                tes3.worldController.menuController.pathGridShown = self.variable.value
-            end
+        })
+        notification:createOnOffButton({
+            label = "Prompts Get",
+            description =
+            "Notifies when a prompt is got. While this is meaningful to the player, agents may misinterpret it.",
+            variable = mwse.mcm.createTableVariable({
+                id = "promptsGet",
+                table = config.notification,
+            }),
+        })
+        notification:createOnOffButton({
+            label = "Errors",
+            description =
+            "Notifies the client of request errors or internal server errors. While this is meaningful to the player, agents may misinterpret it.",
+            variable = mwse.mcm.createTableVariable({
+                id = "errors",
+                table = config.notification,
+            }),
         })
     end
 
     do
         local autoplay = page:createCategory({
             label = "Autoplay",
-            description = "Settings for autoplay features.",
+            description = "Features for autoplay support.",
         })
         autoplay:createOnOffButton({
-            label = "Skip Main Menu",
-            description = "Automatically skip the main menu and load the newest save.\nIf you want to stop this function, press ESC to open the options menu then go to mod config. Or delete this mod's config file: Data Files/MWSE/config/morrowind-mcp.json",
+            label = "Disable Vanity Camera (Recommended)",
+            description =
+            "This is effective in preventing the agent from mistakenly believing that the situation has changed due to its own actions when it transitions to vanity mode.",
+            variable = mwse.mcm.createTableVariable({
+                id = "vanityDisabled",
+                table = config.autoplay,
+            }),
+            callback = function(self)
+                -- no restore, original value is unknown.
+                if self.variable.value then
+                    tes3.vanityDisabled = true
+                end
+            end
+        })
+        autoplay:createOnOffButton({
+            label = "Automatic Continue",
+            description =
+            "After launching the game, the main menu will be automatically skipped, and the latest save file will be loaded.\nImportant: If you want to disable this feature, press the ESC key to open the Options menu and navigate to “MOD Settings.” Alternatively, delete this MOD's configuration file (Data Files/MWSE/config/morrowind-mcp.json).",
             variable = mwse.mcm.createTableVariable({
                 id = "skipMainMenu",
                 table = config.autoplay,
@@ -139,17 +192,41 @@ local function OnModConfigReady(e)
             label = "Development",
             description = "Features for development.",
         })
-        dev:createDropdown({
-            label = "Logging Level",
-            description = "Set the logging level. TRACE is the most verbose, and NONE will disable logging.",
-            options = {
-                { label = "TRACE", value = mwse.logLevel.trace },
-                { label = "DEBUG", value = mwse.logLevel.debug },
-                { label = "INFO",  value = mwse.logLevel.info },
-                { label = "WARN",  value = mwse.logLevel.warn },
-                { label = "ERROR", value = mwse.logLevel.error },
-                { label = "NONE",  value = mwse.logLevel.none },
-            },
+        dev:createOnOffButton({
+            label = "Cell Borders",
+            description = "Show cell borders in the world.",
+            variable = mwse.mcm.createTableVariable({
+                id = "cellBorder",
+                table = config.notification,
+            }),
+            callback = function(self)
+                tes3.worldController.menuController.bordersEnabled = self.variable.value
+            end
+        })
+        dev:createOnOffButton({
+            label = "Collision Boxes",
+            description = "Show collision boxes in the world.",
+            variable = mwse.mcm.createTableVariable({
+                id = "collisionBox",
+                table = config.notification,
+            }),
+            callback = function(self)
+                tes3.worldController.menuController.collisionBoxesEnabled = self.variable.value
+            end
+        })
+        dev:createOnOffButton({
+            label = "Path Grid",
+            description =
+            "Show path grids in the world. but there is a bug where only pathgrids that have already been loaded are rendered.",
+            variable = mwse.mcm.createTableVariable({
+                id = "pathGrid",
+                table = config.notification,
+            }),
+            callback = function(self)
+                tes3.worldController.menuController.pathGridShown = self.variable.value
+            end
+        })
+        dev:createLogLevelOptions({
             variable = mwse.mcm.createTableVariable({
                 id = "logLevel",
                 table = config.development,

@@ -6,10 +6,6 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 
 **This mod contains source code generated or assisted by AI. and all code has been manually reviewed, refactored and verified by a senior software engineer.**
 
-<p align="center">
-  <img src="./morrowind-mcp.png">
-</p>
-
 ## How to use
 
 1. Install Morrowind full expansion, MGE XE, MWSE, MCP, and optionally MO2 and MGE XE UF.
@@ -26,10 +22,6 @@ This mod allows the AI to learn about the world of Morrowind and interact with i
 - [Morrowind Script Extender Community Patch](https://www.nexusmods.com/morrowind/mods/19510) (MCP) or [MCP Beta](https://www.nexusmods.com/morrowind/mods/26348) : Run Morrowind Code Patch.exe. it fixes many bugs in Morrowind.
 - (Optional) [Mod Organizer 2](https://www.nexusmods.com/skyrimspecialedition/mods/6194) (MO2): for managing mods. Also useful for development and testing.
 - (Optional) [MGE XE UF](https://www.nexusmods.com/morrowind/mods/57200): It is unofficial update for MGE XE.
-
-#### Recommended settings for Agent
-
-- `Subtitles`: On
 
 ## MCP Configuration
 

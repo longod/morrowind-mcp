@@ -34,16 +34,17 @@ function this.new(params)
                 ),
                 file_name = jsonrpc.StringSchema(
                     "File Name",
-                    "Screenshot file name (without extension). If not specified, a timestamp will be used.",
+                    "Screenshot file name without extension. If not specified, a timestamp will be used.",
                     minMenuNameLength, -- minimum length
                     maxMenuNameLength  -- maximum length
                 ),
-                extension = jsonrpc.UntitledSingleSelectEnumSchema(
-                    { ".jpg", ".png", ".bmp", ".tga", ".dds" },
-                    "Extension",
-                    "Select screenshot file extension.",
-                    ".jpg"
-                ),
+                -- automatically select extension based on game situation, so the extension option is removed.
+                -- extension = jsonrpc.UntitledSingleSelectEnumSchema(
+                --     { ".jpg", ".png", ".bmp", ".tga", ".dds" },
+                --     "Extension",
+                --     "Select screenshot file extension.",
+                --     ".jpg"
+                -- ),
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, false, false)
@@ -75,19 +76,31 @@ function this:Validate(params)
     return result
 end
 
+--- Select extension based on game situation
+---@param captureWithUI boolean
+---@return string
+local function GetExtension(captureWithUI)
+    if captureWithUI then
+        if tes3.onMainMenu() or tes3.menuMode() then
+            return ".png"
+        end
+    end
+    return ".jpg"
+end
+
 function this:Execute(arguments, context)
     -- Argument validation already rejected unsafe caller-provided names; execution resolves defaults and collisions.
     local ms = math.floor((os.clock() % 1) * 1000)
     local default_name = os.date("%Y%m%d_%H%M%S") .. string.format("_%03d", ms)
     local name = default_name
     local filename = arguments["file_name"]
-    self.logger:debug("arguments file_name=%s, extension=%s, capture_with_ui=%s", tostring(arguments["file_name"]),
-        tostring(arguments["extension"]), tostring(arguments["capture_with_ui"]))
 
     if filename ~= nil then
         name = filename
     end
-    local extension = arguments["extension"]
+    local capture_with_ui = arguments["capture_with_ui"]
+    local extension = GetExtension(capture_with_ui)
+
     local dir = settings.resourceRootDir .. "screenshot\\"
     pcall(lfs.mkdir, dir)
     local file = name .. extension
@@ -96,8 +109,6 @@ function this:Execute(arguments, context)
         self.logger:warn("Screenshot file already exists: %s.", path)
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Screenshot file already exists: " .. path), nil, true)
     end
-
-    local capture_with_ui = arguments["capture_with_ui"]
 
     -- it seems to save to files is no latency, syncronous. it can be readed immidiately.
     mge.saveScreenshot({ path = path, captureWithUI = capture_with_ui })
