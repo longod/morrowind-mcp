@@ -117,6 +117,7 @@ end
 ---@field logger mwseLogger
 ---@field server Socket.TcpServer?
 ---@field enterFrameCallback fun(e : enterFrameEventData)?
+---@field loadedCallback fun(e : loadedEventData)?
 ---@field debugKeyCallback fun(e : keyDownEventData)?
 ---@field debugNavigationKeyCallback fun(e : keyDownEventData)?
 ---@field hostname string
@@ -1696,7 +1697,11 @@ function this:DebugNavigation(e)
         buttons[index] = {
             text = string.format("Node %d: %.0f, %.0f, %.0f", node.id, node.position.x, node.position.y, node.position.z),
             callback = function()
-                local ok, message, navigation = self:StartPlayerNavigation({ cell = player.cell, position = node.position })
+                local ok, message, navigation = self:StartPlayerNavigation({
+                    cell = player.cell,
+                    position = node
+                        .position
+                })
                 if not ok then
                     tes3.messageBox("Navigation failed: %s", tostring(message))
                 elseif navigation then
@@ -1738,7 +1743,37 @@ function this:Start()
         self:CloseExpiredSessions()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
-    self.logger:info("server started on %s:%d", self.hostname, self.port)
+
+    self.loadedCallback = function(e)
+        if tes3.worldController then
+            if config.notification.showSubtitles and not tes3.worldController.showSubtitles then
+                tes3.worldController.showSubtitles = true
+                self.logger:info("Subtitles shown")
+            end
+            if tes3.worldController.menuController then
+                if config.development.cellBorder ~= tes3.worldController.menuController.bordersEnabled then
+                    tes3.worldController.menuController.bordersEnabled = config.development.cellBorder
+                    self.logger:debug("Cell border changed to %s", tostring(config.development.cellBorder))
+                end
+                if config.development.collisionBox ~= tes3.worldController.menuController.collisionBoxesEnabled then
+                    tes3.worldController.menuController.collisionBoxesEnabled = config.development.collisionBox
+                    self.logger:debug("Collision boxes changed to %s", tostring(config.development.collisionBox))
+                end
+                if config.development.pathGrid ~= tes3.worldController.menuController.pathGridShown then
+                    tes3.worldController.menuController.pathGridShown = config.development.pathGrid
+                    self.logger:debug("Pathgrid changed to %s", tostring(config.development.pathGrid))
+                end
+            end
+        end
+
+        if tes3.mobilePlayer then
+            if config.autoplay.vanityDisabled and not tes3.mobilePlayer.vanityDisabled then
+                tes3.mobilePlayer.vanityDisabled = true
+                self.logger:info("Vanity disabled")
+            end
+        end
+    end
+    event.register(tes3.event.loaded, self.loadedCallback)
 
     if config.development.debug then
         -- register debug command
@@ -1752,28 +1787,25 @@ function this:Start()
         end
         event.register(tes3.event.keyDown, self.debugNavigationKeyCallback, { filter = tes3.scanCode.F2 })
     end
-    if config.development.cellBorder then
-        tes3.worldController.menuController.bordersEnabled = true
-    end
-    if config.development.collisionBox then
-        tes3.worldController.menuController.collisionBoxesEnabled = true
-    end
-    if config.development.pathGrid then
-        tes3.worldController.menuController.pathGridShown = true
-    end
-    if config.notification.showSubtitles then
-        tes3.showSubtitles = true
-    end
-    if config.autoplay.vanityDisabled then
-        tes3.vanityDisabled = true
-    end
+
+    self.logger:info("MCP server started on %s:%d", self.hostname, self.port)
     return true
 end
 
 function this:Shutdown()
     if not self.server then
-        self.logger:warn("server is already stopped.")
+        self.logger:warn("MCP server is already stopped.")
         return false
+    end
+
+    if self.enterFrameCallback then
+        event.unregister(tes3.event.enterFrame, self.enterFrameCallback)
+        self.enterFrameCallback = nil
+    end
+
+    if self.loadedCallback then
+        event.unregister(tes3.event.loaded, self.loadedCallback)
+        self.loadedCallback = nil
     end
 
     if self.debugKeyCallback then
@@ -1783,11 +1815,6 @@ function this:Shutdown()
     if self.debugNavigationKeyCallback then
         event.unregister(tes3.event.keyDown, self.debugNavigationKeyCallback)
         self.debugNavigationKeyCallback = nil
-    end
-
-    if self.enterFrameCallback then
-        event.unregister(tes3.event.enterFrame, self.enterFrameCallback)
-        self.enterFrameCallback = nil
     end
 
     for _, session in pairs(self.sessions) do
@@ -1809,9 +1836,8 @@ function this:Shutdown()
 
     self.server:close()
     self.server = nil
-    self.logger:info("server stopped")
+    self.logger:info("MCP Server stopped")
     return true
 end
 
 return this
-

@@ -261,6 +261,7 @@ function this.Test()
         unitwind:expect(schema.required[1]).toBe("name")
         unitwind:expect(schema.required[2]).toBe("missing")
         unitwind:expect(schema.required[3]).toBe("age")
+        unitwind:expect(getmetatable(schema.required).__jsontype).toBe("array")
     end)
 
     unitwind:test("ToolObjectSchema reports false when required is valid", function()
@@ -362,6 +363,62 @@ function this.Test()
         unitwind:expect(tool.inputSchema.additionalProperties).toBe(false)
     end)
 
+    unitwind:test("InputSchema orders root properties and required keys", function()
+        local properties = {
+            zebra = jsonrpc.StringSchema(),
+            alpha = jsonrpc.StringSchema(),
+            middle = jsonrpc.StringSchema(),
+        }
+        local required = { "zebra", "alpha" }
+        local inputSchema, validRequired = jsonrpc.InputSchema(properties, required)
+        local propertyMetatable = getmetatable(inputSchema.properties)
+
+        unitwind:expect(validRequired).toBe(true)
+        unitwind:expect(propertyMetatable.__jsonorder[1]).toBe("alpha")
+        unitwind:expect(propertyMetatable.__jsonorder[2]).toBe("middle")
+        unitwind:expect(propertyMetatable.__jsonorder[3]).toBe("zebra")
+        unitwind:expect(inputSchema.required[1]).toBe("alpha")
+        unitwind:expect(inputSchema.required[2]).toBe("zebra")
+        unitwind:expect(inputSchema.properties.zebra).toBe(properties.zebra)
+        unitwind:expect(required[1]).toBe("zebra")
+        local encodedProperties = json.encode(inputSchema.properties, { indent = false })
+        unitwind:expect(encodedProperties).toBe('{"alpha":{"type":"string"},"middle":{"type":"string"},"zebra":{"type":"string"}}')
+        unitwind:expect(json.encode(inputSchema.properties, { indent = false })).toBe(encodedProperties)
+    end)
+
+    unitwind:test("OutputSchema orders root properties and required keys", function()
+        local outputSchema, validRequired = jsonrpc.OutputSchema({
+            zebra = jsonrpc.StringSchema(),
+            alpha = jsonrpc.StringSchema(),
+        }, { "zebra", "alpha" })
+
+        unitwind:expect(validRequired).toBe(true)
+        unitwind:expect(getmetatable(outputSchema.properties).__jsonorder[1]).toBe("alpha")
+        unitwind:expect(getmetatable(outputSchema.properties).__jsonorder[2]).toBe("zebra")
+        unitwind:expect(outputSchema.required[1]).toBe("alpha")
+        unitwind:expect(outputSchema.required[2]).toBe("zebra")
+        local encodedProperties = json.encode(outputSchema.properties, { indent = false })
+        unitwind:expect(encodedProperties).toBe('{"alpha":{"type":"string"},"zebra":{"type":"string"}}')
+        unitwind:expect(json.encode(outputSchema.properties, { indent = false })).toBe(encodedProperties)
+    end)
+
+    unitwind:test("Schema ordering does not sort nested JsonObjectSchema properties", function()
+        local nestedProperties = {
+            zebra = "z",
+            alpha = "a",
+        }
+        local inputSchema = jsonrpc.InputSchema({
+            container = jsonrpc.JsonObjectSchema({
+                properties = nestedProperties,
+            }),
+        })
+        ---@type table
+        local containerSchema = inputSchema.properties.container
+
+        unitwind:expect(getmetatable(inputSchema.properties).__jsonorder[1]).toBe("container")
+        unitwind:expect(getmetatable(containerSchema.properties)).toBe(nil)
+    end)
+
     unitwind:test("PromptArgument generator maps fields", function()
         local argument = jsonrpc.PromptArgument("topic", "Topic", "Select a topic", true)
         unitwind:expect(argument.name).toBe("topic")
@@ -416,6 +473,19 @@ function this.Test()
         unitwind:expect(prompt.arguments).toBe(nil)
 
         ResetPrimitivePrefix()
+    end)
+
+    unitwind:test("Prompt generator preserves argument declaration order", function()
+        local prompt = jsonrpc.Prompt({
+            name = "ordered_prompt",
+            arguments = {
+                jsonrpc.PromptArgument("zebra"),
+                jsonrpc.PromptArgument("alpha"),
+            },
+        })
+
+        unitwind:expect(prompt.arguments[1].name).toBe("zebra")
+        unitwind:expect(prompt.arguments[2].name).toBe("alpha")
     end)
 
     unitwind:test("ListPromptsResult prepares MCP array field", function()
@@ -502,6 +572,39 @@ function this.Test()
         local result = jsonrpc.CallToolResult(nil, { ok = true }, false)
         unitwind:expect(result.structuredContent.ok).toBe(true)
         unitwind:expect(result.isError).toBe(false)
+    end)
+
+    unitwind:test("CallToolResult orders only root structuredContent keys", function()
+        local structuredContent = {
+            zebra = "z",
+            alpha = "a",
+            nested = {
+                zebra = "nested-z",
+                alpha = "nested-a",
+            },
+        }
+        local result = jsonrpc.CallToolResult(nil, structuredContent)
+        local metatable = getmetatable(result.structuredContent)
+
+        unitwind:expect(metatable.__jsonorder[1]).toBe("alpha")
+        unitwind:expect(metatable.__jsonorder[2]).toBe("nested")
+        unitwind:expect(metatable.__jsonorder[3]).toBe("zebra")
+        unitwind:expect(metatable.__jsontype).toBe("object")
+        unitwind:expect(getmetatable(result.structuredContent.nested)).toBe(nil)
+        unitwind:expect(getmetatable(structuredContent)).toBe(nil)
+        unitwind:expect(result.structuredContent == structuredContent).toBe(false)
+    end)
+
+    unitwind:test("CallToolResult encodes root structuredContent deterministically", function()
+        local result = jsonrpc.CallToolResult(nil, {
+            zebra = "z",
+            alpha = "a",
+            middle = "m",
+        })
+        local encodedStructuredContent = json.encode(result.structuredContent, { indent = false })
+
+        unitwind:expect(encodedStructuredContent).toBe('{"alpha":"a","middle":"m","zebra":"z"}')
+        unitwind:expect(json.encode(result.structuredContent, { indent = false })).toBe(encodedStructuredContent)
     end)
 
     unitwind:test("ListPromptsResult copies prompt array", function()

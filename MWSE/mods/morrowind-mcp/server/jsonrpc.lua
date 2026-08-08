@@ -349,6 +349,33 @@ end
 -- MCP Tool Generators
 -- ============================================================================
 
+--- Return the lexicographically sorted keys of a JSON object.
+---@param object table<string, any>
+---@return string[] keys
+local function SortedObjectKeys(object)
+    local keys = {}
+    for key in pairs(object) do
+        table.insert(keys, key)
+    end
+    table.sort(keys)
+    return keys
+end
+
+--- Configure dkjson's explicit object key order without changing nested values.
+---@param object table<string, any>
+---@param keys string[]
+local function SetObjectKeyOrder(object, keys)
+    local previousMetatable = getmetatable(object)
+    local metatable = {}
+    if previousMetatable then
+        for key, value in pairs(previousMetatable) do
+            metatable[key] = value
+        end
+    end
+    metatable.__jsonorder = keys
+    setmetatable(object, metatable)
+end
+
 ---@param properties table<string, MCP.JsonSchemaProperty>?
 ---@param required string[]?
 ---@return boolean validRequired
@@ -367,6 +394,26 @@ local function ValidateProperties(properties, required)
     return true
 end
 
+--- Normalize required keys to the enclosing properties order while preserving membership.
+---@param required string[]?
+---@param propertyKeys string[]
+---@return table?
+local function NormalizeRequired(required, propertyKeys)
+    if not required then
+        return nil
+    end
+
+    local normalizedRequired = this.array()
+    for _, propertyKey in ipairs(propertyKeys) do
+        for _, requiredKey in ipairs(required) do
+            if propertyKey == requiredKey then
+                table.insert(normalizedRequired, requiredKey)
+            end
+        end
+    end
+    return normalizedRequired
+end
+
 ---@param properties table<string, MCP.JsonSchemaProperty>?
 ---@param required string[]?
 ---@param schema string?
@@ -374,12 +421,17 @@ end
 ---@return boolean validRequired
 function this.InputSchema(properties, required, schema)
     local validRequired = ValidateProperties(properties, required)
+    local normalizedProperties = properties and this.object(properties) or nil
+    local propertyKeys = normalizedProperties and SortedObjectKeys(normalizedProperties) or {}
+    if normalizedProperties then
+        SetObjectKeyOrder(normalizedProperties, propertyKeys)
+    end
 
     local inputSchema = {
         ["$schema"] = schema,
         type = "object",
-        properties = properties,
-        required = required,
+        properties = normalizedProperties,
+        required = validRequired and NormalizeRequired(required, propertyKeys) or (required and this.array(required) or nil),
     }
     if not inputSchema.properties then
         inputSchema.additionalProperties = false
@@ -394,12 +446,17 @@ end
 ---@return boolean validRequired
 function this.OutputSchema(properties, required, schema)
     local validRequired = ValidateProperties(properties, required)
+    local normalizedProperties = properties and this.object(properties) or nil
+    local propertyKeys = normalizedProperties and SortedObjectKeys(normalizedProperties) or {}
+    if normalizedProperties then
+        SetObjectKeyOrder(normalizedProperties, propertyKeys)
+    end
 
     local outputSchema = {
         ["$schema"] = schema,
         type = "object",
-        properties = properties,
-        required = required,
+        properties = normalizedProperties,
+        required = validRequired and NormalizeRequired(required, propertyKeys) or (required and this.array(required) or nil),
     }
     return outputSchema, validRequired
 end
@@ -597,6 +654,14 @@ function this.CallToolResult(content, structuredContent, isError)
         end
     else
         result_content = this.array()
+    end
+    if type(structuredContent) == "table" then
+        -- Only the result root is ordered; nested objects retain their producer-defined representation.
+        local normalizedStructuredContent = this.object(structuredContent)
+        if normalizedStructuredContent then
+            SetObjectKeyOrder(normalizedStructuredContent, SortedObjectKeys(normalizedStructuredContent))
+            structuredContent = normalizedStructuredContent
+        end
     end
     return {
         content = result_content,

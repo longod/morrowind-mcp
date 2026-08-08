@@ -230,6 +230,15 @@ function Invoke-MCPInspector {
             }
         }
 
+        $uvHandleClosingAssertionPattern = 'Assertion failed: !\(handle->flags & UV_HANDLE_CLOSING\)'
+        $hasKnownUvHandleClosingAssertion = $stderrText -match $uvHandleClosingAssertionPattern
+        $hasUnexpectedStderr = @(
+            $stderrText -split "`r?`n" | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_ -notmatch $uvHandleClosingAssertionPattern
+            }
+        ).Count -gt 0
+
         $logStdout = $stdoutText
         if ($json -and $json.result -and $json.result.contents) {
             $blobContent = @($json.result.contents | Where-Object { $_.blob } | Select-Object -First 1)
@@ -284,6 +293,8 @@ function Invoke-MCPInspector {
             Result = if ($json) { $json.result } else { $null }
             Error = if ($json) { $json.error } else { $null }
             ParseError = $parseError
+            HasKnownUvHandleClosingAssertion = $hasKnownUvHandleClosingAssertion
+            HasUnexpectedStderr = $hasUnexpectedStderr
         }
     }
     finally {
@@ -299,7 +310,10 @@ function Assert-InspectorSuccess {
         [bool]$AllowToolError = $false
     )
 
-    if ($Response.ExitCode -ne 0 -and -not $AllowToolError) {
+    $ignoreKnownUvHandleClosingAssertion = $Response.HasKnownUvHandleClosingAssertion -and
+        $null -ne $Response.Result -and
+        -not $Response.HasUnexpectedStderr
+    if ($Response.ExitCode -ne 0 -and -not $AllowToolError -and -not $ignoreKnownUvHandleClosingAssertion) {
         throw "Inspector exited with code $($Response.ExitCode)."
     }
     if ($Response.ParseError) {

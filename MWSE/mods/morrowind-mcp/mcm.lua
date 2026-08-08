@@ -14,10 +14,10 @@ local function OnModConfigReady(e)
         label = string.format("%s Version: %s", settings.modName, settings.version),
         text = settings.description,
     })
-    -- page.sidebar:createHyperlink({
-    --     text = "Nexus Mods Page",
-    --     url = settings.metadata.package.homepage,
-    -- })
+    page.sidebar:createHyperlink({
+        text = "Nexus Mods Page",
+        url = settings.metadata.package.homepage,
+    })
     page.sidebar:createHyperlink({
         text = "GitHub Repository",
         url = settings.metadata.package.repository,
@@ -32,6 +32,7 @@ local function OnModConfigReady(e)
     })
     -- stop, start, restart buttons
     -- port, server status
+    -- history
 
     do
         local server = page:createCategory({
@@ -81,12 +82,7 @@ local function OnModConfigReady(e)
                 id = "showSubtitles",
                 table = config.notification,
             }),
-            callback = function(self)
-                -- no restore, original value is unknown.
-                if self.variable.value then
-                    tes3.showSubtitles = true
-                end
-            end
+            restartRequired = true,
         })
         notification:createOnOffButton({
             label = "Navigation",
@@ -166,12 +162,7 @@ local function OnModConfigReady(e)
                 id = "vanityDisabled",
                 table = config.autoplay,
             }),
-            callback = function(self)
-                -- no restore, original value is unknown.
-                if self.variable.value then
-                    tes3.vanityDisabled = true
-                end
-            end
+            restartRequired = true,
         })
         autoplay:createOnOffButton({
             label = "Automatic Continue",
@@ -185,8 +176,6 @@ local function OnModConfigReady(e)
         })
     end
 
-    -- history
-    -- dev menu
     do
         local dev = page:createCategory({
             label = "Development",
@@ -197,10 +186,16 @@ local function OnModConfigReady(e)
             description = "Show cell borders in the world.",
             variable = mwse.mcm.createTableVariable({
                 id = "cellBorder",
-                table = config.notification,
+                table = config.development,
             }),
             callback = function(self)
-                tes3.worldController.menuController.bordersEnabled = self.variable.value
+                if tes3.worldController then
+                    if tes3.worldController.menuController then
+                        if self.variable.value ~= tes3.worldController.menuController.bordersEnabled then
+                            tes3.worldController.menuController.bordersEnabled = self.variable.value
+                        end
+                    end
+                end
             end
         })
         dev:createOnOffButton({
@@ -208,10 +203,16 @@ local function OnModConfigReady(e)
             description = "Show collision boxes in the world.",
             variable = mwse.mcm.createTableVariable({
                 id = "collisionBox",
-                table = config.notification,
+                table = config.development,
             }),
             callback = function(self)
-                tes3.worldController.menuController.collisionBoxesEnabled = self.variable.value
+                if tes3.worldController then
+                    if tes3.worldController.menuController then
+                        if self.variable.value ~= tes3.worldController.menuController.collisionBoxesEnabled then
+                            tes3.worldController.menuController.collisionBoxesEnabled = self.variable.value
+                        end
+                    end
+                end
             end
         })
         dev:createOnOffButton({
@@ -220,13 +221,30 @@ local function OnModConfigReady(e)
             "Show path grids in the world. but there is a bug where only pathgrids that have already been loaded are rendered.",
             variable = mwse.mcm.createTableVariable({
                 id = "pathGrid",
-                table = config.notification,
+                table = config.development,
             }),
             callback = function(self)
-                tes3.worldController.menuController.pathGridShown = self.variable.value
+                if tes3.worldController then
+                    if tes3.worldController.menuController then
+                        if self.variable.value ~= tes3.worldController.menuController.pathGridShown then
+                            tes3.worldController.menuController.pathGridShown = self.variable.value
+                        end
+                    end
+                end
             end
         })
-        dev:createLogLevelOptions({
+        -- createLogLevelOptions happens error when at the required.
+        dev:createDropdown({
+            label = "Logging Level",
+            description = "Set the logging level. TRACE is the most verbose, and NONE will disable logging.",
+            options = {
+                { label = "TRACE", value = mwse.logLevel.trace },
+                { label = "DEBUG", value = mwse.logLevel.debug },
+                { label = "INFO",  value = mwse.logLevel.info },
+                { label = "WARN",  value = mwse.logLevel.warn },
+                { label = "ERROR", value = mwse.logLevel.error },
+                { label = "NONE",  value = mwse.logLevel.none },
+            },
             variable = mwse.mcm.createTableVariable({
                 id = "logLevel",
                 table = config.development,

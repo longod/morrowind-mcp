@@ -2,7 +2,7 @@
 description: "Morrowind MCP の実装をレビューし、必要ならテストを補強します。実機能は変更しません。"
 name: "Morrowind MCP Reviewer"
 tools: [vscode/memory, vscode/resolveMemoryFileUri, vscode/vscodeAPI, vscode/askQuestions, vscode/toolSearch, read, agent, search, web, vscodeGeneral/toolSearch, todo]
-model: ["Claude Opus 4.7 (copilot)"]
+model: ["Claude Opus 5 (copilot)", "Claude Opus 4.7 (copilot)"]
 agents: ["Morrowind MCP Test Runner"]
 user-invocable: true
 argument-hint: "レビュー対象の計画または変更を指定してください"
