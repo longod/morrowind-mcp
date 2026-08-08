@@ -76,6 +76,12 @@ function this:Validate(params)
     return result
 end
 
+local notifyMenus = {
+    tes3ui.registerID("MenuNotify1"),
+    tes3ui.registerID("MenuNotify2"),
+    tes3ui.registerID("MenuNotify3"),
+}
+
 --- Select extension based on game situation
 ---@param captureWithUI boolean
 ---@return string
@@ -84,6 +90,13 @@ local function GetExtension(captureWithUI)
         if tes3.onMainMenu() or tes3.menuMode() then
             return ".png"
         end
+        for _, id in ipairs(notifyMenus) do
+            local e = tes3ui.findHelpLayerMenu(id)
+            if e and e.visible then
+                return ".png"
+            end
+        end
+        -- and tooltips?
     end
     return ".jpg"
 end

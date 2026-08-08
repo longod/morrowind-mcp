@@ -48,6 +48,26 @@ function this.Test()
         unitwind:expect(unregistered[tes3.event.simulate] ~= nil).toBe(true)
     end)
 
+    unitwind:test("StartRoute copies provider-independent waypoints", function()
+        local registered = {}
+        unitwind:mock(tes3, "player", { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } })
+        unitwind:mock(tes3, "getInputBinding", function() return { device = 0, code = 17 } end)
+        unitwind:mock(tes3, "pushKey", function() end)
+        unitwind:mock(tes3, "releaseKey", function() end)
+        unitwind:mock(event, "register", function(eventId, callback) registered[eventId] = callback end)
+        unitwind:mock(event, "unregister", function() end)
+        local route = { { position = { x = 10, y = 20, z = 30 } }, { position = { x = 40, y = 50, z = 60 } } }
+        local instance = navigator.new({ pathfinding = Graph({ walk = 1 }) })
+        local ok, _, result = instance:StartRoute(route, 7)
+        route[1].position.x = 999
+        instance:Release()
+        unitwind:expect(ok).toBe(true)
+        ---@cast result MCP.NavigatorStartResult
+        unitwind:expect(instance.waypoints[1].position.x).toBe(10)
+        unitwind:expect(result.routeNodeCount).toBe(7)
+        unitwind:expect(result.waypointCount).toBe(2)
+    end)
+
     unitwind:test("Start rejects a path requiring travel activation", function()
         unitwind:mock(tes3, "player", { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } })
         local graph = Graph({ walk = 1 })

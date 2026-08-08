@@ -29,7 +29,7 @@
 | `mw-capabilities-fetch` | | Fetch general conditions for published tools. | <ul><li>`tool_name` (string, optional) - Optional published tool name to filter by.</li></ul> | <ul><li>`tools` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-activator-fetch` | | Fetch active activators in current cells. | | <ul><li>`activators` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-actor-fetch` | | Fetch active actors in current cells. | | <ul><li>`actors` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
-| `mw-debug-action` | | Perform a debug command. | <ul><li>`action` (string, required) - Dump all Memory documents to Data Files\MWSE\mods\morrowind-mcp\memory-dump\</li></ul> | | |
+| `mw-debug-action` | | Perform a debug command. | <ul><li>`action` (string, required) - Select a published debug command.</li></ul> | | |
 | `mw-inventory-fetch` | | Fetch current inventory. | | <ul><li>`inventory` (array)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-journal-fetch` | | Fetch active journal entries. | | <ul><li>`entries` (array)</li><li>`current_time` (object)</li></ul> | <ul><li>`readOnlyHint`: true</li></ul> |
 | `mw-menu-action` | | Action to a non-root menu. | <ul><li>`action` (string, required) - Action to perform on the menu.</li><li>`menu_id` (number, optional) - Action to perform on the non-root menu by ID (key name is `id`). One of `menu_id` or `menu_name` should be specified.</li><li>`menu_name` (string, optional) - Action to perform on the non-root menu by name (key name is `name`). One of `menu_id` or `menu_name` should be specified.</li><li>`text` (string, optional) - Text to input if action is `textInput`.</li></ul> | | |

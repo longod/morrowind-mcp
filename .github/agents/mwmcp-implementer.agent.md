@@ -2,7 +2,7 @@
 description: "計画に従って Morrowind MCP の機能とテストを実装し、Test Runnerで検証します。"
 name: "Morrowind MCP Implementer"
 tools: [vscode/memory, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/askQuestions, vscode/toolSearch, execute, read, agent, edit, search, vscodeGeneral/toolSearch]
-model: ["GPT-5.6 Terra (copilot)", "GPT-5.6 Luna (copilot)", "GPT-5.6 Sol (copilot)"]
+model: ["GPT-5.6 Terra (copilot)", "GPT-5.6 Luna (copilot)", "GPT-5.3-Codex (copilot)", "GPT-5.6 Sol (copilot)"]
 agents: ["Morrowind MCP Test Runner"]
 user-invocable: true
 argument-hint: "実装計画または作業内容を指定してください"

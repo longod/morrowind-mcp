@@ -14,6 +14,7 @@ local pathfinding = require("morrowind-mcp.util.pathfinding")
 local navigator = require("morrowind-mcp.util.navigator")
 local mcpui = require("morrowind-mcp.util.mcpui")
 local cellutil = require("morrowind-mcp.tes3.cell")
+local terrainGridManager = require("morrowind-mcp.navigation.terrain.manager")
 
 -- TODO split implementations, such as session manager?
 
@@ -132,6 +133,7 @@ end
 ---@field nextSessionIndex integer
 ---@field pathfinding MCP.Pathfinding
 ---@field activeNavigator MCP.Navigator?
+---@field terrainGridManager MCP.TerrainGridManager
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -148,6 +150,7 @@ function this.new(params)
     instance.httpHeaders = {}
     instance.resource = resourceManager.new()
     instance.pathfinding = pathfinding.new()
+    instance.terrainGridManager = terrainGridManager.new()
     instance.activeNavigator = nil
     instance.sessions = {}
     instance.nextSessionIndex = 0
@@ -698,6 +701,7 @@ function this:LoadTools()
     local dir = settings.modDir .. "tools\\"
     local params = {
         resource = self.resource,
+        terrainGridManager = self.terrainGridManager,
         -- Capability discovery reads static metadata through this callback without depending on the server type.
         GetPublishedTools = function()
             return self.tools
@@ -858,7 +862,14 @@ end
 ---@param params MCP.ReadResourceRequestParams
 ---@return MCP.MethodResult
 function this:OnResourcesRead(params)
-    return self.resource:OnResourcesRead(params)
+    local result = self.resource:OnResourcesRead(params)
+    if result and result.http_response == http.response_code.ok then
+        if config.notification.resourcesRead and tes3.isInitialized() then
+            local notify = string.format("Read %s", params.uri)
+            mcpui.showNotifyMenu(notify)
+        end
+    end
+    return result
 end
 
 ---@param params MCP.SubscribeRequestParams
@@ -885,6 +896,12 @@ function this:OnResourcesSubscribe(params, request)
     session.resourceSubscriptions[params.uri] = true
     self.logger:debug("Resource subscribed: %s (session=%s, subscriptions=%d)", params.uri, session.id,
         table.size(session.resourceSubscriptions))
+
+    if config.notification.resourcesSubscribe and tes3.isInitialized() then
+        local notify = string.format("Subscribe %s", params.uri)
+        mcpui.showNotifyMenu(notify)
+    end
+
     ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
@@ -915,6 +932,12 @@ function this:OnResourcesUnsubscribe(params, request)
     session.resourceSubscriptions[params.uri] = nil
     self.logger:debug("Resource unsubscribed: %s (session=%s, subscriptions=%d)", params.uri, session.id,
         table.size(session.resourceSubscriptions))
+
+    if config.notification.resourcesSubscribe and tes3.isInitialized() then
+        local notify = string.format("Unubscribe %s", params.uri)
+        mcpui.showNotifyMenu(notify)
+    end
+
     ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
@@ -1012,7 +1035,7 @@ function this:OnToolsCall(params, request)
 
     if config.notification.toolsCall and tes3.isInitialized() then
         -- Insert clear visual indicators when tools are invoked
-        local notify = string.format("Running %s", params.name)
+        local notify = string.format("Call %s", params.name)
         for key, value in pairs(params.arguments) do
             notify = notify .. string.format("\n%s=%s", key, tostring(value))
         end
@@ -1074,6 +1097,14 @@ function this:OnPromptsGet(params)
             error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params,
                 string.format("Prompt is unavailable in the current game state: %s.", tostring(params.name))),
         }
+    end
+
+    if config.notification.promptsGet and tes3.isInitialized() then
+        local notify = string.format("Get %s", params.name)
+        for key, value in pairs(params.arguments) do
+            notify = notify .. string.format("\n%s=%s", key, tostring(value))
+        end
+        mcpui.showNotifyMenu(notify)
     end
 
     local result = prompt:Execute(params.arguments, context)
@@ -1725,15 +1756,16 @@ function this:Start()
         return false
     end
 
-    target:RegisterEvent()
-    self.pathfinding:RegisterEventHandlers()
-
     self.server = socket.bind(self.hostname, self.port)
     if not self.server then
         self.logger:error("Failed to start MCP server on %s:%d", self.hostname, self.port)
         return false
     end
     self.server:settimeout(0)
+
+    target:RegisterEvent()
+    self.pathfinding:RegisterEventHandlers()
+    self.terrainGridManager:RegisterEventHandlers()
 
     self.enterFrameCallback = function(e)
         self:Listen(e)
@@ -1830,6 +1862,8 @@ function this:Shutdown()
         self.activeNavigator:Release()
         self.activeNavigator = nil
     end
+
+    self.terrainGridManager:Release()
 
     self.pathfinding:UnregisterEventHandlers()
     target:UnregisterEvent()

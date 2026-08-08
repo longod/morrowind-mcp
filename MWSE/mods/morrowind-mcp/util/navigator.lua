@@ -162,7 +162,33 @@ function this:Start(destination)
         return false, "The path did not contain usable waypoints."
     end
 
-    self.waypoints = waypoints
+    return self:StartRoute(waypoints, table.size(path.nodeIds))
+end
+
+--- Start following a copied waypoint route supplied by any route provider.
+---@param waypoints MCP.NavigatorWaypoint[]
+---@param routeNodeCount integer?
+---@return boolean
+---@return string?
+---@return MCP.NavigatorStartResult?
+function this:StartRoute(waypoints, routeNodeCount)
+    self:Cancel("replaced by a new navigation request")
+    local player = tes3.player
+    if not player or not player.cell then
+        return false, "Player or current cell is unavailable."
+    end
+    if table.size(waypoints) == 0 then
+        return false, "The route did not contain usable waypoints."
+    end
+    local copiedWaypoints = table.new(table.size(waypoints), 0)
+    for index, waypoint in ipairs(waypoints) do
+        if not waypoint.position then
+            return false, "The route contains a waypoint without a position."
+        end
+        copiedWaypoints[index] = { position = CopyPosition(waypoint.position), edge = waypoint.edge }
+    end
+
+    self.waypoints = copiedWaypoints
     self.waypointIndex = 1
     self.result = nil
     self.lastProgressPosition = CopyPosition(player.position)
@@ -182,10 +208,14 @@ function this:Start(destination)
         self:Finish("failed", "Unable to hold the configured forward action.")
         return false, "Unable to hold the configured forward action."
     end
-    self.logger:info("Navigation started: startNodeId=%d destinationNodeId=%d waypoints=%d destination=(%.1f, %.1f, %.1f)",
-        path.nodeIds[1], path.nodeIds[table.size(path.nodeIds)], table.size(waypoints), destination.position.x,
-        destination.position.y, destination.position.z)
-    return true, nil, { routeNodeCount = table.size(path.nodeIds), waypointCount = table.size(waypoints) }
+    local destination = copiedWaypoints[table.size(copiedWaypoints)].position
+    self.logger:info("Navigation route started: routeNodes=%d waypoints=%d destination=(%.1f, %.1f, %.1f)",
+        routeNodeCount or table.size(copiedWaypoints), table.size(copiedWaypoints), destination.x, destination.y,
+        destination.z)
+    return true, nil, {
+        routeNodeCount = routeNodeCount or table.size(copiedWaypoints),
+        waypointCount = table.size(copiedWaypoints),
+    }
 end
 
 --- Advance the active route, keeping a horizontal look target and performing one bounded obstacle test.
