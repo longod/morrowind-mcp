@@ -37,6 +37,14 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - `MWSE.log` を確認することで、サーバー側の挙動を検査できるようにする
 - luaSocket を使用したTCP通信
 
+### MCP.MWSEConfig
+
+- MCP.MWSEConfig はこのMCPサーバー利用者が変更可能な設定値である
+- MCP.MWSEConfig には、開発時に調整する内部の設定を絶対に含めてはならない
+- [mcm.lua](../../MWSE/mods/morrowind-mcp/mcm.lua) で Mod Configuration Menu (MCM) からGUIで設定できる
+- `mcm` にも、開発時に調整する内部の設定を絶対に含めてはならない
+- `<datafilesOverwriteDir>/MWSE/config/morrowind-mcp.json` に保存される
+
 ## HTTP
 
 - 送受信に使用するヘッダやメソッド、コードは、`http.lua` の定義を使用して即値はしようしないようにする。定義が存在しない場合は、`http.lua` に定義を追加する。

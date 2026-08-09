@@ -7,8 +7,7 @@ function this.Test()
         self:clearSpies()
         self:clearMocks()
     end
-    local navigator = require("morrowind-mcp.util.navigator")
-    local inputAction = require("morrowind-mcp.util.input_action")
+    local navigator = require("morrowind-mcp.navigation.navigator")
 
     --- Build the minimal graph data used to snapshot a route.
     local function Graph(edgeKind)
@@ -23,7 +22,7 @@ function this.Test()
         }
     end
 
-    unitwind:start("morrowind-mcp.util.navigator")
+    unitwind:start("morrowind-mcp.navigation.navigator")
 
     unitwind:test("Start snapshots walk waypoints and Release unregisters callbacks", function()
         local registered = {}

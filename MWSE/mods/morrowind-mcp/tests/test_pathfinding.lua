@@ -7,7 +7,7 @@ function this.Test()
         self:clearSpies()
         self:clearMocks()
     end
-    local pathfinding = require("morrowind-mcp.util.pathfinding")
+    local pathfinding = require("morrowind-mcp.navigation.pathfinding")
     local cellutil = require("morrowind-mcp.tes3.cell")
 
     --- Return the shared graph key used by the pathfinding implementation.
@@ -73,7 +73,7 @@ function this.Test()
         }
     end
 
-    unitwind:start("morrowind-mcp.util.pathfinding")
+    unitwind:start("morrowind-mcp.navigation.pathfinding")
 
     unitwind:test("UpdateCell snapshots an undirected pathgrid without retaining positions", function()
         local first, second = Node(10, 20, 30), Node(110, 20, 30)

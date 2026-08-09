@@ -9,7 +9,7 @@ argument-hint: "実装計画または作業内容を指定してください"
 handoffs:
   - label: "Review"
     agent: "Morrowind MCP Reviewer"
-    prompt: "上記の実装とテスト結果を、元の計画に照らしてレビューしてください。各指摘は Finding ID 付きで、Severity/Scope/Observed/Expected/Evidence/Required Fix/Acceptance Check を必ず含めてください。Evidence 不足は Hypothesis と明記してください。"
+    prompt: "実装内容とテスト結果を、元の計画に照らしてレビューしてください。各指摘は Finding ID 付きで、Severity/Scope/Observed/Expected/Evidence/Required Fix/Acceptance Check を必ず含めてください。Evidence 不足は Hypothesis と明記してください。"
     send: false
 ---
 計画に従って機能とテストを実装し、Test Runnerへ検証を委譲します。

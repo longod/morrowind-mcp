@@ -366,7 +366,9 @@ function this.tes3uiElement(i, o, path)
     -- Same condition, because rawText is text + formatting and caret.
     -- We want to output text if they exsist and text is empty, because they indicate this element is any text type.
     if strutil.IsNullOrEmpty(i.rawText) == false then
-        o.rawText = i.rawText
+        if i.text ~= i.rawText then -- not same as text, because text is rawText stripped of formatting and caret.
+            o.rawText = i.rawText
+        end
         o.text = i.text
     end
     -- o.texture = i.texture, -- need

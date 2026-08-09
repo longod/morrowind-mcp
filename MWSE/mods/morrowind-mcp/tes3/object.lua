@@ -111,6 +111,36 @@ local npcSexName = {
 }
 
 
+---@class MCP.ColorRGBA
+---@field r number
+---@field g number
+---@field b number
+---@field a number?
+
+---@param i number[]|tes3vector3|tes3vector4|niColor|nil
+---@return MCP.ColorRGBA?
+function this.ToRGBA(i)
+    if not i then
+        return nil
+    end
+    if type(i) == "table" then -- array?
+        if #i == 4 then        -- RGBA
+            if i[1] and i[2] and i[3] and i[4] then
+                return jsonrpc.object({ r = i[1], g = i[2], b = i[3], a = i[4] })
+            end
+        elseif #i == 3 then -- RGB
+            if i[1] and i[2] and i[3] then
+                return jsonrpc.object({ r = i[1], g = i[2], b = i[3] })
+            end
+        end
+        return nil
+    end
+
+    if i.w ~= nil then -- tes3vector4
+        return jsonrpc.object({ r = i.x, g = i.y, b = i.z, a = i.w })
+    end
+    return jsonrpc.object({ r = i.r, g = i.g, b = i.b }) -- tes3vector3 or niColor
+end
 
 ---@param i tes3bountyData
 ---@param o MCP.AnyMap?
@@ -177,7 +207,6 @@ function this.tes3itemData(i, o)
     return o
 end
 
-
 ---@param i tes3inventoryTile
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
@@ -225,7 +254,6 @@ function this.tes3statistic(i, o)
     local _ = ValidateType(o)
     return o
 end
-
 
 ---@param i tes3weatherClear
 ---@param o MCP.AnyMap?
@@ -326,16 +354,16 @@ local function tes3weatherBlizzard(i, o)
 end
 
 local weatherHandler = {
-	[tes3.weather.clear] = tes3weatherClear,
-	[tes3.weather.cloudy] = tes3weatherCloudy,
-	[tes3.weather.foggy] = tes3weatherFoggy,
-	[tes3.weather.overcast] = tes3weatherOvercast,
-	[tes3.weather.rain] = tes3weatherRain,
-	[tes3.weather.thunder] = tes3weatherThunder,
-	[tes3.weather.ash] = tes3weatherAsh,
-	[tes3.weather.blight] = tes3weatherBlight,
-	[tes3.weather.snow] = tes3weatherSnow,
-	[tes3.weather.blizzard] = tes3weatherBlizzard,
+    [tes3.weather.clear] = tes3weatherClear,
+    [tes3.weather.cloudy] = tes3weatherCloudy,
+    [tes3.weather.foggy] = tes3weatherFoggy,
+    [tes3.weather.overcast] = tes3weatherOvercast,
+    [tes3.weather.rain] = tes3weatherRain,
+    [tes3.weather.thunder] = tes3weatherThunder,
+    [tes3.weather.ash] = tes3weatherAsh,
+    [tes3.weather.blight] = tes3weatherBlight,
+    [tes3.weather.snow] = tes3weatherSnow,
+    [tes3.weather.blizzard] = tes3weatherBlizzard,
 }
 
 ---@param i tes3weather|tes3weatherAsh|tes3weatherBlight|tes3weatherBlizzard|tes3weatherClear|tes3weatherCloudy|tes3weatherFoggy|tes3weatherOvercast|tes3weatherRain|tes3weatherSnow|tes3weatherThunder
@@ -350,14 +378,14 @@ function this.tes3weather(i, o)
     end
     o = o or jsonrpc.object()
 
-    -- o.ambientDayColor = i.ambientDayColor
+    -- o.ambientDayColor = this.ToRGBA(i.ambientDayColor)
     -- o.ambientLoopSound = this.tes3sound(i.ambientLoopSound)
     o.ambientLoopSoundId = i.ambientLoopSoundId
     -- where is current ambient color?
-    o.ambientNightColor = i.ambientNightColor
-    o.ambientPlaying = i.ambientPlaying
-    o.ambientSunriseColor = i.ambientSunriseColor
-    o.ambientSunsetColor = i.ambientSunsetColor
+    o.ambientNightColor = this.ToRGBA(i.ambientNightColor)
+    -- o.ambientPlaying = i.ambientPlaying
+    o.ambientSunriseColor = this.ToRGBA(i.ambientSunriseColor)
+    o.ambientSunsetColor = this.ToRGBA(i.ambientSunsetColor)
     o.cloudsMaxPercent = i.cloudsMaxPercent
     o.cloudsSpeed = i.cloudsSpeed
     o.cloudTexture = i.cloudTexture
@@ -376,11 +404,11 @@ function this.tes3weather(i, o)
     -- o.skySunriseColor = i.skySunriseColor
     -- o.skySunsetColor = i.skySunsetColor
     -- where is current sun color?
-    o.sunDayColor = i.sunDayColor
-    o.sundiscSunsetColor = i.sundiscSunsetColor
-    o.sunNightColor = i.sunNightColor
-    o.sunSunriseColor = i.sunSunriseColor
-    o.sunSunsetColor = i.sunSunsetColor
+    o.sunDayColor = this.ToRGBA(i.sunDayColor)
+    o.sundiscSunsetColor = this.ToRGBA(i.sundiscSunsetColor)
+    o.sunNightColor = this.ToRGBA(i.sunNightColor)
+    o.sunSunriseColor = this.ToRGBA(i.sunSunriseColor)
+    o.sunSunsetColor = this.ToRGBA(i.sunSunsetColor)
     o.transitionDelta = i.transitionDelta
     -- o.underwaterSoundState = i.underwaterSoundState
     o.windSpeed = i.windSpeed
@@ -395,7 +423,6 @@ function this.tes3weather(i, o)
     local _ = ValidateType(o)
     return o
 end
-
 
 ---@param i tes3weatherController
 ---@param o MCP.AnyMap?
@@ -413,8 +440,8 @@ function this.tes3weatherController(i, o)
     -- o.ambientPostSunsetTime = i.ambientPostSunsetTime
     -- o.ambientPreSunriseTime = i.ambientPreSunriseTime
     -- o.ambientPreSunsetTime = i.ambientPreSunsetTime
-    o.currentFogColor = i.currentFogColor
-    o.currentSkyColor = i.currentSkyColor
+    o.currentFogColor = this.ToRGBA(i.currentFogColor)
+    o.currentSkyColor = this.ToRGBA(i.currentSkyColor)
     o.currentWeather = this.tes3weather(i.currentWeather)
     o.daysRemaining = i.daysRemaining
     -- o.fogDepthChangeSpeed = i.fogDepthChangeSpeed
@@ -451,7 +478,7 @@ function this.tes3weatherController(i, o)
     o.starsPostSunsetStart = i.starsPostSunsetStart
     o.starsPreSunriseFinish = i.starsPreSunriseFinish
     o.sunglareFaderAngleMax = i.sunglareFaderAngleMax
-    o.sunglareFaderColor = i.sunglareFaderColor
+    o.sunglareFaderColor = this.ToRGBA(i.sunglareFaderColor)
     o.sunglareFaderMax = i.sunglareFaderMax
     o.sunPostSunriseTime = i.sunPostSunriseTime
     o.sunPostSunsetTime = i.sunPostSunsetTime
@@ -463,7 +490,7 @@ function this.tes3weatherController(i, o)
     o.sunsetHour = i.sunsetHour
     o.timescaleClouds = i.timescaleClouds
     o.transitionScalar = i.transitionScalar
-    o.underwaterColor = i.underwaterColor
+    o.underwaterColor = this.ToRGBA(i.underwaterColor)
     o.underwaterColorWeight = i.underwaterColorWeight
     o.underwaterDayFog = i.underwaterDayFog
     o.underwaterIndoorFog = i.underwaterIndoorFog
@@ -477,7 +504,6 @@ function this.tes3weatherController(i, o)
     local _ = ValidateType(o)
     return o
 end
-
 
 ---@param i tes3worldController
 ---@param o MCP.AnyMap?
@@ -553,12 +579,12 @@ function this.tes3worldController(i, o)
     -- o.shadowCamera = i.shadowCamera
     -- o.shadows = i.shadows
     -- o.showSubtitles = i.showSubtitles
-    o.simulationTimeScalar = i.simulationTimeScalar
+    -- o.simulationTimeScalar = i.simulationTimeScalar
     -- o.splashController = i.splashController
     -- o.splashscreenCamera = i.splashscreenCamera
     o.stopGameLoop = i.stopGameLoop
     o.sunglareFader = this.tes3fader(i.sunglareFader)
-    o.systemTime = i.systemTime
+    -- o.systemTime = i.systemTime
     o.timescale = this.tes3globalVariable(i.timescale)
     o.transitionFader = this.tes3fader(i.transitionFader)
     o.useBestAttack = i.useBestAttack
@@ -590,10 +616,6 @@ function this.tes3travelDestinationNode(i, o)
     local _ = ValidateType(o)
     return o
 end
-
-
-
-
 
 ---@param i tes3baseObject?
 ---@param o MCP.AnyMap?
@@ -646,7 +668,7 @@ local function tes3object(i, o)
     if not o then
         return nil
     end
-    if i.isLocationMarker then -- for CS
+    if i.isLocationMarker then                  -- for CS
         o.isLocationMarker = i.isLocationMarker -- indicate travel point, but it contains interior north markers.
     end
     -- o.nextInCollection = i.nextInCollection
@@ -903,13 +925,13 @@ function this.tes3apparatus(i, o)
         return nil
     end
 
-    o.quality  = i.quality
+    o.quality = i.quality
     o.script  = this.tes3script(i.script)
-    o.type  = enumname.apparatusType(i.type)
-    o.value  = i.value
+    o.type    = enumname.apparatusType(i.type)
+    o.value   = i.value
     o.weight  = i.weight
 
-    local _ = ValidateType(o)
+    local _   = ValidateType(o)
     return o
 end
 
@@ -1165,7 +1187,7 @@ function this.tes3clothing(i, o)
     if i.enchantCapacity > 0 then
         o.enchantCapacity = i.enchantCapacity
     end
-    o.enchantment =  this.tes3enchantment(i.enchantment)
+    o.enchantment = this.tes3enchantment(i.enchantment)
     o.isLeftPart = i.isLeftPart
     o.isUsableByBeasts = i.isUsableByBeasts
     -- o.parts = i.parts -- TODO
@@ -1203,7 +1225,7 @@ function this.tes3container(i, o)
 
     if i.isInstance then
         ---@cast i tes3containerInstance
-        o.baseObject = this.tes3container(i.baseObject)-- almost values are same as between baseObject and instance?
+        o.baseObject = this.tes3container(i.baseObject) -- almost values are same as between baseObject and instance?
         o.reference = this.tes3reference(i.reference)
     else
         ---@cast i tes3container
@@ -1261,12 +1283,11 @@ function this.tes3creature(i, o)
 
     if i.isInstance then
         ---@cast i tes3creatureInstance
-        o.baseObject = this.tes3creature(i.baseObject)-- almost values are same as between baseObject and instance?
+        o.baseObject = this.tes3creature(i.baseObject) -- almost values are same as between baseObject and instance?
         -- o.equipment = i.equipment -- TODO
         -- o.mobile = this.tes3anyObject(i.mobile) -- TODO avoid circular reference
         o.reference = this.tes3reference(i.reference)
         o.weapon = this.tes3weapon(i.weapon)
-
     else
         ---@cast i tes3creature
     end
@@ -1564,7 +1585,7 @@ function this.tes3light(i, o)
     end
 
     o.canCarry = i.canCarry
-    o.color = jsonrpc.array(i.color)
+    o.color = this.ToRGBA(i.color)
     o.flickers = i.flickers
     o.flickersSlowly = i.flickersSlowly
     o.isDynamic = i.isDynamic
@@ -1656,7 +1677,7 @@ function this.tes3magicEffect(i, o)
     o.name = i.name
     o.nonRecastable = i.nonRecastable
     o.particleTexture = i.particleTexture
-    o.school =  enumname.magicSchool(i.school)
+    o.school = enumname.magicSchool(i.school)
     o.size = i.size
     o.sizeCap = i.sizeCap
     o.skill = enumname.skill(i.skill)
@@ -1815,8 +1836,8 @@ function this.tes3mobileActor(i, o)
     o.resistPoison = i.resistPoison
     o.resistShock = i.resistShock
     o.sanctuary = i.sanctuary
-    o.scanInterval = i.scanInterval
-    o.scanTimer = i.scanTimer
+    -- o.scanInterval = i.scanInterval
+    -- o.scanTimer = i.scanTimer
     o.shield = i.shield
     o.silence = i.silence
     -- o.sound = i.sound -- magic effect sound
@@ -1992,7 +2013,7 @@ function this.tes3mobileProjectile(i, o)
         return nil
     end
 
-    o.animTime = i.animTime
+    -- o.animTime = i.animTime
     o.attackSwing = i.attackSwing
     o.damage = i.damage
     o.expire = i.expire
@@ -2266,17 +2287,37 @@ function this.tes3region(i, o)
     -- o.sleepCreature = this.tes3leveledCreature(i.sleepCreature) -- it seems to be not useless.
     -- o.sounds = i.sounds -- TODO
     -- o.weather = this.tes3weather(i.weather) -- access to weather controlelr is better
-    o.weatherChanceAsh = i.weatherChanceAsh
-    o.weatherChanceBlight = i.weatherChanceBlight
-    o.weatherChanceBlizzard = i.weatherChanceBlizzard
-    o.weatherChanceClear = i.weatherChanceClear
-    o.weatherChanceCloudy = i.weatherChanceCloudy
-    o.weatherChanceFoggy = i.weatherChanceFoggy
-    o.weatherChanceOvercast = i.weatherChanceOvercast
-    o.weatherChanceRain = i.weatherChanceRain
+    if i.weatherChanceAsh > 0 then
+        o.weatherChanceAsh = i.weatherChanceAsh
+    end
+    if i.weatherChanceBlight > 0 then
+        o.weatherChanceBlight = i.weatherChanceBlight
+    end
+    if i.weatherChanceBlizzard > 0 then
+        o.weatherChanceBlizzard = i.weatherChanceBlizzard
+    end
+    if i.weatherChanceClear > 0 then
+        o.weatherChanceClear = i.weatherChanceClear
+    end
+    if i.weatherChanceCloudy > 0 then
+        o.weatherChanceCloudy = i.weatherChanceCloudy
+    end
+    if i.weatherChanceFoggy > 0 then
+        o.weatherChanceFoggy = i.weatherChanceFoggy
+    end
+    if i.weatherChanceOvercast > 0 then
+        o.weatherChanceOvercast = i.weatherChanceOvercast
+    end
+    if i.weatherChanceRain > 0 then
+        o.weatherChanceRain = i.weatherChanceRain
+    end
     -- o.weatherChances = i.weatherChances
-    o.weatherChanceSnow = i.weatherChanceSnow
-    o.weatherChanceThunder = i.weatherChanceThunder
+    if i.weatherChanceSnow then
+        o.weatherChanceSnow = i.weatherChanceSnow
+    end
+    if i.weatherChanceThunder > 0 then
+        o.weatherChanceThunder = i.weatherChanceThunder
+    end
 
     local _ = ValidateType(o)
     return o
@@ -2566,41 +2607,41 @@ local function WrapSerializerWithVisited(functionName, serializer)
         serializationDepth = serializationDepth + 1
 
         local ok, result = pcall(function()
-        -- Preserve existing nil behavior of each serializer.
-        if not i then
-            return serializer(i, o)
-        end
+            -- Preserve existing nil behavior of each serializer.
+            if not i then
+                return serializer(i, o)
+            end
 
-        local inputType = type(i)
-        -- Cycle tracking is only needed for reference-like values.
-        if inputType ~= "table" and inputType ~= "userdata" then
-            return serializer(i, o)
-        end
+            local inputType = type(i)
+            -- Cycle tracking is only needed for reference-like values.
+            if inputType ~= "table" and inputType ~= "userdata" then
+                return serializer(i, o)
+            end
 
-        -- Re-entrance on the same object means we hit a reference cycle.
-        if serializationVisited and serializationVisited[i] then
-            logger:trace("Detected circular reference in %s", functionName)
-            return CircularReferencePlaceholder(i)
-        end
+            -- Re-entrance on the same object means we hit a reference cycle.
+            if serializationVisited and serializationVisited[i] then
+                logger:trace("Detected circular reference in %s", functionName)
+                return CircularReferencePlaceholder(i)
+            end
 
-        -- Mark before descending into child serializers.
-        if serializationVisited then
-            serializationVisited[i] = true
-        end
+            -- Mark before descending into child serializers.
+            if serializationVisited then
+                serializationVisited[i] = true
+            end
 
-        -- Protect the visited map cleanup even if serializer throws.
-        local ok, result = pcall(serializer, i, o)
+            -- Protect the visited map cleanup even if serializer throws.
+            local ok, result = pcall(serializer, i, o)
 
-        -- Unmark on both success and failure paths.
-        if serializationVisited then
-            serializationVisited[i] = nil
-        end
+            -- Unmark on both success and failure paths.
+            if serializationVisited then
+                serializationVisited[i] = nil
+            end
 
-        if not ok then
-            -- Re-throw original serializer error for normal upstream handling.
-            error(result)
-        end
-        return result
+            if not ok then
+                -- Re-throw original serializer error for normal upstream handling.
+                error(result)
+            end
+            return result
         end)
 
         serializationDepth = serializationDepth - 1
