@@ -39,7 +39,13 @@ description: |
 Inspector集約ログのJSONは既定でpretty-printされる。エージェントが機械的にログを処理する必要がある場合のみ、`-Unpretty` を指定してInspectorの1行JSONを保存してよい。
 自動 foreground 化は best effort であり、ロードされるセーブ内容や実際のウィンドウ状態に依存するため、`tests/server_test.ps1` は target/activate/MenuDialog への到達を必須にしない。会話 actor まで到達したかは、実行後の `MWSE.log` と `tests/validate_memory_dump.ps1` の `conversationActors` 集計で判断する。
 
-2. 出力を確認する。
+2. 出力で `inspector_<timestamp>.log` の timestamp を確認し、次を実行する。
+
+```powershell
+.\tests\summarize_test_runs.ps1 -TestType server_test -RunTimestamp YYYYMMDD_HHMMSS
+```
+
+`tests/logs/server_test/summary_<timestamp>.json` を主な結果として報告する。`[EXIT] 0` だけでは passed ではなく、保存済みの `[PASSED]` case marker が必要である。explicit skip だけなら `skipped`、証拠不足や壊れた Inspector block は `inconclusive` となる。
 
 3. 出力からテスト結果を抽出する。
   - `[SKIPPED]` はテスト失敗ではないが、公開されるtool/prompt/resourceやゲーム状態が想定と変化している可能性があるため、件数と対象caseを必ず確認する。
@@ -49,9 +55,9 @@ Inspector集約ログのJSONは既定でpretty-printされる。エージェン�
   - `[INFO] Inspector logs: ...\\tests\\logs\\server_test\\inspector_<timestamp>.log`
   - `[INFO] MWSE log copy: ...\\tests\\logs\\server_test\\mwse_<timestamp>.log`
 
-5. `mwse_<timestamp>.log` を確認する（必要に応じて元の `MWSE.log` も確認する）。
+5. `failed` / `inconclusive` のときだけ summary evidence の `inspector_<timestamp>.log` と `mwse_<timestamp>.log` を確認する。ライブ `MWSE.log` は読まない。
 
-6. `MWSE.log` からサーバー側の挙動を検査する。
+6. 追加判定は source を値に含めて加える。例: `-RequirePattern 'primary:\[RUN\]' -ForbidPattern 'inspector:connection refused'`。規則は既定判定に追加されるだけである。
 
 7. 必要に応じて Memory dump を検査する。
   - `tests/server_test.ps1` は `mw-debug-action action=memory:SaveDebugDocuments` を実行するが、`tests/validate_memory_dump.ps1` は自動実行しない。

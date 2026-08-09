@@ -8,7 +8,8 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 - クラス名と関数は先頭大文字 `CamelCase` で命名すること
 - 変数は先頭小文字`camelCase`か`snake_case`で命名すること。使い分けは状況次第。
 - pattern matchingやregular expressionを必要とする処理は、使用しない方が高速と思われる場合は使用しない
-- `table` 型のサイズを取得する場合、`#table` を使用するのではなく、`table.size()` を使用する
+- `table` 型のサイズを取得する場合、非配列または要素に穴がある可能性がある場合は `table.size()` を使用する。1 から始まる連続した配列であることを不変条件として保証できる場合に限り、`#table` を使用してよい
+- 要素数の上限を既存の入力値や定数から根拠付きで求められる配列・ハッシュは、`table.new(narray, nhash)` で事前確保する。実使用数とかけ離れた上限、追加走査、またはMWSEプロパティの再取得を要する場合は使用しない
 - `logger` に外部入力や URI を渡す場合は `logger:debug("%s", value)` のように format を明示する
 - `require` と `include` は完全修飾モジュール名を使用する（例: `require("morrowind-mcp.core.strutil")`）
 - 文字列はテストケースで使用する場合を除き、英語で書く

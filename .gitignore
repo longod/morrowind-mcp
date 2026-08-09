@@ -51,7 +51,7 @@ meta.ini
 .exit-after-tests
 .server-test-running
 tests/logs/
-tests/test/
+tests/testdata/
 mwmcp.local.json
 .agents/mcp_config.json
 .mcp.json

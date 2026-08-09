@@ -418,7 +418,7 @@ function this.CreateCellSampler(cell, bucketSize)
     ---@type MCP.TerrainSampleTriangle[]
     local triangles = {}
     ---@type table<integer, integer[]>
-    local buckets = {}
+    local buckets = table.new(bucketCount * bucketCount, 0)
     for node in cell.landscape.sceneNode:traverse({ type = ni.type.NiTriShape }) do
         ---@cast node niTriShape
         local data = node.data

@@ -60,6 +60,7 @@ local this = {}
 ---@field builderFactory (fun(params: MCP.TerrainGridBuilderParams): MCP.TerrainGridBuilder)? Injectable builder constructor.
 ---@field segmentValidator (fun(start: MCP.PathfindingPosition, destination: MCP.PathfindingPosition, params: MCP.TerrainSegmentValidationParams?): MCP.TerrainSegmentValidationResult)? Injectable obstacle validator.
 ---@field qualityEvaluator (fun(referenceSampler: MCP.TerrainHeightSampler, grid: MCP.TerrainGrid, validationInterval: number): MCP.TerrainHeightMetrics)? Injectable quality evaluator.
+---@field onChanged fun(layer: "terrain", cellId: MCP.CellIdentityKey)?
 
 ---@class MCP.TerrainGridManager
 ---@field logger mwseLogger
@@ -75,6 +76,7 @@ local this = {}
 ---@field loadedCallback fun(e: loadedEventData)?
 ---@field simulateCallback fun(e: simulateEventData)?
 ---@field qualityComparison MCP.TerrainQualityComparison?
+---@field onChanged fun(layer: "terrain", cellId: MCP.CellIdentityKey)?
 ---@field QueueCell fun(self: MCP.TerrainGridManager, cell: tes3cell): boolean
 ---@field RemoveCell fun(self: MCP.TerrainGridManager, cellId: MCP.CellIdentityKey)
 ---@field Clear fun(self: MCP.TerrainGridManager)
@@ -102,6 +104,7 @@ function this.new(params)
         builderFactory = params.builderFactory or builderModule.new,
         segmentValidator = params.segmentValidator or raycast.ValidateSegment,
         qualityEvaluator = params.qualityEvaluator or quality.EvaluateHeight,
+        onChanged = params.onChanged,
         jobs = {},
         grids = {},
         queue = {},
@@ -152,6 +155,9 @@ function this:RemoveCell(cellId)
     if grid then
         grid:Release()
         self.grids[cellId] = nil
+        if self.onChanged then
+            self.onChanged("terrain", cellId)
+        end
     end
     for index = table.size(self.queue), 1, -1 do
         if self.queue[index] == cellId then
@@ -214,6 +220,9 @@ function this:Step()
             "Terrain grid ready: cell=%s samples=%d elapsedMilliseconds=%.3f maxStepMilliseconds=%.3f memoryDeltaKilobytes=%.3f",
             cellId, job.builder.processedSamples, job.builder.elapsedMilliseconds or 0,
             job.builder.maxStepMilliseconds or 0, job.builder.memoryDeltaKilobytes or 0)
+        if self.onChanged then
+            self.onChanged("terrain", cellId)
+        end
     elseif state == "failed" or state == "cancelled" then
         self.logger:warn("Terrain grid build stopped: cell=%s state=%s error=%s", cellId, state,
             tostring(job.builder.error))
@@ -415,7 +424,9 @@ function this:FindPath(start, destination, options)
             })
             if not validation.clear then
                 -- Only the first obstruction is learned per attempt; rerunning A* may avoid all later segments.
-                grid:SetEdgeBlocked(path.indices[index], path.indices[index + 1], true)
+                if grid:SetEdgeBlocked(path.indices[index], path.indices[index + 1], true) and self.onChanged then
+                    self.onChanged("terrain", startCellId)
+                end
                 blocked = true
                 break
             end

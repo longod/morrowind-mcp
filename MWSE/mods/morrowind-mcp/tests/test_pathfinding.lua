@@ -24,7 +24,7 @@ function this.Test()
 
     --- Build the minimal active-cell shape consumed by UpdateCell.
     local function Cell(id, gridX, gridY, nodes, isInterior)
-        local cell = { id = id, isInterior = isInterior ~= false, gridX = gridX, gridY = gridY, waterLevel = 0, pathGrid = { isLoaded = true, nodes = nodes }, references = {}, valid = true }
+        local cell = { id = id, isInterior = isInterior ~= false, gridX = gridX, gridY = gridY, waterLevel = 0, pathGrid = { isLoaded = true, nodeCount = table.size(nodes), nodes = nodes }, references = {}, valid = true }
         function cell:isValid()
             return self.valid ~= false
         end
@@ -84,6 +84,18 @@ function this.Test()
         unitwind:expect(table.size(graph.edges)).toBe(1)
         first.position.x = 999
         unitwind:expect(graph.nodes[graph.nodeIdsByCellId[CellKey(cell)][1]].position.x).toBe(10)
+    end)
+
+    unitwind:test("UpdateCell and edge state changes notify observers", function()
+        local first, second = Node(0, 0, 0), Node(100, 0, 0)
+        first.connectedNodes = { second }
+        local changes = 0
+        local graph, cell = pathfinding.new({ onChanged = function() changes = changes + 1 end }), Cell("changes", 0, 0, { first, second })
+        graph:UpdateCell(cell)
+        local firstNodeId = graph.nodeIdsByCellId[CellKey(cell)][1]
+        local secondNodeId = graph.nodeIdsByCellId[CellKey(cell)][2]
+        graph:SetEdgeBlocked(graph.edgeIdByNeighborId[firstNodeId][secondNodeId], true)
+        unitwind:expect(changes).toBe(2)
     end)
 
     unitwind:test("UpdateCell resolves copied connectedNodes by position", function()
@@ -265,6 +277,8 @@ function this.Test()
         graph:UpdateCell(source)
         local sourceNodeId = graph.nodeIdsByCellId[CellKey(source)][2]
         unitwind:expect(table.size(graph.edges)).toBe(1)
+        unitwind:expect(table.size(graph.travelDestinationsByCellId[CellKey(source)])).toBe(1)
+        unitwind:expect(graph:FindNearestNodeByPosition(CellKey(source), graph.travelDestinationsByCellId[CellKey(source)][1].doorPosition).id).toBe(sourceNodeId)
         graph:UpdateCell(destination)
         unitwind:expect(table.size(graph.travelDestinationsByCellId[CellKey(source)])).toBe(1)
         unitwind:expect(graph.travelEdgeCount).toBe(1)

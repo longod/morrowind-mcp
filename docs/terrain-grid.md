@@ -90,6 +90,8 @@ Time checks may be batched after several samples to reduce clock-call overhead. 
 
 The player's current cell has highest build priority. Other active exterior cells are ordered by grid distance from it. Queries distinguish `pending`, `ready`, and `unavailable`.
 
+The manager accepts an optional internal `onChanged("terrain", cellId)` callback. It fires when a grid becomes `ready`, when a completed grid is removed, and when static-obstacle learning changes a grid edge. The callback is notification-only and must not mutate manager or grid state; consumers such as debug visualization defer their refresh work until a later frame. It is not an MCP client notification.
+
 ## Obstacle Validation
 
 Initial static-obstacle support validates candidate route edges with bounded, root-filtered `tes3.rayTest` calls. Because a ray has no radius, multiple rays approximate the player's width and height using `tes3.mobilePlayer.boundSize2D` and `height`.

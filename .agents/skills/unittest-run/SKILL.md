@@ -36,11 +36,19 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 .\tests\unit_test.ps1 -VerifyRuntimeAfterTests
 ```
 
-6. `MWSE.log` を確認する。
+6. 実行直後に保存先の timestamp を取り、次を実行する。
 
-7. `MWSE.log` からテスト結果を抽出する。
+```powershell
+.\tests\summarize_test_runs.ps1 -TestType unit_test -RunTimestamp YYYYMMDD_HHMMSS
+```
 
-8. 抽出結果ファイルと `MWSE.log` コピーを確認する。
+7. `tests/logs/unit_test/summary_<timestamp>.json` の `status` を主な結果として報告する。`passed` は suite pass と UnitWind evidence、`failed` は `FAILED`、証拠不足は `inconclusive` である。
+
+8. `failed` / `inconclusive` のときだけ summary の `evidence` が示す抽出結果と同 timestamp の `mwse_<timestamp>.log` を確認する。ライブ `MWSE.log` は読まない。
+
+9. 必要なら追加規則を明示 source 付きで加える。例: `-RequirePattern 'primary:MORROWIND-MCP\\.JSONRPC' -ForbidPattern 'mwse:traceback'`。規則は加算のみで、既定の failed/inconclusive を passed にしない。
+
+10. 抽出結果ファイルと `MWSE.log` コピーの命名は次のとおり。
 	- 抽出結果: `tests/logs/unit_test/unitwind_YYYYMMDD_HHMMSS.log`
 	- `MWSE.log` コピー: `tests/logs/unit_test/mwse_YYYYMMDD_HHMMSS.log`
 

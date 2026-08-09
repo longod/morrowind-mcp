@@ -59,6 +59,7 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@field stitchMaxVerticalDistance number?
 ---@field pathgridPollInterval number?
 ---@field pathgridPollDeadline number?
+---@field onChanged fun(layer: "graph", cellId: MCP.CellIdentityKey?)?
 
 ---@class MCP.PathfindingNearestWeights
 ---@field horizontal number?
@@ -124,6 +125,7 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@field cellActivatedCallback fun(e: cellActivatedEventData)?
 ---@field cellDeactivatedCallback fun(e: cellDeactivatedEventData)?
 ---@field loadedCallback fun(e: loadedEventData)?
+---@field onChanged fun(layer: "graph", cellId: MCP.CellIdentityKey?)?
 local this = {}
 
 local exteriorCellSize = 8192
@@ -228,6 +230,7 @@ function this.new(params)
         pathgridPollInterval = 0.1,
         pathgridPollDeadline = 5,
         pendingPathgridPolls = {},
+        onChanged = params and params.onChanged or nil,
         cellActivatedCallback = nil,
         cellDeactivatedCallback = nil,
         loadedCallback = nil,
@@ -424,7 +427,7 @@ end
 --- Rebuild only travel edges emitted by one cell after its active references change.
 ---@param sourceCellId MCP.CellIdentityKey
 function this:ResolveTravelDestinations(sourceCellId)
-    local removedEdgeIds = {}
+    local removedEdgeIds = table.new(self.travelEdgeCount, 0)
     for edgeId, edge in pairs(self.edges) do
         if edge.kind == edgeKind.travel and edge.sourceCellId == sourceCellId then
             table.insert(removedEdgeIds, edgeId)
@@ -470,10 +473,21 @@ end
 ---@param cell MCP.PathfindingCell
 ---@return MCP.PathfindingBorderNodeIds
 function this:CollectBorderNodeIds(cell)
-    local borderNodeIds = { west = {}, east = {}, south = {}, north = {} }
     if cell.isInterior then
-        return borderNodeIds
+        return {
+            west = table.new(0, 0),
+            east = table.new(0, 0),
+            south = table.new(0, 0),
+            north = table.new(0, 0),
+        }
     end
+    local nodeCount = table.size(self.nodeIdsByCellId[cell.id])
+    local borderNodeIds = {
+        west = table.new(nodeCount, 0),
+        east = table.new(nodeCount, 0),
+        south = table.new(nodeCount, 0),
+        north = table.new(nodeCount, 0),
+    }
     for _, nodeId in ipairs(self.nodeIdsByCellId[cell.id]) do
         local position = self.nodes[nodeId].position
         if math.abs(position.x - cell.gridX * self.exteriorCellSize) <= self.stitchBorderMargin then
@@ -558,33 +572,46 @@ function this:UpdateCell(cell)
     if self.cells[cellId] then
         self:ResolveTravelDestinationsForCell(cellId)
         self.logger:debug("Skipping pathgrid reconstruction because the cell is already snapshotted: cell=%s key=%s", cell.id, cellId)
+        if self.onChanged then
+            self.onChanged("graph", cellId)
+        end
         return true
     end
+    local pathgridNodeCount = cell.pathGrid.nodeCount
     self.cells[cellId] = {
         id = cellId,
         isInterior = cell.isInterior,
         gridX = cell.gridX,
         gridY = cell.gridY,
         waterLevel = cell.waterLevel,
-        borderNodeIds = { west = {}, east = {}, south = {}, north = {} },
+        borderNodeIds = {
+            west = table.new(0, 0),
+            east = table.new(0, 0),
+            south = table.new(0, 0),
+            north = table.new(0, 0),
+        },
         unresolvedConnectionCount = 0,
         ambiguousConnectionCount = 0,
     }
-    self.nodeIdsByCellId[cellId] = {}
+    self.nodeIdsByCellId[cellId] = table.new(pathgridNodeCount, 0)
 
-    ---@type MCP.PathfindingNodeIdsByX
-    local nodeIdsByPosition = {}
+    local nodeIdsByPosition = table.new(0, pathgridNodeCount)
+    ---@cast nodeIdsByPosition MCP.PathfindingNodeIdsByX
+    local connectedNodesByIndex = table.new(pathgridNodeCount, 0)
     for index, pathgridNode in ipairs(cell.pathGrid.nodes) do
         local nodeId = self.nextNodeId
         self.nextNodeId = self.nextNodeId + 1
         self.nodes[nodeId] = { id = nodeId, cellId = cellId, position = CopyPosition(pathgridNode.position) }
-        self.edgeIdByNeighborId[nodeId] = {}
+        -- This MWSE property returns a fresh table, so retain the single copy needed by both passes.
+        local connectedNodes = pathgridNode.connectedNodes
+        connectedNodesByIndex[index] = connectedNodes
+        self.edgeIdByNeighborId[nodeId] = table.new(0, table.size(connectedNodes))
         self.nodeIdsByCellId[cellId][index] = nodeId
         IndexNodePosition(nodeIdsByPosition, pathgridNode.position, nodeId)
     end
     for index, pathgridNode in ipairs(cell.pathGrid.nodes) do
         local fromId = self.nodeIdsByCellId[cellId][index]
-        for _, connectedNode in ipairs(pathgridNode.connectedNodes) do
+        for _, connectedNode in ipairs(connectedNodesByIndex[index]) do
             local position = connectedNode and connectedNode.position
             local toId, ambiguous = nil, false
             if position then
@@ -613,6 +640,9 @@ function this:UpdateCell(cell)
             cellSnapshot.ambiguousConnectionCount)
     end
     self.logger:debug("Snapshotted pathgrid: cell=%s key=%s grid=%s nodes=%d edges=%d unresolvedConnections=%d ambiguousConnections=%d", cell.id, cellId, grid, table.size(self.nodeIdsByCellId[cellId]), table.size(self.edges), cellSnapshot.unresolvedConnectionCount, cellSnapshot.ambiguousConnectionCount)
+    if self.onChanged then
+        self.onChanged("graph", cellId)
+    end
     return true
 end
 
@@ -760,6 +790,9 @@ function this:SetEdgeSurface(edgeId, surface)
     end
     edge.surface = surface
     self.logger:debug("Updated pathfinding edge surface: edgeId=%d surface=%d", edgeId, surface)
+    if self.onChanged then
+        self.onChanged("graph")
+    end
     return true
 end
 
@@ -774,6 +807,9 @@ function this:SetEdgeBlocked(edgeId, blocked)
     end
     edge.blocked = blocked
     self.logger:debug("Updated pathfinding edge blockage: edgeId=%d blocked=%s", edgeId, tostring(blocked))
+    if self.onChanged then
+        self.onChanged("graph")
+    end
     return true
 end
 
@@ -867,14 +903,17 @@ function this:FindPath(start, destination, options)
         self.logger:debug("Pathfinding skipped because a start or destination node is unavailable.")
         return nil
     end
-    ---@type MCP.PathfindingOpenEntry[]
-    local open = { { nodeId = startNode.id, score = self:Heuristic(startNode, destinationNode, options) } }
-    ---@type MCP.PathfindingCosts
-    local costs = { [startNode.id] = 0 }
-    ---@type MCP.PathfindingPrevious
-    local previous = {}
-    ---@type MCP.PathfindingClosed
-    local closed = {}
+    local nodeCount = table.size(self.nodes)
+    local open = table.new(table.size(self.edges) + 1, 0)
+    ---@cast open MCP.PathfindingOpenEntry[]
+    open[1] = { nodeId = startNode.id, score = self:Heuristic(startNode, destinationNode, options) }
+    local costs = table.new(nodeCount, 0)
+    ---@cast costs MCP.PathfindingCosts
+    costs[startNode.id] = 0
+    local previous = table.new(nodeCount, 0)
+    ---@cast previous MCP.PathfindingPrevious
+    local closed = table.new(nodeCount, 0)
+    ---@cast closed MCP.PathfindingClosed
     -- Heap operations avoid quadratic open-set scans across connected cells.
     while table.size(open) > 0 do
         local current = self:PopOpenEntry(open)
@@ -884,10 +923,10 @@ function this:FindPath(start, destination, options)
         if not closed[current.nodeId] then
             closed[current.nodeId] = true
             if current.nodeId == destinationNode.id then
-                ---@type integer[]
-                local nodeIds = {}
-                ---@type integer[]
-                local edgeIds = {}
+                local nodeIds = table.new(nodeCount, 0)
+                ---@cast nodeIds integer[]
+                local edgeIds = table.new(nodeCount, 0)
+                ---@cast edgeIds integer[]
                 local nodeId = destinationNode.id ---@type integer?
                 while nodeId do
                     table.insert(nodeIds, 1, nodeId)
@@ -960,6 +999,9 @@ function this:RegisterEventHandlers()
         local cellId = cellutil.GetIdentityKey(e.cell)
         if cellId then
             self:StopPathgridPoll(cellId, "cell deactivated")
+            if self.onChanged then
+                self.onChanged("graph", cellId)
+            end
         end
     end
     self.loadedCallback = function()
@@ -985,7 +1027,7 @@ function this:UnregisterEventHandlers()
         event.unregister(tes3.event.loaded, self.loadedCallback)
         self.loadedCallback = nil
     end
-    local pendingCellIds = {}
+    local pendingCellIds = table.new(table.size(self.pendingPathgridPolls), 0)
     for cellId in pairs(self.pendingPathgridPolls) do
         table.insert(pendingCellIds, cellId)
     end

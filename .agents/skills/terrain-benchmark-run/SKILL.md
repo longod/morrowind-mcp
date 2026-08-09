@@ -46,6 +46,18 @@ description: |
 
 ## Verification
 
+実行直後に `result_<timestamp>.json` の timestamp を取り、次を実行する。
+
+```powershell
+.\tests\summarize_test_runs.ps1 -TestType terrain_benchmark -RunTimestamp YYYYMMDD_HHMMSS
+```
+
+`tests/logs/terrain_benchmark/summary_<timestamp>.json` を主な結果として報告する。`ready` と 64/128/256 の samples >= 1、non-null height が揃えば passed、valid JSON の `state=failed` または同 timestamp Inspector の非 0 exit は failed、不正/不足した JSON は inconclusive である。同 timestamp の `result` / `inspector` / `mwse` だけが evidence になる。ライブ `MWSE.log` は読まない。
+
+追加規則は `-RequirePattern 'result:"state"\s*:\s*"ready"'` のように `source:regex` で指定する。規則は additive であり、既定 failed/inconclusive を passed にしない。
+
+`failed` / `inconclusive` のときだけ summary evidence の生アーティファクトを確認する。
+
 成功時は次を確認する。
 
 1. 終了コードが `0`、コンソールに `[PASSED] Terrain benchmark completed for cell ...` がある。

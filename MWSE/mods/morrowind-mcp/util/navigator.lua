@@ -144,7 +144,7 @@ function this:Start(destination)
         return false, "No pathgrid route is available for the requested destination."
     end
 
-    local waypoints = {}
+    local waypoints = table.new(table.size(path.nodeIds) + 1, 0)
     for index, nodeId in ipairs(path.nodeIds) do
         local node = self.pathfinding.nodes[nodeId]
         local edge = index > 1 and self.pathfinding.edges[path.edgeIds[index - 1]] or nil

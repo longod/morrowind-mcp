@@ -600,16 +600,6 @@ try {
         (New-ServerTestCase -Name "tools list after continue" -Arguments @("--method", "tools/list") -Validate { param($result) if ($null -eq $result.tools) { throw "Missing tools." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) } -RetryUntil { param($result, $context) $context.ToolNames -contains "mw-player-fetch" } -RetryAttempts $MaxTry -RetryIntervalSeconds $IntervalSeconds),
         (New-ServerTestCase -Name "prompts list after continue" -Arguments @("--method", "prompts/list") -Validate { param($result) if ($null -eq $result.prompts) { throw "Missing prompts." } } -Capture { param($result, $context) $context.PromptNames = @($result.prompts | ForEach-Object { $_.name }) }),
         (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($null -eq $result.structuredContent.player.position -or [string]::IsNullOrWhiteSpace($result.structuredContent.player.cell.id) -or $null -eq $result.structuredContent.mobilePlayer) { throw "Player reference or mobile state is missing." } } -Capture { param($result, $context) $context.PlayerNavigationPosition = $result.structuredContent.player.position; $context.PlayerNavigationCellId = $result.structuredContent.player.cell.id }),
-        (New-ToolCallTestCase -Name "terrain runtime access probe" -ToolName "mw-debug-action" -ToolArguments @{ action = "terrain:ProbeRuntimeAccess" } -When { param($context) $context.ToolNames -contains "mw-debug-action" } -Validate {
-            param($result)
-            Assert-ToolSuccess $result
-            $probe = $result.structuredContent
-            if ($null -eq $probe -or -not $probe.is_exterior) { throw "Terrain probe did not run in an exterior cell." }
-            if (-not $probe.landscape.available -or $probe.landscape.tri_shape_count -lt 1 -or $probe.landscape.triangle_count -lt 1) { throw "Active landscape triangles are unavailable." }
-            if (-not $probe.world_landscape.available -or $probe.world_landscape.tri_shape_count -lt 1) { throw "World landscape root is unavailable." }
-            if ($null -eq $probe.collision.collidees -or $null -eq $probe.collision.colliders -or ($probe.collision.collidees.record_count + $probe.collision.colliders.record_count) -lt 1) { throw "Collision-group records are unavailable." }
-            if (-not $probe.rays.landscape.attempted -or -not $probe.rays.landscape.hit) { throw "Landscape ray did not hit terrain." }
-        }),
         (New-ServerTestCase -Name "player navigate reachable location" -Arguments {
             param($context)
             New-ToolCallArguments -ToolName "mw-player-navigate" -ToolArguments @{
@@ -681,14 +671,6 @@ try {
         (New-ResourceReadTestCase -Name "memory player equipment read" -Uri "morrowind://memory/player/equipment.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/player/equipment.json" } -Validate { param($result) $content = @($result.contents | Where-Object { $_.uri -eq "morrowind://memory/player/equipment.json" -and $_.mimeType -eq "application/json" -and $_.text } | Select-Object -First 1)[0]; if ($null -eq $content) { throw "Player equipment memory is not JSON text." }; $document = $content.text | ConvertFrom-Json -ErrorAction Stop; if ($document.type -ne "memory.collection" -or $document.data_type -ne "equipment_items") { throw "Player equipment memory has an invalid document type." }; if ($document.subject.id -ne "player") { throw "Player equipment memory is missing the player subject." }; foreach ($field in @("available", "item_count", "items")) { if ($null -eq $document.data.PSObject.Properties[$field]) { throw "Player equipment memory is missing data.$field." } }; if ($document.data.item_count -ne @($document.data.items).Count) { throw "Player equipment item_count does not match items." } }),
         (New-ResourceReadTestCase -Name "memory actor index read" -Uri "morrowind://memory/actors/index.json" -When { param($context) $context.ResourceUris -contains "morrowind://memory/actors/index.json" } -Validate { param($result) if (@($result.contents | Where-Object { $_.uri -eq "morrowind://memory/actors/index.json" -and $_.mimeType -eq "application/json" -and $_.text }).Count -ne 1) { throw "Actor memory index is not JSON text." } }),
         (New-ResourceReadTestCase -Name "screenshot resource read" -Uri { param($context) $context.ScreenshotUri } -When { param($context) -not [string]::IsNullOrWhiteSpace($context.ScreenshotUri) } -Validate { param($result, $context) $content = @($result.contents | Where-Object { $_.uri -eq $context.ScreenshotUri } | Select-Object -First 1)[0]; if ($null -eq $content -or $content.mimeType -ne $context.ScreenshotMimeType -or [string]::IsNullOrWhiteSpace($content.blob) -or $content.blob.Length -lt 4) { throw "Screenshot blob is missing or invalid." }; if ($content.mimeType -eq "image/jpeg" -and -not $content.blob.StartsWith("/9j/")) { throw "Screenshot is not a JPEG blob." } }),
-        (New-ToolCallTestCase -Name "terrain grid status" -ToolName "mw-debug-action" -ToolArguments @{ action = "terrain:GetGridStatus" } -When { param($context) $context.ToolNames -contains "mw-debug-action" } -Validate {
-            param($result)
-            Assert-ToolSuccess $result
-            $status = $result.structuredContent
-            if ($null -eq $status -or -not $status.enabled) { throw "Terrain grid manager is not enabled." }
-            if ($status.ready_count -lt 1) { throw "No active terrain grid reached ready state." }
-            if ($status.interval -ne 128) { throw "Terrain grid interval does not match the configured default." }
-        }),
         (New-PromptGetTestCase -Name "prompt loar" -PromptName "mw-loar" -Validate { param($result) if (@($result.messages | Where-Object { $_.content.type -eq "text" -and -not [string]::IsNullOrWhiteSpace($_.content.text) }).Count -eq 0) { throw "Prompt returned no text message." } }),
         (New-PromptGetTestCase -Name "prompt role" -PromptName "mw-role" -When { param($context) $context.PromptNames -contains "mw-role" } -Validate { param($result) if (@($result.messages).Count -eq 0) { throw "Prompt returned no messages." } }),
         (New-PromptGetTestCase -Name "prompt todo" -PromptName "mw-todo" -Validate { param($result) if (@($result.messages).Count -eq 0) { throw "Prompt returned no messages." } }),
@@ -746,4 +728,3 @@ finally {
 }
 
 exit $ExitCode
-

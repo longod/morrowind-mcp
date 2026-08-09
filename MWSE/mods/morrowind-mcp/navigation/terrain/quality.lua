@@ -30,7 +30,9 @@ end
 ---@param validationInterval number
 ---@return MCP.TerrainHeightMetrics
 function this.EvaluateHeight(referenceSampler, grid, validationInterval)
-    local errors = {}
+    local columnCount = math.floor((grid.width - 1) * grid.interval / validationInterval) + 1
+    local rowCount = math.floor((grid.height - 1) * grid.interval / validationInterval) + 1
+    local errors = table.new(columnCount * rowCount, 0)
     local squaredError = 0
     local absoluteError = 0
     local maxError = 0

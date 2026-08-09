@@ -321,20 +321,24 @@ function this:FindPath(start, destination)
     if not startIndex or not destinationIndex then
         return nil
     end
-    ---@type MCP.TerrainGridOpenEntry[]
-    local open = { { index = startIndex, score = self:Heuristic(startIndex, destinationIndex) } }
-    ---@type table<integer, number>
-    local costs = { [startIndex] = 0 }
-    ---@type table<integer, integer>
-    local previous = {}
-    ---@type table<integer, boolean>
-    local closed = {}
+    local sampleCount = self.width * self.height
+    local open = table.new(sampleCount, 0)
+    ---@cast open MCP.TerrainGridOpenEntry[]
+    open[1] = { index = startIndex, score = self:Heuristic(startIndex, destinationIndex) }
+    local costs = table.new(sampleCount, 0)
+    ---@cast costs table<integer, number>
+    costs[startIndex] = 0
+    local previous = table.new(sampleCount, 0)
+    ---@cast previous table<integer, integer>
+    local closed = table.new(sampleCount, 0)
+    ---@cast closed table<integer, boolean>
     while table.size(open) > 0 do
         local current = PopHeap(open)
         if current and not closed[current.index] then
             closed[current.index] = true
             if current.index == destinationIndex then
-                local indices = {}
+                local indices = table.new(sampleCount, 0)
+                ---@cast indices integer[]
                 local index = destinationIndex
                 while index do
                     table.insert(indices, 1, index)
@@ -405,3 +409,4 @@ end
 this.flags = { sampled = sampledFlag, walkable = walkableFlag, water = waterFlag }
 this.directions = directions
 return this
+

@@ -50,17 +50,17 @@ end
 function this.BuildVolumeOffsets(boundSize2D, height)
     local halfWidth = math.max(boundSize2D.x, boundSize2D.y) * 0.5
     local margin = math.min(8, height * 0.1)
-    return {
-        { lateral = -halfWidth, vertical = margin },
-        { lateral = 0, vertical = margin },
-        { lateral = halfWidth, vertical = margin },
-        { lateral = -halfWidth, vertical = height * 0.5 },
-        { lateral = 0, vertical = height * 0.5 },
-        { lateral = halfWidth, vertical = height * 0.5 },
-        { lateral = -halfWidth, vertical = height - margin },
-        { lateral = 0, vertical = height - margin },
-        { lateral = halfWidth, vertical = height - margin },
-    }
+    local offsets = table.new(9, 0)
+    offsets[1] = { lateral = -halfWidth, vertical = margin }
+    offsets[2] = { lateral = 0, vertical = margin }
+    offsets[3] = { lateral = halfWidth, vertical = margin }
+    offsets[4] = { lateral = -halfWidth, vertical = height * 0.5 }
+    offsets[5] = { lateral = 0, vertical = height * 0.5 }
+    offsets[6] = { lateral = halfWidth, vertical = height * 0.5 }
+    offsets[7] = { lateral = -halfWidth, vertical = height - margin }
+    offsets[8] = { lateral = 0, vertical = height - margin }
+    offsets[9] = { lateral = halfWidth, vertical = height - margin }
+    return offsets
 end
 
 --- Validate one horizontal route segment with bounded scene-graph rays that approximate a swept volume.

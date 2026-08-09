@@ -15,6 +15,8 @@ local navigator = require("morrowind-mcp.util.navigator")
 local mcpui = require("morrowind-mcp.util.mcpui")
 local cellutil = require("morrowind-mcp.tes3.cell")
 local terrainGridManager = require("morrowind-mcp.navigation.terrain.manager")
+local debugGeometryProbe = require("morrowind-mcp.navigation.debug_geometry_probe")
+local visualizerModule = require("morrowind-mcp.navigation.visualizer")
 
 -- TODO split implementations, such as session manager?
 
@@ -134,6 +136,7 @@ end
 ---@field pathfinding MCP.Pathfinding
 ---@field activeNavigator MCP.Navigator?
 ---@field terrainGridManager MCP.TerrainGridManager
+---@field visualizer MCP.NavigationVisualizer?
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -149,8 +152,13 @@ function this.new(params)
     instance.port = instance.port or settings.defaultConfig.server.port
     instance.httpHeaders = {}
     instance.resource = resourceManager.new()
-    instance.pathfinding = pathfinding.new()
-    instance.terrainGridManager = terrainGridManager.new()
+    local function RequestVisualizationRefresh(layer, cellId)
+        if instance.visualizer then
+            instance.visualizer:RequestRefresh(layer, cellId)
+        end
+    end
+    instance.pathfinding = pathfinding.new({ onChanged = RequestVisualizationRefresh })
+    instance.terrainGridManager = terrainGridManager.new({ onChanged = RequestVisualizationRefresh })
     instance.activeNavigator = nil
     instance.sessions = {}
     instance.nextSessionIndex = 0
@@ -1683,6 +1691,39 @@ end
 
 ---@param e keyDownEventData
 function this:DebugNavigation(e)
+    if not self.visualizer then
+        self.logger:warn("Navigation visualizer is unavailable")
+        return
+    end
+    tes3ui.showMessageMenu({
+        header = "Navigation Debug",
+        message = "Choose a navigation visualization action.",
+        cancels = true,
+        buttons = {
+            {
+                text = self.visualizer.options.terrainEnabled and "Hide Terrain Grid" or "Show Terrain Grid",
+                callback = function()
+                    self.visualizer:SetTerrainEnabled(not self.visualizer.options.terrainEnabled)
+                end,
+            },
+            {
+                text = self.visualizer.options.graphEnabled and "Hide Pathfinding Graph" or "Show Pathfinding Graph",
+                callback = function()
+                    self.visualizer:SetGraphEnabled(not self.visualizer.options.graphEnabled)
+                end,
+            },
+            {
+                text = "Pathgrid Navigation",
+                callback = function()
+                    self:DebugNavigationCandidates(e)
+                end,
+            },
+        },
+    })
+end
+
+---@param e keyDownEventData
+function this:DebugNavigationCandidates(e)
     local player = tes3.player
     if not player or not player.cell then
         self.logger:warn("Navigation debug menu requires an active player cell")
@@ -1766,6 +1807,7 @@ function this:Start()
     target:RegisterEvent()
     self.pathfinding:RegisterEventHandlers()
     self.terrainGridManager:RegisterEventHandlers()
+    self.visualizer = visualizerModule.new(self.pathfinding, self.terrainGridManager)
 
     self.enterFrameCallback = function(e)
         self:Listen(e)
@@ -1773,10 +1815,13 @@ function this:Start()
         self:MaintainServerPings()
         self:BroadcastNotifications()
         self:CloseExpiredSessions()
+        self.visualizer:Tick()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
     self.loadedCallback = function(e)
+        debugGeometryProbe.Remove()
+        self.visualizer:Refresh()
         if tes3.worldController then
             if config.notification.showSubtitles and not tes3.worldController.showSubtitles then
                 tes3.worldController.showSubtitles = true
@@ -1861,6 +1906,12 @@ function this:Shutdown()
     if self.activeNavigator then
         self.activeNavigator:Release()
         self.activeNavigator = nil
+    end
+
+    debugGeometryProbe.Remove()
+    if self.visualizer then
+        self.visualizer:Remove()
+        self.visualizer = nil
     end
 
     self.terrainGridManager:Release()

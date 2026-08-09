@@ -25,18 +25,24 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 ```
 
 ## Verification Steps
-1. コンソール出力で `[PASSED] Received SSE notification: notifications/message` を確認する。
+1. 出力の `sse_<timestamp>.log` から timestamp を取得し、次を実行する。
+
+```powershell
+.\tests\summarize_test_runs.ps1 -TestType sse_test -RunTimestamp YYYYMMDD_HHMMSS
+```
+
+`tests/logs/sse_test/summary_<timestamp>.json` を主な結果として報告する。`[PASSED] Received SSE notification: notifications/message` が必要で、`[FAILED]` / `[ERROR]` は failed、端末 marker 不在は inconclusive である。
 
 2. 実行完了時に表示される保存先を確認する。
    - `[INFO] SSE test log: ...\tests\logs\sse_test\sse_<timestamp>.log`
    - `[INFO] MWSE log copy: ...\tests\logs\sse_test\mwse_<timestamp>.log`
 
-3. `sse_<timestamp>.log` を確認する。
+3. `failed` / `inconclusive` のときだけ summary evidence の `sse_<timestamp>.log` を確認する。
    - session id が出力されていること。
    - `[PASSED] Received SSE notification: notifications/message` があること。
    - `[FAILED]` がないこと。
 
-4. `mwse_<timestamp>.log` を確認する。
+4. 同じ場合だけ summary evidence の同 timestamp `mwse_<timestamp>.log` を確認する。ライブ `MWSE.log` は読まない。追加規則は `-RequirePattern 'primary:notifications/message'` のように `source:regex` で指定でき、既定 verdict を成功へ昇格させない。
    - `initialize` が成功し、`MCP-Session-Id` が発行されていること。
    - `ping` が `200 OK` と空の JSON-RPC result で処理されていること。
    - `notifications/initialized` が `202 Accepted` で no body として処理されていること。
