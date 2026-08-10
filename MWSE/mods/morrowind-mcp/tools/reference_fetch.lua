@@ -1,7 +1,7 @@
 local base = require("morrowind-mcp.core.itool")
 local availability = require("morrowind-mcp.core.toolavailability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local obj = require("morrowind-mcp.tes3.object")
+local summary = require("morrowind-mcp.tes3.object_summary")
 local iter = require("morrowind-mcp.tes3.iterator")
 
 
@@ -36,6 +36,12 @@ function this.new(params)
                 "Reference ID",
                 "Filter references by ID. If not specified, all references will be returned.",
                 1, 255
+            ),
+            detail_level = jsonrpc.UntitledSingleSelectEnumSchema(
+                { "minimal", "standard", "full" },
+                "Detail Level",
+                "Serialization detail. The default is minimal for lists and full when filtering by reference ID.",
+                nil
             ),
         }),
         outputSchema = jsonrpc.OutputSchema(
@@ -74,6 +80,11 @@ end
 
 function this:Execute(arguments, context)
     local id = arguments["id"]
+    local detailLevel = arguments["detail_level"] or (id and summary.level.full or summary.level.minimal)
+    local serializer = summary.new({
+        detailLevel = detailLevel,
+        origin = tes3.player and tes3.player.position or nil,
+    })
     local cats = arguments["category"] or {} -- possible nil
     local category = nil
     if #cats > 0 then
@@ -107,7 +118,7 @@ function this:Execute(arguments, context)
                     cell.activators,
                     function(i)
                         if CompareId(i.id, id) then
-                            return obj.tes3reference(i)
+                            return serializer:Reference(i)
                         end
                         return nil
                     end,
@@ -120,7 +131,7 @@ function this:Execute(arguments, context)
                     cell.actors,
                     function(i)
                         if CompareId(i.id, id) then
-                            return obj.tes3reference(i)
+                            return serializer:Reference(i)
                         end
                         return nil
                     end,
@@ -133,7 +144,7 @@ function this:Execute(arguments, context)
                     cell.statics,
                     function(i)
                         if CompareId(i.id, id) then
-                            return obj.tes3reference(i)
+                            return serializer:Reference(i)
                         end
                         return nil
                     end,
@@ -143,21 +154,26 @@ function this:Execute(arguments, context)
     else
         if category == nil or category["activators"] then
             for _, cell in ipairs(cells) do
-                iter.ForEachReferenceObject(cell.activators, obj.tes3reference, activators)
+                iter.ForEachReferenceObject(cell.activators, function(i) return serializer:Reference(i) end, activators)
             end
         end
         if category == nil or category["actors"] then
             for _, cell in ipairs(cells) do
-                iter.ForEachReferenceObject(cell.actors, obj.tes3reference, actors)
+                iter.ForEachReferenceObject(cell.actors, function(i) return serializer:Reference(i) end, actors)
             end
         end
         if category == nil or category["statics"] then
             for _, cell in ipairs(cells) do
-                iter.ForEachReferenceObject(cell.statics, obj.tes3reference, statics)
+                iter.ForEachReferenceObject(cell.statics, function(i) return serializer:Reference(i) end, statics)
             end
         end
     end
-    local structuredContent = jsonrpc.object({ activators = activators, actors = actors, statics = statics })
+    local structuredContent = jsonrpc.object({
+        serialization = serializer:GetMetadata(),
+        activators = activators,
+        actors = actors,
+        statics = statics,
+    })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

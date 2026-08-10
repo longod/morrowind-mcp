@@ -349,6 +349,38 @@ function Assert-ToolError {
     }
 }
 
+function Measure-JsonPayloadSize {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Payload
+    )
+
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    $prettyJson = $Payload | ConvertTo-Json -Depth 100
+    $unprettyJson = $Payload | ConvertTo-Json -Depth 100 -Compress
+    return [pscustomobject]@{
+        PrettyBytes = $encoding.GetByteCount($prettyJson)
+        UnprettyBytes = $encoding.GetByteCount($unprettyJson)
+    }
+}
+
+function Write-ReferenceDetailSizeComparison {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Sizes
+    )
+
+    foreach ($format in @(
+        [pscustomobject]@{ Name = "pretty"; Property = "PrettyBytes" },
+        [pscustomobject]@{ Name = "unpretty"; Property = "UnprettyBytes" }
+    )) {
+        $minimalBytes = [int]$Sizes.minimal.($format.Property)
+        $standardBytes = [int]$Sizes.standard.($format.Property)
+        $fullBytes = [int]$Sizes.full.($format.Property)
+        Write-Host ("[INFO] Reference detail size ({0}, UTF-8 bytes): minimal={1} (1.00x), standard={2} ({3:N2}x), full={4} ({5:N2}x)" -f $format.Name, $minimalBytes, $standardBytes, ($standardBytes / $minimalBytes), $fullBytes, ($fullBytes / $minimalBytes)) -ForegroundColor Cyan
+    }
+}
+
 function New-ServerTestCase {
     param(
         [Parameter(Mandatory = $true)]
@@ -638,7 +670,14 @@ try {
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu fetch in game" -ToolName "mw-menu-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
-        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } } -Capture { param($result, $context) $actor = @($result.structuredContent.actors | Select-Object -First 1)[0]; if ($actor -and -not [string]::IsNullOrWhiteSpace($actor.id)) { $context.PlayerLookTargetId = $actor.id } }),
+        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference list did not default to minimal detail." } } -Capture { param($result, $context) $actor = @($result.structuredContent.actors | Select-Object -First 1)[0]; if ($actor -and -not [string]::IsNullOrWhiteSpace($actor.id)) { $context.PlayerLookTargetId = $actor.id } }),
+        (New-ToolCallTestCase -Name "reference fetch all cells minimal detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "minimal" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch did not honor minimal detail." } } -Capture { param($result, $context) $context.ReferenceDetailSizes.minimal = Measure-JsonPayloadSize -Payload $result.structuredContent }),
+        (New-ToolCallTestCase -Name "reference fetch all cells standard detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "standard" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "standard") { throw "Reference fetch did not honor standard detail." } } -Capture { param($result, $context) $context.ReferenceDetailSizes.standard = Measure-JsonPayloadSize -Payload $result.structuredContent }),
+        (New-ToolCallTestCase -Name "reference fetch all cells full detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "full" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "full") { throw "Reference fetch did not honor full detail." } } -Capture {
+            param($result, $context)
+            $context.ReferenceDetailSizes.full = Measure-JsonPayloadSize -Payload $result.structuredContent
+            Write-ReferenceDetailSizeComparison -Sizes $context.ReferenceDetailSizes
+        }),
         (New-ServerTestCase -Name "player look target active reference" -Arguments {
             param($context)
             New-ToolCallArguments -ToolName "mw-player-look" -ToolArguments @{ mode = "target"; target_id = $context.PlayerLookTargetId }
@@ -648,7 +687,7 @@ try {
             if ($result.structuredContent.navigation_cancelled -ne $false) { throw "Player look unexpectedly cancelled navigation." }
             if ([string]::IsNullOrWhiteSpace($result.structuredContent.target_point_kind)) { throw "Player look target mode did not report a target point kind." }
         }),
-        (New-ToolCallTestCase -Name "target fetch" -ToolName "mw-target-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "target fetch" -ToolName "mw-target-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "full") { throw "Target fetch did not default to full detail." } }),
         (New-ToolCallTestCase -Name "world fetch" -ToolName "mw-world-fetch" -When { param($context) $context.ToolNames -contains "mw-world-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "activate action" -ToolName "mw-player-action" -ToolArguments @{ action = "activate"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "screenshot save" -ToolName "mw-screenshot-save" -ToolArguments @{ file_name = $RunTimestamp } -When {
@@ -687,7 +726,9 @@ try {
     )
 
     $TestResult = 0
-    $TestContext = @{}
+    $TestContext = @{
+        ReferenceDetailSizes = @{}
+    }
     foreach ($TestCase in $TestCases) {
         $TestResult = $TestResult -bor (Invoke-ServerTestCase -TestCase $TestCase -Context $TestContext)
     }

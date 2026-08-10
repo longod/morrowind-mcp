@@ -1,5 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
+local summary = require("morrowind-mcp.tes3.object_summary")
 local obj = require("morrowind-mcp.tes3.object")
 local ui = require("morrowind-mcp.tes3.ui")
 
@@ -19,8 +20,14 @@ function this.new(params)
         name = "target-fetch",
         description =
         "Fetch current target state. This is the object that the player is currently looking at or cursor is currently pointing at.",
-        inputSchema = jsonrpc.InputSchema(
-        ),
+        inputSchema = jsonrpc.InputSchema({
+            detail_level = jsonrpc.UntitledSingleSelectEnumSchema(
+                { "minimal", "standard", "full" },
+                "Detail Level",
+                "Serialization detail for game objects. The default is full.",
+                "full"
+            ),
+        }),
         outputSchema = jsonrpc.OutputSchema(
             {
                 playerTarget = jsonrpc.JsonObjectSchema(), -- cant set description?
@@ -43,6 +50,10 @@ function this:CanExecute(arguments, context)
 end
 
 function this:Execute(arguments, context)
+    local serializer = summary.new({
+        detailLevel = arguments["detail_level"] or summary.level.full,
+        origin = tes3.player and tes3.player.position or nil,
+    })
     local playerTarget = tes3.getPlayerTarget() -- not include non-activatable objects.
     local helpLayerMenu = tes3ui.getCursor() -- on item picking and dragging.
     local inventoryTile = tes3ui.getCursorTile() -- on item picking and dragging.
@@ -101,10 +112,11 @@ function this:Execute(arguments, context)
 
 
     local structuredContent = jsonrpc.object({
-        playerTarget = obj.tes3reference(playerTarget),
+        serialization = serializer:GetMetadata(),
+        playerTarget = serializer:Reference(playerTarget),
         helpLayerMenu = ui.tes3uiElement(helpLayerMenu),
         inventoryTile = obj.tes3inventoryTile(inventoryTile),
-        serviceActor = obj.tes3anyObject(serviceActor),
+        serviceActor = serializer:tes3anyObject(serviceActor),
      })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
