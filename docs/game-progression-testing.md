@@ -19,6 +19,8 @@ The schema is `tests/game_progression/scenario.schema.json`; the runner performs
 
 - `schema_version` is `1`.
 - `bootstrap.start_mode` is always `new_game`.
+- `completion_goal` is the current end condition for the exploration.
+- `milestones` is an ordered, appendable list. Each item has a unique `id`, an `intent`, a `status` (`pending`, `achieved`, or `blocked`), and non-empty observed `evidence`. Add later progression objectives to the end of this list instead of replacing earlier evidence.
 - Every step has an `id`, an agent-readable `intent`, and a replayable MCP `operation`.
 - `assertions` use RFC 6901 `pointer` with `exists`, `equals`, or `contains`.
 - `wait_until` repeats an observed operation until its assertions pass. It records `timeout_seconds` and `interval_seconds` instead of hard-coding them into the runner.

@@ -15,7 +15,7 @@ function this.new(params)
     instance.logger = require("morrowind-mcp.logger").Get({ moduleName = "capabilities_fetch" })
     instance.definition = jsonrpc.Tool({
         name = "capabilities-fetch",
-        description = "Fetch general conditions for published tools.",
+        description = "Fetch general conditions for published tools. We recommend using this tool to check then.",
         inputSchema = jsonrpc.InputSchema({
             tool_name = jsonrpc.StringSchema(
                 "Tool Name",

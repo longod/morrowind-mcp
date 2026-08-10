@@ -13,6 +13,9 @@ local reason = {
     inputBindingUnavailable = "input_binding_unavailable",
     navigationUnavailable = "navigation_unavailable",
     noActiveNavigation = "no_active_navigation",
+    pausedInMenu = "paused_in_menu",
+    movementUnavailable = "movement_unavailable",
+    unsupported = "unsupported",
 }
 
 this.reason = reason

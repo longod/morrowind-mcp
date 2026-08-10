@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "new-game-smoke",
+  "bootstrap": {
+    "start_mode": "new_game"
+  },
+  "completion_goal": "Complete character creation.",
+  "milestones": [
+    {
+      "id": "character-creation",
+      "intent": "Complete the character creation sequence.",
+      "status": "pending",
+      "evidence": "No character creation operation has run yet."
+    }
+  ],
+  "steps": [
+    {
+      "id": "list-tools",
+      "intent": "Discover tools available before selecting NEW GAME.",
+      "operation": {
+        "method": "tools/list"
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Morrowind MCP Game Progression Scenario",
   "type": "object",
-  "required": ["schema_version", "name", "bootstrap", "steps"],
+  "required": ["schema_version", "name", "bootstrap", "completion_goal", "milestones", "steps"],
   "properties": {
     "schema_version": { "const": 1 },
     "name": { "type": "string", "minLength": 1 },
@@ -10,6 +10,21 @@
       "type": "object",
       "required": ["start_mode"],
       "properties": { "start_mode": { "const": "new_game" } }
+    },
+    "completion_goal": { "type": "string", "minLength": 1 },
+    "milestones": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "intent", "status", "evidence"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "intent": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["pending", "achieved", "blocked"] },
+          "evidence": { "type": "string", "minLength": 1 }
+        }
+      }
     },
     "steps": {
       "type": "array",

@@ -52,33 +52,33 @@ function this.new(params)
                         "sneak",
                         "run",
                         "alwaysRun",
-                        "autoRun",
+                        -- "autoRun",
                         "jump",
-                        "nextWeapon",
-                        "previousWeapon",
-                        "nextSpell",
-                        "previousSpell",
-                        "togglePOV",
+                        -- "nextWeapon",
+                        -- "previousWeapon",
+                        -- "nextSpell",
+                        -- "previousSpell",
+                        -- "togglePOV",
                         "menuMode",
                         "journal",
                         "rest",
-                        "quickMenu",
-                        "quick1",
-                        "quick2",
-                        "quick3",
-                        "quick4",
-                        "quick5",
-                        "quick6",
-                        "quick7",
-                        "quick8",
-                        "quick9",
-                        "quick10",
-                        "quickSave",
-                        "quickLoad",
-                        "escape",
+                        -- "quickMenu",
+                        -- "quick1",
+                        -- "quick2",
+                        -- "quick3",
+                        -- "quick4",
+                        -- "quick5",
+                        -- "quick6",
+                        -- "quick7",
+                        -- "quick8",
+                        -- "quick9",
+                        -- "quick10",
+                        -- "quickSave",
+                        -- "quickLoad",
+                        -- "escape",
                         -- "console",
                         -- "screenshot",
-                        "readyMagicMCP",
+                        -- "readyMagicMCP",
                     },
                     "Action",
                     "Action to perform on the player character.",
@@ -111,15 +111,95 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "A game must be active and the player must be loaded. Individual actions can have additional menu or input-binding requirements."
+    return
+    "A game must be active and the player must be loaded. Individual actions can have additional menu or input-binding requirements."
 end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function AlwaysOK()
+    return true
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function AlwaysNO()
+    return false,
+        availability.Unavailable(availability.reason.unsupported,
+            "It's unsupported.")
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function TestNotMenu()
+    -- Messages should ideally be instructions.
+    return (not tes3.menuMode()),
+        availability.Unavailable(availability.reason.pausedInMenu,
+            "This action is available only when menu mode is not active.")
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function TestMove()
+    local ok, reason = TestNotMenu()
+    if not ok then
+        return ok, reason
+    end
+    -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
+    return (tes3.mobilePlayer.canMove),
+        availability.Unavailable(availability.reason.movementUnavailable,
+            "This action is available only when the player is able to move.")
+end
+
+---@type table<tes3.keybind, (fun(): boolean, MCP.ToolAvailability?)?>
+local testActionHandler = {
+    [tes3.keybind.forward] = TestMove,
+    [tes3.keybind.back] = TestMove,
+    [tes3.keybind.left] = TestMove,
+    [tes3.keybind.right] = TestMove,
+    [tes3.keybind.use] = AlwaysNO,
+    [tes3.keybind.activate] = AlwaysOK, -- TODO target or activatable menus...
+    [tes3.keybind.readyWeapon] = AlwaysNO,
+    [tes3.keybind.readyMagic] = AlwaysNO,
+    [tes3.keybind.sneak] = AlwaysNO,
+    [tes3.keybind.run] = AlwaysNO,
+    [tes3.keybind.alwaysRun] = AlwaysNO,
+    [tes3.keybind.autoRun] = AlwaysNO,
+    [tes3.keybind.jump] = AlwaysNO,
+    [tes3.keybind.nextWeapon] = AlwaysNO,
+    [tes3.keybind.previousWeapon] = AlwaysNO,
+    [tes3.keybind.nextSpell] = AlwaysNO,
+    [tes3.keybind.previousSpell] = AlwaysNO,
+    [tes3.keybind.togglePOV] = AlwaysNO,
+    [tes3.keybind.menuMode] = AlwaysNO,
+    [tes3.keybind.journal] = AlwaysNO,
+    [tes3.keybind.rest] = AlwaysNO,
+    [tes3.keybind.quickMenu] = AlwaysNO,
+    [tes3.keybind.quick1] = AlwaysNO,
+    [tes3.keybind.quick2] = AlwaysNO,
+    [tes3.keybind.quick3] = AlwaysNO,
+    [tes3.keybind.quick4] = AlwaysNO,
+    [tes3.keybind.quick5] = AlwaysNO,
+    [tes3.keybind.quick6] = AlwaysNO,
+    [tes3.keybind.quick7] = AlwaysNO,
+    [tes3.keybind.quick8] = AlwaysNO,
+    [tes3.keybind.quick9] = AlwaysNO,
+    [tes3.keybind.quick10] = AlwaysNO,
+    [tes3.keybind.quickSave] = AlwaysNO,
+    [tes3.keybind.quickLoad] = AlwaysNO,
+    [tes3.keybind.escape] = AlwaysNO,
+    [tes3.keybind.console] = AlwaysNO,
+    [tes3.keybind.screenshot] = AlwaysNO,
+    [tes3.keybind.readyMagicMCP] = AlwaysNO,
+}
 
 function this:CanExecute(arguments, context)
     if tes3.onMainMenu() then
         return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
     end
-    if not tes3.player then
-        return false, availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+    if not tes3.player or not tes3.mobilePlayer then
+        return false,
+            availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
     end
     local action = arguments["action"]
     local key = tes3.keybind[action]
@@ -129,6 +209,12 @@ function this:CanExecute(arguments, context)
             "Configure a key binding for the requested player action."
         )
     end
+
+    local handler = testActionHandler[action]
+    if handler then
+        return handler()
+    end
+
     return true
 end
 
@@ -179,10 +265,10 @@ function this:Execute(arguments, context)
         successMessage = successMessage .. string.format(" Hold seconds=%.3f.", seconds)
     end
     successMessage = successMessage
-        .. string.format(" Keybinding=%d (device=%s, code=%d).", key, input_action.GetDeviceName(binding.device), binding.code)
+        .. string.format(" Keybinding=%d (device=%s, code=%d).", key, input_action.GetDeviceName(binding.device),
+            binding.code)
 
     return jsonrpc.CallToolResult(jsonrpc.TextContent(successMessage), nil, false)
-
 end
 
 return this

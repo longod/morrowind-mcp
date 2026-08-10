@@ -56,6 +56,10 @@ def ValidateScenario(scenario: Any) -> None:
     bootstrap = scenario.get("bootstrap")
     if not isinstance(bootstrap, dict) or bootstrap.get("start_mode") != "new_game":
         raise ScenarioValidationError("bootstrap.start_mode must be new_game.")
+    completion_goal = scenario.get("completion_goal")
+    if not isinstance(completion_goal, str) or not completion_goal.strip():
+        raise ScenarioValidationError("completion_goal must be a non-empty string.")
+    ValidateMilestones(scenario.get("milestones"))
     steps = scenario.get("steps")
     if not isinstance(steps, list) or not steps:
         raise ScenarioValidationError("steps must be a non-empty array.")
@@ -69,6 +73,31 @@ def ValidateScenario(scenario: Any) -> None:
     if expected_error_indices and expected_error_indices[0] != len(steps) - 1:
         raise ScenarioValidationError("expected_error must be on the final step.")
     ValidateTerminationPolicy(ResolveTerminationPolicy(scenario))
+
+
+def ValidateMilestones(milestones: Any) -> None:
+    """Require an appendable, evidence-backed list of progression milestones."""
+    if not isinstance(milestones, list) or not milestones:
+        raise ScenarioValidationError("milestones must be a non-empty array.")
+
+    milestone_ids: set[str] = set()
+    allowed_statuses = {"pending", "achieved", "blocked"}
+    for index, milestone in enumerate(milestones):
+        path = f"milestones[{index}]"
+        if not isinstance(milestone, dict):
+            raise ScenarioValidationError(f"{path} must be an object.")
+        milestone_id = milestone.get("id")
+        if not isinstance(milestone_id, str) or not milestone_id.strip():
+            raise ScenarioValidationError(f"{path}.id must be a non-empty string.")
+        if milestone_id in milestone_ids:
+            raise ScenarioValidationError(f"{path}.id duplicates {milestone_id!r}.")
+        milestone_ids.add(milestone_id)
+        for field in ("intent", "evidence"):
+            value = milestone.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ScenarioValidationError(f"{path}.{field} must be a non-empty string.")
+        if milestone.get("status") not in allowed_statuses:
+            raise ScenarioValidationError(f"{path}.status must be pending, achieved, or blocked.")
 
 
 def ValidateStep(step: Any, index: int, step_ids: set[str]) -> None:

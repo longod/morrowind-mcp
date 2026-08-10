@@ -21,7 +21,7 @@ function New-McpRequest {
     $request.Headers.TryAddWithoutValidation("Accept", $Accept) | Out-Null
     $request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", $ProtocolVersion) | Out-Null
     if (-not [string]::IsNullOrWhiteSpace($SessionId)) {
-        $request.Headers.TryAddWithoutValidation("MCP-Session-Id", $SessionId) | Out-Null
+        $request.Headers.TryAddWithoutValidation("MCP-Session-Id", [string]$SessionId) | Out-Null
     }
     if ($null -ne $Body) {
         $request.Content = [System.Net.Http.StringContent]::new($Body, [System.Text.Encoding]::UTF8, "application/json")
@@ -36,10 +36,10 @@ function Get-RequiredHeaderValue {
     )
 
     $values = [string[]]@()
-    if (-not $Response.Headers.TryGetValues($Name, [ref]$values) -or $values.Count -eq 0 -or [string]::IsNullOrWhiteSpace($values[0])) {
+    if (-not $Response.Headers.TryGetValues($Name, [ref]$values) -or $values.Count -ne 1 -or [string]::IsNullOrWhiteSpace($values[0])) {
         throw "Missing response header: $Name"
     }
-    return $values[0]
+    return [string]$values[0]
 }
 
 function Send-McpRequest {

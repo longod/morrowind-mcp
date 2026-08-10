@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -15,20 +16,12 @@ from inspector import FormatToolArgument, InspectorError, InspectorResponse
 from run import RecordDiagnosticProbes, RecordMemoryDebugDump, RecordWaitResponse, WaitUntil, WaitUntilTimeout
 
 
+SCENARIO_FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "scenario.json"
+
+
 def NewScenario() -> dict:
-    """Return the smallest replayable scenario used by contract tests."""
-    return {
-        "schema_version": 1,
-        "name": "new-game-smoke",
-        "bootstrap": {"start_mode": "new_game"},
-        "steps": [
-            {
-                "id": "list-tools",
-                "intent": "Discover tools available before selecting NEW GAME.",
-                "operation": {"method": "tools/list"},
-            }
-        ],
-    }
+    """Load an isolated copy of the smallest replayable scenario fixture."""
+    return json.loads(SCENARIO_FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
 class ScenarioTests(unittest.TestCase):
@@ -58,6 +51,20 @@ class ScenarioTests(unittest.TestCase):
         scenario["steps"].append(dict(scenario["steps"][0]))
 
         with self.assertRaisesRegex(ScenarioValidationError, "duplicates"):
+            ValidateScenario(scenario)
+
+    def test_rejects_duplicate_milestone_ids(self) -> None:
+        scenario = NewScenario()
+        scenario["milestones"].append(dict(scenario["milestones"][0]))
+
+        with self.assertRaisesRegex(ScenarioValidationError, r"milestones\[1\].id duplicates"):
+            ValidateScenario(scenario)
+
+    def test_rejects_milestone_without_evidence(self) -> None:
+        scenario = NewScenario()
+        del scenario["milestones"][0]["evidence"]
+
+        with self.assertRaisesRegex(ScenarioValidationError, r"milestones\[0\].evidence"):
             ValidateScenario(scenario)
 
     def test_evaluates_json_pointer_assertions(self) -> None:

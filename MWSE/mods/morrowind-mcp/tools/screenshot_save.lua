@@ -87,16 +87,23 @@ local notifyMenus = {
 ---@return string
 local function GetExtension(captureWithUI)
     if captureWithUI then
-        if tes3.onMainMenu() or tes3.menuMode() then
+        -- recognize text
+        if tes3.menuMode() then
             return ".png"
         end
-        for _, id in ipairs(notifyMenus) do
-            local e = tes3ui.findHelpLayerMenu(id)
-            if e and e.visible then
-                return ".png"
-            end
-        end
+
+        -- for _, id in ipairs(notifyMenus) do
+        --     local e = tes3ui.findHelpLayerMenu(id)
+        --     if e and e.visible then
+        --         return ".png"
+        --     end
+        -- end
+
         -- and tooltips?
+
+        -- if tes3.onMainMenu() then
+        --     return ".png"
+        -- end
     end
     return ".jpg"
 end

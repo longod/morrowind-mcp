@@ -1585,7 +1585,7 @@ function this.tes3light(i, o)
     end
 
     o.canCarry = i.canCarry
-    o.color = this.ToRGBA(i.color)
+    o.color = this.ToRGBA(i.color) -- empty?
     o.flickers = i.flickers
     o.flickersSlowly = i.flickersSlowly
     o.isDynamic = i.isDynamic
