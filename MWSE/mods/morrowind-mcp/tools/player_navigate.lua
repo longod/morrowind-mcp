@@ -17,7 +17,11 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "player-navigate",
         description =
-        "Navigate the player character or cancel the active navigation. Navigation returns route node and waypoint counts.",
+        "Navigate the player character through the game world toward an intentional destination, " ..
+        "such as an observed NPC, door, reference, location, or world-space coordinate. " ..
+        "This is useful for travel when a reachable destination is known. " ..
+        "Navigation returns route node and waypoint counts; verify arrival with player, reference, or world state. " ..
+        "Use cancel_navigation to stop an active route.",
         inputSchema = jsonrpc.InputSchema(
             {
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
@@ -31,10 +35,10 @@ function this.new(params)
                     "navigate"
                 ),
                 -- array, object schema are in specification, but it seems client view is not supported.
-                position_x = jsonrpc.NumberSchema("X", "X coordinate in world space."),
-                position_y = jsonrpc.NumberSchema("Y", "Y coordinate in world space."),
-                position_z = jsonrpc.NumberSchema("Z", "Z coordinate in world space."),
-                cell_id = jsonrpc.StringSchema("Cell ID", "Optional destination cell ID for navigation.", nil,
+                position_x = jsonrpc.NumberSchema("Destination X", "Destination X coordinate in world space."),
+                position_y = jsonrpc.NumberSchema("Destination Y", "Destination Y coordinate in world space."),
+                position_z = jsonrpc.NumberSchema("Destination Z", "Destination Z coordinate in world space."),
+                cell_id = jsonrpc.StringSchema("Destination Cell", "Optional cell containing the destination.", nil,
                     64),
             },
             jsonrpc.array({ "action" })

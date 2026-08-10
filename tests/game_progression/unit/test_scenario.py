@@ -55,7 +55,7 @@ class ScenarioTests(unittest.TestCase):
 
     def test_rejects_duplicate_milestone_ids(self) -> None:
         scenario = NewScenario()
-        scenario["milestones"].append(dict(scenario["milestones"][0]))
+        scenario["milestones"].insert(1, dict(scenario["milestones"][0]))
 
         with self.assertRaisesRegex(ScenarioValidationError, r"milestones\[1\].id duplicates"):
             ValidateScenario(scenario)
@@ -73,6 +73,19 @@ class ScenarioTests(unittest.TestCase):
         failures = EvaluateAssertions(document, [
             {"pointer": "/result/tools/0/name", "operator": "equals", "value": "mw-menu-fetch"},
             {"pointer": "/result/tools", "operator": "exists"},
+        ])
+
+        self.assertEqual(failures, [])
+
+    def test_contains_assertion_finds_nested_ui_text(self) -> None:
+        document = {"result": {"structuredContent": {"menu": {"children": [{"text": "You're on your own now. Good luck."}]}}}}
+
+        failures = EvaluateAssertions(document, [
+            {
+                "pointer": "/result/structuredContent/menu",
+                "operator": "contains",
+                "value": "You're on your own now. Good luck.",
+            },
         ])
 
         self.assertEqual(failures, [])
@@ -99,7 +112,7 @@ class ScenarioTests(unittest.TestCase):
 
     def test_accepts_expected_terminal_tool_error(self) -> None:
         scenario = NewScenario()
-        scenario["steps"][0]["expected_error"] = {
+        scenario["steps"][-1]["expected_error"] = {
             "message_contains": "menu_path points to a missing child",
         }
 

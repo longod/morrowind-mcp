@@ -4,13 +4,19 @@
   "bootstrap": {
     "start_mode": "new_game"
   },
-  "completion_goal": "Complete character creation.",
+  "completion_goal": "Complete character creation and confirm tutorial completion.",
   "milestones": [
     {
       "id": "character-creation",
       "intent": "Complete the character creation sequence.",
       "status": "pending",
-      "evidence": "No character creation operation has run yet."
+      "evidence": "Completion is verified from player Memory: ready=true, character_generation.finished=true, and character_generation.running=false."
+    },
+    {
+      "id": "tutorial-complete",
+      "intent": "Confirm the tutorial completion message is displayed.",
+      "status": "pending",
+      "evidence": "The visible UI must contain \"You're on your own now. Good luck.\"."
     }
   ],
   "steps": [
@@ -20,6 +26,47 @@
       "operation": {
         "method": "tools/list"
       }
+    },
+    {
+      "id": "verify-character-generation-finished",
+      "intent": "Verify character creation completion from the published player Memory resource.",
+      "operation": {
+        "method": "resources/read",
+        "uri": "morrowind://memory/player/index.json"
+      },
+      "assertions": [
+        {
+          "pointer": "/result/contents/0/text",
+          "operator": "contains",
+          "value": "\"ready\":true"
+        },
+        {
+          "pointer": "/result/contents/0/text",
+          "operator": "contains",
+          "value": "\"finished\":true"
+        },
+        {
+          "pointer": "/result/contents/0/text",
+          "operator": "contains",
+          "value": "\"running\":false"
+        }
+      ]
+    },
+    {
+      "id": "verify-tutorial-complete",
+      "intent": "Verify the tutorial completion message in the published menu UI.",
+      "operation": {
+        "method": "tools/call",
+        "tool_name": "mw-menu-fetch",
+        "arguments": {}
+      },
+      "assertions": [
+        {
+          "pointer": "/result/structuredContent/menu",
+          "operator": "contains",
+          "value": "You're on your own now. Good luck."
+        }
+      ]
     }
   ]
 }

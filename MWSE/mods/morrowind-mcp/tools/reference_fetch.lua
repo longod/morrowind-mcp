@@ -49,6 +49,7 @@ function this.new(params)
                 activators = jsonrpc.JsonArraySchema(),
                 actors = jsonrpc.JsonArraySchema(),
                 statics = jsonrpc.JsonArraySchema(),
+                serialization = jsonrpc.JsonObjectSchema(),
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)

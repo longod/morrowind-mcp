@@ -206,9 +206,20 @@ def EvaluateAssertions(document: Any, assertions: list[dict[str, Any]]) -> list[
         elif operator == "equals":
             if not found or actual != assertion["value"]:
                 failures.append(f"{assertion['pointer']} did not equal the recorded value")
-        elif not found or not isinstance(actual, (list, str, dict)) or assertion["value"] not in actual:
+        elif not found or not ContainsAssertionValue(actual, assertion["value"]):
             failures.append(f"{assertion['pointer']} did not contain the recorded value")
     return failures
+
+
+def ContainsAssertionValue(document: Any, expected: Any) -> bool:
+    """Find a contains value in a scalar or any nested JSON container."""
+    if isinstance(document, dict):
+        return expected in document or any(ContainsAssertionValue(value, expected) for value in document.values())
+    if isinstance(document, list):
+        return expected in document or any(ContainsAssertionValue(value, expected) for value in document)
+    if isinstance(document, str):
+        return expected in document
+    return False
 
 
 def ResolveJsonPointer(document: Any, pointer: str) -> tuple[bool, Any]:

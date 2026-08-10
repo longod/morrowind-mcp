@@ -2,6 +2,7 @@ local config = require("morrowind-mcp.config")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local object = require("morrowind-mcp.tes3.object")
 local enumname = require("morrowind-mcp.tes3.enumname")
+local iter = require("morrowind-mcp.tes3.iterator")
 
 ---@diagnostic disable: need-check-nil, undefined-field
 
@@ -42,11 +43,25 @@ function this.new(params)
     if detailLevel ~= this.level.minimal and detailLevel ~= this.level.standard and detailLevel ~= this.level.full then
         error("Unknown detail level: " .. tostring(detailLevel))
     end
-    return setmetatable({
+    local instance = {
         detailLevel = detailLevel,
         origin = params.origin,
         stack = setmetatable({}, { __mode = "k" }),
-    }, { __index = this })
+    }
+    return setmetatable(instance, {
+        __index = function(serializer, key)
+            local summaryMethod = this[key]
+            local fullMethod = object[key]
+            local fullMethodMetatable = type(fullMethod) == "table" and getmetatable(fullMethod) or nil
+            if serializer.detailLevel == this.level.full and type(key) == "string" and key:sub(1, 4) == "tes3" and
+                (type(fullMethod) == "function" or (fullMethodMetatable and type(fullMethodMetatable.__call) == "function")) then
+                return function(_, value)
+                    return fullMethod(value)
+                end
+            end
+            return summaryMethod
+        end,
+    })
 end
 
 ---@return boolean
@@ -145,6 +160,17 @@ function this:ObjectSummary(value)
     if self:IsStandard() then
         output.mesh = value.mesh
         output.scale = value.scale
+    end
+    return output
+end
+
+---@param value tes3item?
+---@return MCP.AnyMap?
+function this:ItemSummary(value)
+    local output = self:ObjectSummary(value)
+    if output and self:IsStandard() then
+        output.value = value.value
+        output.weight = value.weight
     end
     return output
 end
@@ -251,7 +277,7 @@ function this:Reference(reference)
         output.isRespawn = reference.isRespawn == true or nil
         output.destination = self:DestinationSummary(reference.destination)
         output.itemData = self:ItemDataSummary(reference.itemData)
-        output.lock = self:LockSummary(reference.lockNode)
+        output.lockNode = self:LockSummary(reference.lockNode)
         output.object = self:AnyObject(baseObject)
     else
         output.hasDestination = reference.destination ~= nil or nil
@@ -336,10 +362,8 @@ end
 ---@param value tes3weapon?
 ---@return MCP.AnyMap?
 function this:tes3weapon(value)
-    local output = self:ObjectSummary(value)
+    local output = self:ItemSummary(value)
     if output and self:IsStandard() then
-        output.value = value.value
-        output.weight = value.weight
         output.maxCondition = value.maxCondition
         output.type = enumname.weaponType(value.type)
         output.reach = value.reach
@@ -356,10 +380,8 @@ end
 ---@param value tes3armor?
 ---@return MCP.AnyMap?
 function this:tes3armor(value)
-    local output = self:ObjectSummary(value)
+    local output = self:ItemSummary(value)
     if output and self:IsStandard() then
-        output.value = value.value
-        output.weight = value.weight
         output.maxCondition = value.maxCondition
         output.armorRating = value.armorRating
         output.slot = enumname.armorSlot(value.slot)
@@ -370,23 +392,39 @@ end
 ---@param value tes3clothing?
 ---@return MCP.AnyMap?
 function this:tes3clothing(value)
-    local output = self:ObjectSummary(value)
+    local output = self:ItemSummary(value)
     if output and self:IsStandard() then
-        output.value = value.value
-        output.weight = value.weight
         output.slot = enumname.clothingSlot(value.slot)
     end
     return self:Finish("tes3clothing", output)
 end
 
+---@param value tes3effect?
+---@return MCP.AnyMap?
+function this:EffectSummary(value)
+    if not value then
+        return nil
+    end
+    return jsonrpc.object({
+        id = enumname.effect(value.id) or value.id,
+        range = enumname.effectRange(value.rangeType),
+        radius = value.radius,
+        duration = value.duration,
+        min = value.min,
+        max = value.max,
+        attribute = enumname.attribute(value.attribute),
+        skill = enumname.skill(value.skill),
+    })
+end
+
 ---@param value tes3alchemy|tes3ingredient?
 ---@return MCP.AnyMap?
 function this:ItemWithEffects(value)
-    local output = self:ObjectSummary(value)
+    local output = self:ItemSummary(value)
     if output and self:IsStandard() then
-        output.value = value.value
-        output.weight = value.weight
-        output.effects = value.effects
+        output.effects = iter.ForEachObject(value.effects, function(effect)
+            return self:EffectSummary(effect)
+        end)
     end
     return output
 end
@@ -395,13 +433,27 @@ function this:tes3alchemy(value) return self:Finish("tes3alchemy", self:ItemWith
 
 function this:tes3activator(value) return self:Finish("tes3activator", self:ObjectSummary(value)) end
 
-function this:tes3apparatus(value) return self:Finish("tes3apparatus", self:ObjectSummary(value)) end
+function this:tes3apparatus(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.quality = value.quality
+        output.type = enumname.apparatusType(value.type)
+    end
+    return self:Finish("tes3apparatus", output)
+end
 
 function this:tes3birthsign(value) return self:Finish("tes3birthsign", self:ObjectSummary(value)) end
 
 function this:tes3bodyPart(value) return self:Finish("tes3bodyPart", self:ObjectSummary(value)) end
 
-function this:tes3book(value) return self:Finish("tes3book", self:ObjectSummary(value)) end
+function this:tes3book(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.type = enumname.bookType(value.type)
+        output.skill = enumname.skill(value.skill)
+    end
+    return self:Finish("tes3book", output)
+end
 
 function this:tes3cell(value) return self:CellSummary(value) end
 
@@ -425,21 +477,67 @@ function this:tes3land(value) return self:Finish("tes3land", self:ObjectSummary(
 
 function this:tes3landTexture(value) return self:Finish("tes3landTexture", self:ObjectSummary(value)) end
 
-function this:tes3leveledCreature(value) return self:Finish("tes3leveledCreature", self:ObjectSummary(value)) end
+function this:tes3leveledCreature(value)
+    local output = self:ObjectSummary(value)
+    if output and self:IsStandard() then
+        output.calculateFromAllLevels = value.calculateFromAllLevels
+        output.chanceForNothing = value.chanceForNothing
+        output.count = value.count
+    end
+    return self:Finish("tes3leveledCreature", output)
+end
 
-function this:tes3leveledItem(value) return self:Finish("tes3leveledItem", self:ObjectSummary(value)) end
+function this:tes3leveledItem(value)
+    local output = self:ObjectSummary(value)
+    if output and self:IsStandard() then
+        output.calculateForEachItem = value.calculateForEachItem
+        output.calculateFromAllLevels = value.calculateFromAllLevels
+        output.chanceForNothing = value.chanceForNothing
+        output.count = value.count
+    end
+    return self:Finish("tes3leveledItem", output)
+end
 
-function this:tes3light(value) return self:Finish("tes3light", self:ObjectSummary(value)) end
+function this:tes3light(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.radius = value.radius
+        output.time = value.time
+    end
+    return self:Finish("tes3light", output)
+end
 
-function this:tes3lockpick(value) return self:Finish("tes3lockpick", self:ObjectSummary(value)) end
+function this:tes3lockpick(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.maxCondition = value.maxCondition
+        output.quality = value.quality
+    end
+    return self:Finish("tes3lockpick", output)
+end
 
 function this:tes3magicEffect(value) return self:Finish("tes3magicEffect", self:ObjectSummary(value)) end
 
-function this:tes3misc(value) return self:Finish("tes3misc", self:ObjectSummary(value)) end
+function this:tes3misc(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.isGold = value.isGold
+        output.isKey = value.isKey
+        output.isSoulGem = value.isSoulGem
+        output.soulGemCapacity = value.soulGemCapacity
+    end
+    return self:Finish("tes3misc", output)
+end
 
 function this:tes3pathGrid(value) return self:Finish("tes3pathGrid", self:ObjectSummary(value)) end
 
-function this:tes3probe(value) return self:Finish("tes3probe", self:ObjectSummary(value)) end
+function this:tes3probe(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.quality = value.quality
+    end
+    return self:Finish("tes3probe", output)
+end
 
 function this:tes3quest(value) return self:Finish("tes3quest", self:ObjectSummary(value)) end
 
@@ -447,7 +545,14 @@ function this:tes3race(value) return self:Finish("tes3race", self:ObjectSummary(
 
 function this:tes3region(value) return self:Finish("tes3region", self:ObjectSummary(value)) end
 
-function this:tes3repairTool(value) return self:Finish("tes3repairTool", self:ObjectSummary(value)) end
+function this:tes3repairTool(value)
+    local output = self:ItemSummary(value)
+    if output and self:IsStandard() then
+        output.maxCondition = value.maxCondition
+        output.quality = value.quality
+    end
+    return self:Finish("tes3repairTool", output)
+end
 
 function this:tes3script(value) return self:Finish("tes3script", nil) end
 
@@ -487,23 +592,65 @@ function this:tes3soulGemData(value) return object.tes3soulGemData(value) end
 
 function this:tes3itemData(value) return self:ItemDataSummary(value) end
 
-function this:tes3mobileActor(value) return self:IsFull() and object.tes3mobileActor(value) or
-    self:Reference(value.reference) end
+function this:tes3mobileActor(value)
+    if not value then
+        return nil
+    end
+    if self:IsFull() then
+        return object.tes3mobileActor(value)
+    end
+    return self:Reference(value.reference)
+end
 
-function this:tes3mobileCreature(value) return self:IsFull() and object.tes3mobileCreature(value) or
-    self:Reference(value.reference) end
+function this:tes3mobileCreature(value)
+    if not value then
+        return nil
+    end
+    if self:IsFull() then
+        return object.tes3mobileCreature(value)
+    end
+    return self:Reference(value.reference)
+end
 
-function this:tes3mobileNPC(value) return self:IsFull() and object.tes3mobileNPC(value) or
-    self:Reference(value.reference) end
+function this:tes3mobileNPC(value)
+    if not value then
+        return nil
+    end
+    if self:IsFull() then
+        return object.tes3mobileNPC(value)
+    end
+    return self:Reference(value.reference)
+end
 
-function this:tes3mobilePlayer(value) return self:IsFull() and object.tes3mobilePlayer(value) or
-    self:Reference(value.reference) end
+function this:tes3mobilePlayer(value)
+    if not value then
+        return nil
+    end
+    if self:IsFull() then
+        return object.tes3mobilePlayer(value)
+    end
+    return self:Reference(value.reference)
+end
 
-function this:tes3mobileProjectile(value) return self:IsFull() and object.tes3mobileProjectile(value) or
-    self:Reference(value.reference) end
+function this:tes3mobileProjectile(value)
+    if not value then
+        return nil
+    end
+    if self:IsFull() then
+        return object.tes3mobileProjectile(value)
+    end
+    return self:Reference(value.reference)
+end
 
-function this:tes3mobileSpellProjectile(value) return self:IsFull() and object.tes3mobileSpellProjectile(value) or
-    self:Reference(value.reference) end
+function this:tes3mobileSpellProjectile(value)
+    if not value then
+        return nil
+    end
+    if self:IsFull() then
+        return object.tes3mobileSpellProjectile(value)
+    end
+    return self:Reference(value.reference)
+end
 
 function this:tes3reference(value) return self:Reference(value) end
 

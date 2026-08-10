@@ -617,6 +617,23 @@ function this.tes3travelDestinationNode(i, o)
     return o
 end
 
+---@param i tes3lockNode?
+---@param o MCP.AnyMap?
+---@return MCP.AnyMap?
+local function tes3lockNode(i, o)
+    if not i then
+        return nil
+    end
+    local o = o or jsonrpc.object()
+    o.key = this.tes3anyObject(i.key)
+    o.level = i.level
+    o.locked = i.locked
+    o.trap = this.tes3anyObject(i.trap)
+
+    local _ = ValidateType(o)
+    return o
+end
+
 ---@param i tes3baseObject?
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
@@ -2240,10 +2257,10 @@ function this.tes3reference(i, o)
     if i.isRespawn then
         o.isRespawn = i.isRespawn
     end
-    -- o.itemData = i.itemData -- TODO
+    o.itemData = this.tes3itemData(i.itemData)
     o.leveledBaseReference = this.tes3reference(i.leveledBaseReference)
     -- o.light = i.light
-    -- o.lockNode = i.lockNode -- TODO
+    o.lockNode = tes3lockNode(i.lockNode)
     if strutil.IsNullOrEmpty(i.mesh) == false then
         o.mesh = i.mesh
     end

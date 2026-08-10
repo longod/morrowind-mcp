@@ -72,7 +72,7 @@ function this.Test()
                 { r = 1, g = 2, b = 3, a = 255 }, { r = 1, g = 2, b = 3, a = 255 }, { r = 1, g = 2, b = 3, a = 255 },
                 { r = 1, g = 2, b = 3, a = 255 }, { r = 1, g = 2, b = 3, a = 255 }, { r = 1, g = 2, b = 3, a = 255 },
             },
-            triangles = { { 0, 1, 2 }, { 3, 4, 5 } },
+            triangles = { { 0, 1, 2 }, { 3, 4, 5 } }, ---@diagnostic disable-line: missing-fields
         })
         unitwind:expect(table.size(mesh.vertices)).toBe(4)
         unitwind:expect(table.size(mesh.triangles)).toBe(2)

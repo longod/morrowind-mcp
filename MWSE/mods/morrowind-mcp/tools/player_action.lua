@@ -36,7 +36,9 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "player-action",
         description =
-        "Perform an action on the player. This is the player character that the user is controlling.",
+        "Perform direct player input such as movement keys, activation, jumping, sneaking, combat preparation, " ..
+        "or other short manual actions. Use this for interaction, immediate input, or fine movement adjustment. " ..
+        "For intentional travel toward a known world destination, player-navigate may be more suitable.",
         inputSchema = jsonrpc.InputSchema(
             {
                 action = jsonrpc.UntitledSingleSelectEnumSchema(

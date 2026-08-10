@@ -243,7 +243,7 @@ try {
             throw "Initialize failed: HTTP $([int]$initializeResponse.StatusCode)"
         }
         $initializeBody = $initializeResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -ErrorAction Stop
-        if ($initializeBody.result.capabilities.prompts.listChanged -ne $true) {
+        if ($initializeBody.result.capabilities.prompts.listChanged -ne $false) {
             throw "Initialize did not advertise prompts.listChanged capability."
         }
         if ($initializeBody.result.capabilities.resources.subscribe -ne $true) {
@@ -252,7 +252,7 @@ try {
         if ($initializeBody.result.capabilities.resources.listChanged -ne $true) {
             throw "Initialize did not advertise resources.listChanged capability."
         }
-        if ($initializeBody.result.capabilities.tools.listChanged -ne $true) {
+        if ($initializeBody.result.capabilities.tools.listChanged -ne $false) {
             throw "Initialize did not advertise tools.listChanged capability."
         }
         $sessionId = Get-RequiredHeaderValue -Response $initializeResponse -Name "MCP-Session-Id"

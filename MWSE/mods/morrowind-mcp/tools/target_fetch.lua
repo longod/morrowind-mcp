@@ -34,6 +34,7 @@ function this.new(params)
                 helpLayerMenu = jsonrpc.JsonObjectSchema(),
                 inventoryTile = jsonrpc.JsonObjectSchema(),
                 serviceActor = jsonrpc.JsonObjectSchema(),
+                serialization = jsonrpc.JsonObjectSchema(),
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
