@@ -45,29 +45,9 @@ description: |
 - foreground 化が必要な入力は送らないため、`-NoForeground` は既定 lifecycle モードでのみ意味を持つ。
 
 ## Verification
+Test Runner Agent の共通手順で `terrain_benchmark` summary を一次根拠として判定する。summary は `result_<timestamp>.json` の `ready` state、64/128/256 の `samples` と `height`、Inspector の non-zero exit を判定する。
 
-実行直後に `result_<timestamp>.json` の timestamp を取り、次を実行する。
-
-```powershell
-.\tests\summarize_test_runs.ps1 -TestType terrain_benchmark -RunTimestamp YYYYMMDD_HHMMSS
-```
-
-`tests/logs/terrain_benchmark/summary_<timestamp>.json` を主な結果として報告する。`ready` と 64/128/256 の samples >= 1、non-null height が揃えば passed、valid JSON の `state=failed` または同 timestamp Inspector の非 0 exit は failed、不正/不足した JSON は inconclusive である。同 timestamp の `result` / `inspector` / `mwse` だけが evidence になる。ライブ `MWSE.log` は読まない。
-
-追加規則は `-RequirePattern 'result:"state"\s*:\s*"ready"'` のように `source:regex` で指定する。規則は additive であり、既定 failed/inconclusive を passed にしない。
-
-`failed` / `inconclusive` のときだけ summary evidence の生アーティファクトを確認する。
-
-成功時は次を確認する。
-
-1. 終了コードが `0`、コンソールに `[PASSED] Terrain benchmark completed for cell ...` がある。
-2. `tests/logs/terrain_benchmark/result_<timestamp>.json` が保存されている。
-3. JSON の `state` が `ready` である。
-4. `results.64`、`results.128`、`results.256` の各項目に `samples` と `height` があり、`samples` が 1 以上である。
-5. `tests/logs/terrain_benchmark/inspector_<timestamp>.log` の各 `[RUN]` が成功している。
-6. `tests/logs/terrain_benchmark/mwse_<timestamp>.log` に terrain probe、quality comparison start、quality status のサーバー処理が記録されている。
-7. 既定モードでは、終了後に Morrowind process と server port が残っていない。
-8. `-UseRunningServer` モードでは、終了後も Morrowind process と server port が残っている。
+`failed` / `inconclusive` の場合だけ、summary evidence の保存済み result/Inspector/MWSE artifact を読んで切り分ける。ライブ `MWSE.log` は読まない。
 
 ## Failure Triage
 

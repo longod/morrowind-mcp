@@ -8,7 +8,7 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 
 ## 目的
 - `tests/unit_test.ps1` を使って単体テストを実行する。
-- `MWSE.log` でテスト結果を検証する。
+- Test Runner Agent の共通手順で `unit_test` summary を一次根拠として判定する。
 
 ## 使用タイミング
 - 単体テストスクリプトの実行を求められたとき。
@@ -36,34 +36,8 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 .\tests\unit_test.ps1 -VerifyRuntimeAfterTests
 ```
 
-6. 実行直後に保存先の timestamp を取り、次を実行する。
-
-```powershell
-.\tests\summarize_test_runs.ps1 -TestType unit_test -RunTimestamp YYYYMMDD_HHMMSS
-```
-
-7. `tests/logs/unit_test/summary_<timestamp>.json` の `status` を主な結果として報告する。`passed` は suite pass と UnitWind evidence、`failed` は `FAILED`、証拠不足は `inconclusive` である。
-
-8. `failed` / `inconclusive` のときだけ summary の `evidence` が示す抽出結果と同 timestamp の `mwse_<timestamp>.log` を確認する。ライブ `MWSE.log` は読まない。
-
-9. 必要なら追加規則を明示 source 付きで加える。例: `-RequirePattern 'primary:MORROWIND-MCP\\.JSONRPC' -ForbidPattern 'mwse:traceback'`。規則は加算のみで、既定の failed/inconclusive を passed にしない。
-
-10. 抽出結果ファイルと `MWSE.log` コピーの命名は次のとおり。
-	- 抽出結果: `tests/logs/unit_test/unitwind_YYYYMMDD_HHMMSS.log`
-	- `MWSE.log` コピー: `tests/logs/unit_test/mwse_YYYYMMDD_HHMMSS.log`
-
-## Notes
-- ログの `[UnitWind]` で始まる行が単体テストの出力である。
-- `MORROWIND-MCP.JSONRPC PASSED` / `MORROWIND-MCP.HTTP PASSED` / `MORROWIND-MCP.STRUTIL PASSED` のような suite 単位の PASS 行を確認する。
-- UnitWind は `unitwind:finish()` の内部で `reset()` を呼び、`testsPassed/testsFailed` を 0 に戻す。
-- そのため各 `test_*.lua` では、`finish()` の前に `testsPassed/testsFailed` をローカル変数へ退避して返す。
-- 新規テスト追加時も同じパターンを使う。
-- `unittest.lua` は各テストモジュールの戻り値を集計するため、`Unit test <file> passed: tests_passed=<n> tests_failed=<n>` の行で件数が正しく出ていることを確認する。
-- `tests_passed=0 tests_failed=0` が並ぶ場合は、`test_*.lua` 側が `finish()` 後の値を直接返していないか確認する。
-- 回帰切り分けのために `test_*.lua` の UnitWind 設定を `enabled = false` にした場合も `tests_passed=0 tests_failed=0` になる。意図した一時無効化か、値の退避漏れかを区別して確認する。
-- 抽出対象パターンは `\[UnitWind\]|MORROWIND-MCP\..*(PASSED|FAILED)` である。
-- `FAILED` 行が抽出されると、`tests/unit_test.ps1` は non-zero を返す。
-- ただし、`start_server_mo2.ps1` が non-zero の場合も最終終了コードは non-zero になる。
-- MCP schema generator を追加・変更した場合は、`StringSchema`, `NumberSchema`, `BooleanSchema`, `ConstTitle`, enum schema, multi-select schema の UnitWind テストが `MWSE.log` に PASS として出ていることを確認する。
-- Tool prefix 処理を変更した場合は、`Tool generator applies configured primitive prefixes` と `Tool generator keeps nil title and description with prefixes` の PASS を確認する。
+## Suite-specific follow-up
+- summary は `unitwind_<timestamp>.log` の `FAILED` と suite pass evidence を判定する。`failed` / `inconclusive` のときだけ、summary evidence の抽出結果と `mwse_<timestamp>.log` を読む。
+- UnitWind の mock が通常ランタイムを壊していないことを確認する変更では、全 suite に `-VerifyRuntimeAfterTests` を付ける。個別 target とは併用できない。
+- `start_server_mo2.ps1` の non-zero が最終終了コードへ影響し得るため、終了コードだけで失敗と断定しない。
 

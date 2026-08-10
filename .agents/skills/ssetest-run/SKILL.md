@@ -9,7 +9,7 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 ## Purpose
 - `tests/sse_test.ps1` は Streamable HTTP / SSE の integration test として扱う。
 - リポジトリのルートからワークスペースのテストスクリプトを実行し、MCP session と SSE server-to-client notification 経路を検証する。
-- コンソール出力、`tests/logs/sse_test` 配下の SSE test log、`MWSE.log` コピーを確認して成否を判断する。
+- Test Runner Agent の共通手順で `sse_test` summary を一次根拠として判定する。
 
 ## How to run
 ワークスペースのルートから以下を実行する。相対パスを使うため、カレントディレクトリの移動は不要です。
@@ -24,41 +24,17 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 .\tests\sse_test.ps1 -NoStart -NoStop
 ```
 
-## Verification Steps
-1. 出力の `sse_<timestamp>.log` から timestamp を取得し、次を実行する。
-
-```powershell
-.\tests\summarize_test_runs.ps1 -TestType sse_test -RunTimestamp YYYYMMDD_HHMMSS
-```
-
-`tests/logs/sse_test/summary_<timestamp>.json` を主な結果として報告する。`[PASSED] Received SSE notification: notifications/message` が必要で、`[FAILED]` / `[ERROR]` は failed、端末 marker 不在は inconclusive である。
-
-2. 実行完了時に表示される保存先を確認する。
-   - `[INFO] SSE test log: ...\tests\logs\sse_test\sse_<timestamp>.log`
-   - `[INFO] MWSE log copy: ...\tests\logs\sse_test\mwse_<timestamp>.log`
-
-3. `failed` / `inconclusive` のときだけ summary evidence の `sse_<timestamp>.log` を確認する。
-   - session id が出力されていること。
-   - `[PASSED] Received SSE notification: notifications/message` があること。
-   - `[FAILED]` がないこと。
-
-4. 同じ場合だけ summary evidence の同 timestamp `mwse_<timestamp>.log` を確認する。ライブ `MWSE.log` は読まない。追加規則は `-RequirePattern 'primary:notifications/message'` のように `source:regex` で指定でき、既定 verdict を成功へ昇格させない。
-   - `initialize` が成功し、`MCP-Session-Id` が発行されていること。
-   - `ping` が `200 OK` と空の JSON-RPC result で処理されていること。
-   - `notifications/initialized` が `202 Accepted` で no body として処理されていること。
-   - `notifications/cancelled` が `202 Accepted` で no body として処理され、request id と reason がログに出ていること。
-   - `GET` SSE stream が開かれていること。
-   - `logging/setLevel` により `notifications/message` が queued/sent されていること。
-   - `resources/subscribe` と `resources/unsubscribe` が成功していること。
-   - `DELETE` 後の同 session SSE GET が `404 Not Found` になっていること。
+## Suite-specific follow-up
+- summary は `sse_<timestamp>.log` の `notifications/message` pass marker と `[FAILED]` / `[ERROR]` を判定する。
+- `failed` / `inconclusive` の場合だけ summary evidence の保存済み SSE/MWSE artifact を読み、session、SSE stream、notification、DELETE 後の `404` を切り分ける。ライブ `MWSE.log` は読まない。
 
 ## Expected Coverage
 - `initialize` response が Streamable HTTP session id を返す。
 - initialize capabilities に以下が含まれる。
-  - `prompts.listChanged = true`
+  - `prompts.listChanged = false`
   - `resources.subscribe = true`
   - `resources.listChanged = true`
-  - `tools.listChanged = true`
+  - `tools.listChanged = false`
 - `ping` は initialize 応答後、`notifications/initialized` 前でも HTTP `200 OK` と空 result を返す。
 - Client-to-server notification は POST で受け付けられ、HTTP `202 Accepted` no body になる。
 - `notifications/cancelled` は client-to-server notification として受け付けられ、対象 request id と reason が記録される。
@@ -104,5 +80,3 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 - このテストは Morrowind/MWSE を起動するため、`unit_test.ps1` より重い integration test として扱う。
 - `server_test.ps1` と同時に実行しない。どちらも同じ Morrowind/MCP server を起動・停止するため競合しやすい。
 - `-NoStart -NoStop` は手動起動中のサーバーに対する確認用であり、通常は使わない。
-- サーバー側の詳細な挙動は保存された `mwse_<timestamp>.log` を優先して確認する。
-- テストスクリプトのコンソール出力は `sse_<timestamp>.log` にも保存される。
