@@ -156,6 +156,7 @@ $defaults = switch ($TestType) {
             Rule "server-failed" "primary" "\[FAILED\]"
             Rule "server-skipped" "primary" "\[SKIPPED\]"
             Rule "server-inspector-nonzero" "primary" "^\[EXIT\]\s+(?!0\s*$)-?\d+\s*$"
+            Rule "server-known-uv-handle-closing" "primary" "^\[KNOWN\] Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable\.$" "default" "known-issue"
         )
     }
     "sse_test" {
@@ -193,6 +194,7 @@ $counts = [ordered]@{
     skipped = 0
 }
 $primaryExists = Test-Path -LiteralPath $paths.primary -PathType Leaf
+$knownIssues = @()
  switch ($TestType) {
      "unit_test" {
         $counts.failed = $byId["unit-failed"].match_count
@@ -218,6 +220,17 @@ $primaryExists = Test-Path -LiteralPath $paths.primary -PathType Leaf
         $counts.passed = $byId["server-passed"].match_count
         $counts.failed = $byId["server-failed"].match_count + $byId["server-inspector-nonzero"].match_count
         $counts.skipped = $byId["server-skipped"].match_count
+        $knownUvHandleClosing = $byId["server-known-uv-handle-closing"]
+        if ($knownUvHandleClosing.match_count) {
+            $knownIssues += [ordered]@{
+                id = "inspector-uv-handle-closing"
+                message = "Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable."
+                occurrence_count = $knownUvHandleClosing.match_count
+                evidence_source = $knownUvHandleClosing.source
+                line_numbers = @($knownUvHandleClosing.line_numbers)
+            }
+            $reasons += "Known Inspector UV_HANDLE_CLOSING assertion evidence is present."
+        }
 
         if (-not $primaryExists) {
             $reasons += "Primary Inspector artifact is missing."
@@ -371,6 +384,7 @@ $summary = [ordered]@{
     status = $status
     counts = $counts
     reasons = @($reasons)
+    known_issues = @($knownIssues)
     rules = @($ruleMatches | ForEach-Object {
         $rule = [ordered]@{
             id = $_.id

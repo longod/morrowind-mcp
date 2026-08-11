@@ -128,7 +128,7 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@field onChanged fun(layer: "graph", cellId: MCP.CellIdentityKey?)?
 local this = {}
 
-local exteriorCellSize = 8192
+local exteriorCellSize = cellutil.exteriorCellSize
 
 ---@enum MCP.PathfindingEdgeKind
 local edgeKind = {

@@ -4,7 +4,7 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 --- The probe keeps experimental MWSE collision APIs behind protected calls so unsupported access is reported cleanly.
 local this = {}
 
-local exteriorCellSize = 8192
+local exteriorCellSize = cellutil.exteriorCellSize
 
 ---@class MCP.TerrainSceneRootInspection
 ---@field available boolean
@@ -276,9 +276,9 @@ function this.ProbeRuntimeAccess()
         local origin = tes3vector3.new(player.position.x, player.position.y, player.position.z + 4096)
         local direction = tes3vector3.new(0, 0, -1)
         result.rays = {
-            landscape = ProbeRay("landscape", tes3.game.worldLandscapeRoot, origin, direction, 8192),
-            static = ProbeRay("static", tes3.game.worldObjectRoot, origin, direction, 8192),
-            pick = ProbeRay("pick", tes3.game.worldPickRoot, origin, direction, 8192),
+            landscape = ProbeRay("landscape", tes3.game.worldLandscapeRoot, origin, direction, exteriorCellSize),
+            static = ProbeRay("static", tes3.game.worldObjectRoot, origin, direction, exteriorCellSize),
+            pick = ProbeRay("pick", tes3.game.worldPickRoot, origin, direction, exteriorCellSize),
         }
     else
         result.rays = {}

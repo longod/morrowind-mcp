@@ -232,6 +232,7 @@ function Invoke-MCPInspector {
 
         $uvHandleClosingAssertionPattern = 'Assertion failed: !\(handle->flags & UV_HANDLE_CLOSING\)'
         $hasKnownUvHandleClosingAssertion = $stderrText -match $uvHandleClosingAssertionPattern
+        $knownUvHandleClosingMessage = "[KNOWN] Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable."
         $hasUnexpectedStderr = @(
             $stderrText -split "`r?`n" | Where-Object {
                 -not [string]::IsNullOrWhiteSpace($_) -and
@@ -255,8 +256,12 @@ function Invoke-MCPInspector {
             "[RUN] $runLabel"
             "[TIME] $(Get-Date -Format o)"
             "[EXIT] $result"
+            $(if ($hasKnownUvHandleClosingAssertion) { $knownUvHandleClosingMessage })
             "--- STDERR ---"
         )
+        if ($hasKnownUvHandleClosingAssertion) {
+            Write-Host $knownUvHandleClosingMessage -ForegroundColor Yellow
+        }
         if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
             Add-Content -Path $InspectorLogPath -Value $stderrText
         }
@@ -670,7 +675,8 @@ try {
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu fetch in game" -ToolName "mw-menu-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
-        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference list did not default to minimal detail." } } -Capture { param($result, $context) $activators = @($result.structuredContent.activators | Select-Object -First 1)[0]; if ($activators -and -not [string]::IsNullOrWhiteSpace($activators.id)) { $context.PlayerLookTargetId = $activators.id } }),
+        (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference list did not default to minimal detail." }; if (@($result.structuredContent.activators | Where-Object { $_.type -eq "leveledCreature" }).Count -ne 0) { throw "Reference fetch included a leveled creature activator." } } -Capture { param($result, $context) $activators = @($result.structuredContent.activators | Select-Object -First 1)[0]; if ($activators -and -not [string]::IsNullOrWhiteSpace($activators.id)) { $context.PlayerLookTargetId = $activators.id }; $context.NearbyReferenceCounts = @{ activators = @($result.structuredContent.activators).Count; actors = @($result.structuredContent.actors).Count; statics = @($result.structuredContent.statics).Count } }),
+        (New-ToolCallTestCase -Name "reference fetch active cell scope" -ToolName "mw-reference-fetch" -ToolArguments @{ scope = "active" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result, $context) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch active scope did not retain minimal detail." }; foreach ($category in @("activators", "actors", "statics")) { if (@($result.structuredContent.$category).Count -lt $context.NearbyReferenceCounts[$category]) { throw "Reference fetch active scope omitted nearby $category." } } }),
         (New-ToolCallTestCase -Name "reference fetch all cells minimal detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "minimal" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch did not honor minimal detail." } } -Capture { param($result, $context) $context.ReferenceDetailSizes.minimal = Measure-JsonPayloadSize -Payload $result.structuredContent }),
         (New-ToolCallTestCase -Name "reference fetch all cells standard detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "standard" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "standard") { throw "Reference fetch did not honor standard detail." } } -Capture { param($result, $context) $context.ReferenceDetailSizes.standard = Measure-JsonPayloadSize -Payload $result.structuredContent }),
         (New-ToolCallTestCase -Name "reference fetch all cells full detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "full" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "full") { throw "Reference fetch did not honor full detail." }; $references = @($result.structuredContent.activators) + @($result.structuredContent.actors) + @($result.structuredContent.statics); $locked = @($references | Where-Object { $null -ne $_.lockNode -and $_.lockNode.locked -eq $true }); if ($locked.Count -eq 0) { throw "Full reference fetch did not include a locked reference with lockNode." } } -Capture {

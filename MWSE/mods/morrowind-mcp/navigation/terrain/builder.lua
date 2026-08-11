@@ -3,7 +3,7 @@ local gridModule = require("morrowind-mcp.navigation.terrain.grid")
 local sourceModule = require("morrowind-mcp.navigation.terrain.source")
 
 local this = {}
-local exteriorCellSize = 8192
+local exteriorCellSize = cellutil.exteriorCellSize
 
 ---@alias MCP.TerrainGridBuilderState "queued"|"sampling"|"ready"|"cancelled"|"failed"
 ---@alias MCP.TerrainGridBudgetMode "time"|"samples"|"hybrid"

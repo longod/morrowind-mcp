@@ -3,18 +3,12 @@ local availability = require("morrowind-mcp.core.toolavailability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local summary = require("morrowind-mcp.tes3.object_summary")
 local iter = require("morrowind-mcp.tes3.iterator")
+local cellutil = require("morrowind-mcp.tes3.cell")
 
 
 ---@class MCP.Tools.ReferenceFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
----@param ref tes3reference
----@return boolean
-local function IsNotLeveledCreature(ref)
-    local baseObject = ref.baseObject
-    return not baseObject or baseObject.objectType ~= tes3.objectType.leveledCreature
-end
-
 setmetatable(this, { __index = base })
 
 ---@param params table?
@@ -26,7 +20,7 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "reference-fetch",
         description =
-        "Fetch references in current active cells. In minimal and standard results, " ..
+        "Fetch references near the player by default, or from all active cells when requested. In minimal and standard results, " ..
         "distance is reported from the player as both Morrowind game units and meters; " ..
         "reference positions remain Morrowind game-space coordinates in game units.",
         inputSchema = jsonrpc.InputSchema({
@@ -51,6 +45,12 @@ function this.new(params)
                 "Detail Level",
                 "Serialization detail. The default is minimal for lists and full when filtering by reference ID.",
                 nil
+            ),
+            scope = jsonrpc.UntitledSingleSelectEnumSchema(
+                { "nearby", "active" },
+                "Cell Scope",
+                "Reference cell scope. nearby includes the player's current cell and loaded neighbours near exterior cell boundaries. active includes all active cells.",
+                "nearby"
             ),
         }),
         outputSchema = jsonrpc.OutputSchema(
@@ -88,6 +88,13 @@ local function CompareId(ref, id)
     return ref == id
 end
 
+---@param ref tes3reference
+---@return boolean
+local function IsNotLeveledCreature(ref)
+    local baseObject = ref.baseObject
+    return not baseObject or baseObject.objectType ~= tes3.objectType.leveledCreature
+end
+
 function this:Execute(arguments, context)
     local id = arguments["id"]
     local detailLevel = arguments["detail_level"] or (id and summary.level.full or summary.level.minimal)
@@ -104,12 +111,18 @@ function this:Execute(arguments, context)
         end
     end
 
-    -- it seems always returns non nil array, but it contains only valid references.
-    local cells = tes3.getActiveCells()
-    if not cells then
+    -- Active cells are the authoritative loaded-cell set. Nearby scope narrows that set by player position.
+    local activeCells = tes3.getActiveCells()
+    if not activeCells then
         local errorContent = jsonrpc.TextContent("no active cells found. Please enter a cell first.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
+    local cells = activeCells
+    local scope = arguments["scope"] or "nearby"
+    if scope ~= "active" then
+        cells = cellutil.GetNearbyActiveCells(tes3.getPlayerCell(), tes3.player and tes3.player.position or nil, activeCells)
+    end
+    self.logger:debug("reference-fetch scope=%s cells=%d", scope, #cells)
     local activatorSize = 0
     local actorSize = 0
     local staticSize = 0
