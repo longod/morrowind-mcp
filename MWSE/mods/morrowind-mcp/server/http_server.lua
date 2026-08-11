@@ -190,6 +190,36 @@ function this.new(params)
     return instance
 end
 
+--- Create the debug-only navigation visualizer when development debugging is enabled.
+---@param self MCP.MwseHttpServer
+function this:CreateNavigationVisualizer()
+    if config.development.debug then
+        self.visualizer = visualizerModule.new(self.pathfinding, self.terrainGridManager)
+    end
+end
+
+--- Advance or refresh the optional debug-only navigation visualizer.
+---@param self MCP.MwseHttpServer
+---@param refresh boolean?
+function this:UpdateNavigationVisualizer(refresh)
+    if self.visualizer then
+        if refresh then
+            self.visualizer:Refresh()
+        else
+            self.visualizer:Tick()
+        end
+    end
+end
+
+--- Detach and release the optional debug-only navigation visualizer.
+---@param self MCP.MwseHttpServer
+function this:ReleaseNavigationVisualizer()
+    if self.visualizer then
+        self.visualizer:Remove()
+        self.visualizer = nil
+    end
+end
+
 --- Replace any active route and begin navigation through the shared pathfinding graph.
 ---@param destination MCP.PathfindingLocator
 ---@return boolean
@@ -1829,7 +1859,7 @@ function this:Start()
     target:RegisterEvent()
     self.pathfinding:RegisterEventHandlers()
     self.terrainGridManager:RegisterEventHandlers()
-    self.visualizer = visualizerModule.new(self.pathfinding, self.terrainGridManager)
+    self:CreateNavigationVisualizer()
 
     self.enterFrameCallback = function(e)
         self:Listen(e)
@@ -1837,13 +1867,13 @@ function this:Start()
         self:MaintainServerPings()
         self:BroadcastNotifications()
         self:CloseExpiredSessions()
-        self.visualizer:Tick()
+        self:UpdateNavigationVisualizer()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
     self.loadedCallback = function(e)
         debugGeometryProbe.Remove()
-        self.visualizer:Refresh()
+        self:UpdateNavigationVisualizer(true)
         if tes3.worldController then
             if config.notification.showSubtitles and not tes3.worldController.showSubtitles then
                 tes3.worldController.showSubtitles = true
@@ -1931,10 +1961,7 @@ function this:Shutdown()
     end
 
     debugGeometryProbe.Remove()
-    if self.visualizer then
-        self.visualizer:Remove()
-        self.visualizer = nil
-    end
+    self:ReleaseNavigationVisualizer()
 
     self.terrainGridManager:Release()
 

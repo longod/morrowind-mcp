@@ -35,9 +35,9 @@ function this.new(params)
                     "navigate"
                 ),
                 -- array, object schema are in specification, but it seems client view is not supported.
-                position_x = jsonrpc.NumberSchema("Destination X", "Destination X coordinate in world space."),
-                position_y = jsonrpc.NumberSchema("Destination Y", "Destination Y coordinate in world space."),
-                position_z = jsonrpc.NumberSchema("Destination Z", "Destination Z coordinate in world space."),
+                position_x = jsonrpc.NumberSchema("Destination X", "Destination X coordinate in world space, in Morrowind game units."),
+                position_y = jsonrpc.NumberSchema("Destination Y", "Destination Y coordinate in world space, in Morrowind game units."),
+                position_z = jsonrpc.NumberSchema("Destination Z", "Destination Z coordinate in world space, in Morrowind game units."),
                 cell_id = jsonrpc.StringSchema("Destination Cell", "Optional cell containing the destination.", nil,
                     64),
             },

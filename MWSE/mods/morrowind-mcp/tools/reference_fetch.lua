@@ -19,7 +19,9 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "reference-fetch",
         description =
-        "Fetch references in current active cells.",
+        "Fetch references in current active cells. In minimal and standard results, " ..
+        "distance is reported from the player as both Morrowind game units and meters; " ..
+        "reference positions remain Morrowind game-space coordinates in game units.",
         inputSchema = jsonrpc.InputSchema({
             category = jsonrpc.UntitledMultiSelectEnumSchema(
                 jsonrpc.UntitledMultiSelectEnumSchemaItems({

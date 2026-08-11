@@ -32,7 +32,7 @@ function Relative([string]$Path) {
     return [IO.Path]::GetRelativePath($workspaceRoot, $Path).Replace("\", "/")
 }
 
-function Rule([string]$Id, [string]$Source, [string]$Pattern, [string]$Kind = "default") {
+function Rule([string]$Id, [string]$Source, [string]$Pattern, [string]$Kind = "default", [string]$Role = "assertion", [bool]$IncludeDetails = $true) {
     try {
         $null = [regex]::new($Pattern, "IgnoreCase")
         return [pscustomobject]@{
@@ -40,6 +40,8 @@ function Rule([string]$Id, [string]$Source, [string]$Pattern, [string]$Kind = "d
             source = $Source
             pattern = $Pattern
             kind = $Kind
+            role = $Role
+            include_details = $IncludeDetails
         }
     }
     catch {
@@ -73,22 +75,31 @@ function MatchRules([object[]]$Rules, [hashtable]$Paths) {
         else {
             @()
         }
-        $numbers = @($matchingLines | ForEach-Object { $_.LineNumber })
+        $numbers = if ($_.include_details) {
+            @($matchingLines | ForEach-Object { $_.LineNumber })
+        }
+        else {
+            @()
+        }
 
-        [pscustomobject]@{
+        $result = [ordered]@{
             id = $_.id
             source = $_.source
             pattern = $_.pattern
             kind = $_.kind
-            match_count = $numbers.Count
-            line_numbers = @($numbers)
-            line_matches = @($matchingLines | Select-Object -First 10 | ForEach-Object {
+            role = $_.role
+            match_count = $matchingLines.Count
+        }
+        if ($_.include_details) {
+            $result.line_numbers = @($numbers)
+            $result.line_matches = @($matchingLines | Select-Object -First 10 | ForEach-Object {
                 [pscustomobject]@{
                     line = $_.LineNumber
                     text = $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length))
                 }
             })
         }
+        [pscustomobject]$result
     })
 }
 function Inspector([string]$Path) {
@@ -136,7 +147,7 @@ $defaults = switch ($TestType) {
         @(
             Rule "unit-failed" "primary" "^\[UnitWind\].*MORROWIND-MCP\..*\bFAILED\b"
             Rule "unit-pass" "primary" "^\[UnitWind\].*MORROWIND-MCP\..*\bPASSED\b"
-            Rule "unitwind" "primary" "\[UnitWind\]"
+            Rule "unitwind" "primary" "\[UnitWind\]" "default" "execution-evidence" $false
         )
     }
     "server_test" {
@@ -360,7 +371,20 @@ $summary = [ordered]@{
     status = $status
     counts = $counts
     reasons = @($reasons)
-    rules = @($ruleMatches | Select-Object id, source, pattern, kind, match_count, line_numbers)
+    rules = @($ruleMatches | ForEach-Object {
+        $rule = [ordered]@{
+            id = $_.id
+            source = $_.source
+            pattern = $_.pattern
+            kind = $_.kind
+            role = $_.role
+            match_count = $_.match_count
+        }
+        if ($_.include_details) {
+            $rule.line_numbers = @($_.line_numbers)
+        }
+        [pscustomobject]$rule
+    })
     evidence = $evidence
 }
 

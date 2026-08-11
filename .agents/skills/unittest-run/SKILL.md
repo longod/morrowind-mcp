@@ -37,7 +37,8 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 ```
 
 ## Suite-specific follow-up
-- summary は `unitwind_<timestamp>.log` の `FAILED` と suite pass evidence を判定する。`failed` / `inconclusive` のときだけ、summary evidence の抽出結果と `mwse_<timestamp>.log` を読む。
+- まず生成した summary の `status` を判定する。`passed` ならそこで終了し、ログ本文は調査しない。
+- `failed` または `inconclusive` のときだけ、summary の `evidence` を確認し、その後に対応する `mwse_<timestamp>.log` と必要な `unitwind_<timestamp>.log` を調査する。
 - UnitWind の mock が通常ランタイムを壊していないことを確認する変更では、全 suite に `-VerifyRuntimeAfterTests` を付ける。個別 target とは併用できない。
 - `start_server_mo2.ps1` の non-zero が最終終了コードへ影響し得るため、終了コードだけで失敗と断定しない。
 

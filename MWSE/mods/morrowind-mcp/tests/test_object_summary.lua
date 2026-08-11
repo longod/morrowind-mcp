@@ -221,7 +221,7 @@ function this.Test()
         unitwind:expect(message:match("Invalid JSON userdata")).NOT.toBe(nil)
     end)
 
-    unitwind:test("References report distance from the serializer origin", function()
+    unitwind:test("References report distance from the serializer origin in game units and meters", function()
         local cell = {
             id = "Balmora",
             objectType = tes3.objectType.cell,
@@ -251,7 +251,8 @@ function this.Test()
 
         local result = serializerModule.new({ detailLevel = "minimal", origin = origin }):Reference(reference)
 
-        unitwind:expect(result.distance).toBe(7)
+        unitwind:expect(result.distance.units).toBe(7)
+        unitwind:expect(result.distance.meters).toBe(7 * 0.3048 / 22.1)
     end)
 
     unitwind:test("References report an existing traversal cycle", function()

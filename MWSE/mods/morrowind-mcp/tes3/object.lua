@@ -2734,7 +2734,7 @@ local objectHandler = {
     ["weapon"] = this.tes3weapon,
 }
 
----@param i tes3baseObject|tes3mobileObject?
+---@param i tes3baseObject|tes3mobileObject|nil
 ---@param o MCP.AnyMap?
 function this.tes3anyObject(i, o)
     if not i then

@@ -3,6 +3,7 @@ local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local object = require("morrowind-mcp.tes3.object")
 local enumname = require("morrowind-mcp.tes3.enumname")
 local iter = require("morrowind-mcp.tes3.iterator")
+local distanceutil = require("morrowind-mcp.util.distance")
 
 ---@diagnostic disable: need-check-nil, undefined-field
 
@@ -21,18 +22,68 @@ this.level = {
 
 -- Keep this manifest aligned with object.lua so a missing extension point is visible in tests.
 this.supportedMethods = {
-    "tes3bountyData", "tes3fader", "tes3itemData", "tes3inventoryTile", "tes3statistic",
-    "tes3weather", "tes3weatherController", "tes3worldController", "tes3travelDestinationNode",
-    "tes3globalVariable", "tes3effect", "tes3soulGemData", "tes3activator", "tes3alchemy",
-    "tes3apparatus", "tes3armor", "tes3birthsign", "tes3bodyPart", "tes3book", "tes3cell",
-    "tes3class", "tes3clothing", "tes3container", "tes3creature", "tes3dialogue",
-    "tes3dialogueInfo", "tes3door", "tes3enchantment", "tes3faction", "tes3gameSetting",
-    "tes3ingredient", "tes3land", "tes3landTexture", "tes3leveledCreature", "tes3leveledItem",
-    "tes3light", "tes3lockpick", "tes3magicEffect", "tes3misc", "tes3mobileActor",
-    "tes3mobileCreature", "tes3mobileNPC", "tes3mobilePlayer", "tes3mobileProjectile",
-    "tes3mobileSpellProjectile", "tes3npc", "tes3pathGrid", "tes3probe", "tes3quest", "tes3race",
-    "tes3reference", "tes3region", "tes3repairTool", "tes3script", "tes3skill", "tes3sound",
-    "tes3soundGenerator", "tes3spell", "tes3startScript", "tes3static", "tes3weapon", "tes3anyObject",
+    "tes3bountyData",
+    "tes3fader",
+    "tes3itemData",
+    "tes3inventoryTile",
+    "tes3statistic",
+    "tes3weather",
+    "tes3weatherController",
+    "tes3worldController",
+    "tes3travelDestinationNode",
+    "tes3globalVariable",
+    "tes3effect",
+    "tes3soulGemData",
+    "tes3activator",
+    "tes3alchemy",
+    "tes3apparatus",
+    "tes3armor",
+    "tes3birthsign",
+    "tes3bodyPart",
+    "tes3book",
+    "tes3cell",
+    "tes3class",
+    "tes3clothing",
+    "tes3container",
+    "tes3creature",
+    "tes3dialogue",
+    "tes3dialogueInfo",
+    "tes3door",
+    "tes3enchantment",
+    "tes3faction",
+    "tes3gameSetting",
+    "tes3ingredient",
+    "tes3land",
+    "tes3landTexture",
+    "tes3leveledCreature",
+    "tes3leveledItem",
+    "tes3light",
+    "tes3lockpick",
+    "tes3magicEffect",
+    "tes3misc",
+    "tes3mobileActor",
+    "tes3mobileCreature",
+    "tes3mobileNPC",
+    "tes3mobilePlayer",
+    "tes3mobileProjectile",
+    "tes3mobileSpellProjectile",
+    "tes3npc",
+    "tes3pathGrid",
+    "tes3probe",
+    "tes3quest",
+    "tes3race",
+    "tes3reference",
+    "tes3region",
+    "tes3repairTool",
+    "tes3script",
+    "tes3skill",
+    "tes3sound",
+    "tes3soundGenerator",
+    "tes3spell",
+    "tes3startScript",
+    "tes3static",
+    "tes3weapon",
+    "tes3anyObject",
 }
 
 ---@param params { detailLevel: "minimal"|"standard"|"full"?, origin: tes3vector3? }?
@@ -86,6 +137,7 @@ end
 ---@param value any
 ---@param path string
 ---@param ancestors table<any, boolean>
+---@return nil
 local function ValidateJsonValue(value, path, ancestors)
     local valueType = type(value)
     if valueType == "nil" or valueType == "boolean" or valueType == "string" then
@@ -268,7 +320,11 @@ function this:Reference(reference)
         stackSize = reference.stackSize,
     })
     if self.origin and reference.position then
-        output.distance = self.origin:distance(reference.position)
+        local distanceUnits = self.origin:distance(reference.position)
+        output.distance = jsonrpc.object({
+            units = distanceUnits,
+            meters = distanceutil.ToMeters(distanceUnits),
+        })
     end
     if self:IsStandard() then
         output.facing = reference.facing
@@ -429,10 +485,21 @@ function this:ItemWithEffects(value)
     return output
 end
 
-function this:tes3alchemy(value) return self:Finish("tes3alchemy", self:ItemWithEffects(value)) end
+---@param value tes3alchemy?
+---@return MCP.AnyMap?
+function this:tes3alchemy(value)
+    return self:Finish("tes3alchemy", self:ItemWithEffects(value))
+end
 
-function this:tes3activator(value) return self:Finish("tes3activator", self:ObjectSummary(value)) end
+---@param value tes3activator?
+---@return MCP.AnyMap?
+-- TODO Add activator-specific summary fields.
+function this:tes3activator(value)
+    return self:Finish("tes3activator", self:ObjectSummary(value))
+end
 
+---@param value tes3apparatus?
+---@return MCP.AnyMap?
 function this:tes3apparatus(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -442,10 +509,22 @@ function this:tes3apparatus(value)
     return self:Finish("tes3apparatus", output)
 end
 
-function this:tes3birthsign(value) return self:Finish("tes3birthsign", self:ObjectSummary(value)) end
+---@param value tes3birthsign?
+---@return MCP.AnyMap?
+-- TODO Add birthsign-specific summary fields.
+function this:tes3birthsign(value)
+    return self:Finish("tes3birthsign", self:ObjectSummary(value))
+end
 
-function this:tes3bodyPart(value) return self:Finish("tes3bodyPart", self:ObjectSummary(value)) end
+---@param value tes3bodyPart?
+---@return MCP.AnyMap?
+-- TODO Add body part-specific summary fields.
+function this:tes3bodyPart(value)
+    return self:Finish("tes3bodyPart", self:ObjectSummary(value))
+end
 
+---@param value tes3book?
+---@return MCP.AnyMap?
 function this:tes3book(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -455,28 +534,83 @@ function this:tes3book(value)
     return self:Finish("tes3book", output)
 end
 
-function this:tes3cell(value) return self:CellSummary(value) end
+---@param value tes3cell?
+---@return MCP.AnyMap?
+function this:tes3cell(value)
+    return self:CellSummary(value)
+end
 
-function this:tes3class(value) return self:Finish("tes3class", self:ObjectSummary(value)) end
+---@param value tes3class?
+---@return MCP.AnyMap?
+-- TODO Add class-specific summary fields.
+function this:tes3class(value)
+    return self:Finish("tes3class", self:ObjectSummary(value))
+end
 
-function this:tes3dialogue(value) return self:Finish("tes3dialogue", self:ObjectSummary(value)) end
+---@param value tes3dialogue?
+---@return MCP.AnyMap?
+-- TODO Add dialogue-specific summary fields.
+function this:tes3dialogue(value)
+    return self:Finish("tes3dialogue", self:ObjectSummary(value))
+end
 
-function this:tes3dialogueInfo(value) return self:Finish("tes3dialogueInfo", self:ObjectSummary(value)) end
+---@param value tes3dialogueInfo?
+---@return MCP.AnyMap?
+-- TODO Add dialogue-info-specific summary fields.
+function this:tes3dialogueInfo(value)
+    return self:Finish("tes3dialogueInfo", self:ObjectSummary(value))
+end
 
-function this:tes3door(value) return self:Finish("tes3door", self:ObjectSummary(value)) end
+---@param value tes3door?
+---@return MCP.AnyMap?
+-- TODO Add door-specific summary fields.
+function this:tes3door(value)
+    return self:Finish("tes3door", self:ObjectSummary(value))
+end
 
-function this:tes3enchantment(value) return self:Finish("tes3enchantment", self:ObjectSummary(value)) end
+---@param value tes3enchantment?
+---@return MCP.AnyMap?
+-- TODO Add enchantment-specific summary fields.
+function this:tes3enchantment(value)
+    return self:Finish("tes3enchantment", self:ObjectSummary(value))
+end
 
-function this:tes3faction(value) return self:Finish("tes3faction", self:ObjectSummary(value)) end
+---@param value tes3faction?
+---@return MCP.AnyMap?
+-- TODO Add faction-specific summary fields.
+function this:tes3faction(value)
+    return self:Finish("tes3faction", self:ObjectSummary(value))
+end
 
-function this:tes3gameSetting(value) return self:Finish("tes3gameSetting", self:ObjectSummary(value)) end
+---@param value tes3gameSetting?
+---@return MCP.AnyMap?
+-- TODO Add game-setting-specific summary fields.
+function this:tes3gameSetting(value)
+    return self:Finish("tes3gameSetting", self:ObjectSummary(value))
+end
 
-function this:tes3ingredient(value) return self:Finish("tes3ingredient", self:ItemWithEffects(value)) end
+---@param value tes3ingredient?
+---@return MCP.AnyMap?
+function this:tes3ingredient(value)
+    return self:Finish("tes3ingredient", self:ItemWithEffects(value))
+end
 
-function this:tes3land(value) return self:Finish("tes3land", self:ObjectSummary(value)) end
+---@param value tes3land?
+---@return MCP.AnyMap?
+-- TODO Add land-specific summary fields.
+function this:tes3land(value)
+    return self:Finish("tes3land", self:ObjectSummary(value))
+end
 
-function this:tes3landTexture(value) return self:Finish("tes3landTexture", self:ObjectSummary(value)) end
+---@param value tes3landTexture?
+---@return MCP.AnyMap?
+-- TODO Add land-texture-specific summary fields.
+function this:tes3landTexture(value)
+    return self:Finish("tes3landTexture", self:ObjectSummary(value))
+end
 
+---@param value tes3leveledCreature?
+---@return MCP.AnyMap?
 function this:tes3leveledCreature(value)
     local output = self:ObjectSummary(value)
     if output and self:IsStandard() then
@@ -487,6 +621,8 @@ function this:tes3leveledCreature(value)
     return self:Finish("tes3leveledCreature", output)
 end
 
+---@param value tes3leveledItem?
+---@return MCP.AnyMap?
 function this:tes3leveledItem(value)
     local output = self:ObjectSummary(value)
     if output and self:IsStandard() then
@@ -498,6 +634,8 @@ function this:tes3leveledItem(value)
     return self:Finish("tes3leveledItem", output)
 end
 
+---@param value tes3light?
+---@return MCP.AnyMap?
 function this:tes3light(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -507,6 +645,8 @@ function this:tes3light(value)
     return self:Finish("tes3light", output)
 end
 
+---@param value tes3lockpick?
+---@return MCP.AnyMap?
 function this:tes3lockpick(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -516,8 +656,16 @@ function this:tes3lockpick(value)
     return self:Finish("tes3lockpick", output)
 end
 
-function this:tes3magicEffect(value) return self:Finish("tes3magicEffect", self:ObjectSummary(value)) end
+---@param value tes3magicEffect?
+---@return MCP.AnyMap?
+-- TODO Add magic-effect-specific summary fields.
+function this:tes3magicEffect(value)
+    ---@diagnostic disable-next-line: param-type-mismatch
+    return self:Finish("tes3magicEffect", self:ObjectSummary(value))
+end
 
+---@param value tes3misc?
+---@return MCP.AnyMap?
 function this:tes3misc(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -529,8 +677,15 @@ function this:tes3misc(value)
     return self:Finish("tes3misc", output)
 end
 
-function this:tes3pathGrid(value) return self:Finish("tes3pathGrid", self:ObjectSummary(value)) end
+---@param value tes3pathGrid?
+---@return MCP.AnyMap?
+-- TODO Add path-grid-specific summary fields.
+function this:tes3pathGrid(value)
+    return self:Finish("tes3pathGrid", self:ObjectSummary(value))
+end
 
+---@param value tes3probe?
+---@return MCP.AnyMap?
 function this:tes3probe(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -539,12 +694,29 @@ function this:tes3probe(value)
     return self:Finish("tes3probe", output)
 end
 
-function this:tes3quest(value) return self:Finish("tes3quest", self:ObjectSummary(value)) end
+---@param value tes3quest?
+---@return MCP.AnyMap?
+-- TODO Add quest-specific summary fields.
+function this:tes3quest(value)
+    return self:Finish("tes3quest", self:ObjectSummary(value))
+end
 
-function this:tes3race(value) return self:Finish("tes3race", self:ObjectSummary(value)) end
+---@param value tes3race?
+---@return MCP.AnyMap?
+-- TODO Add race-specific summary fields.
+function this:tes3race(value)
+    return self:Finish("tes3race", self:ObjectSummary(value))
+end
 
-function this:tes3region(value) return self:Finish("tes3region", self:ObjectSummary(value)) end
+---@param value tes3region?
+---@return MCP.AnyMap?
+-- TODO Add region-specific summary fields.
+function this:tes3region(value)
+    return self:Finish("tes3region", self:ObjectSummary(value))
+end
 
+---@param value tes3repairTool?
+---@return MCP.AnyMap?
 function this:tes3repairTool(value)
     local output = self:ItemSummary(value)
     if output and self:IsStandard() then
@@ -554,44 +726,139 @@ function this:tes3repairTool(value)
     return self:Finish("tes3repairTool", output)
 end
 
-function this:tes3script(value) return self:Finish("tes3script", nil) end
+---@param value tes3script?
+---@return MCP.AnyMap?
+-- TODO Add script summary fields when script data is safe to expose.
+function this:tes3script(value)
+    return self:Finish("tes3script", nil)
+end
 
-function this:tes3skill(value) return self:Finish("tes3skill", self:ObjectSummary(value)) end
+---@param value tes3skill?
+---@return MCP.AnyMap?
+-- TODO Add skill-specific summary fields.
+function this:tes3skill(value)
+    return self:Finish("tes3skill", self:ObjectSummary(value))
+end
 
-function this:tes3sound(value) return self:Finish("tes3sound", self:ObjectSummary(value)) end
+---@param value tes3sound?
+---@return MCP.AnyMap?
+-- TODO Add sound-specific summary fields.
+function this:tes3sound(value)
+    return self:Finish("tes3sound", self:ObjectSummary(value))
+end
 
-function this:tes3soundGenerator(value) return self:Finish("tes3soundGenerator", self:ObjectSummary(value)) end
+---@param value tes3soundGenerator?
+---@return MCP.AnyMap?
+-- TODO Add sound-generator-specific summary fields.
+function this:tes3soundGenerator(value)
+    return self:Finish("tes3soundGenerator", self:ObjectSummary(value))
+end
 
-function this:tes3spell(value) return self:Finish("tes3spell", self:ObjectSummary(value)) end
+---@param value tes3spell?
+---@return MCP.AnyMap?
+-- TODO Add spell-specific summary fields.
+function this:tes3spell(value)
+    return self:Finish("tes3spell", self:ObjectSummary(value))
+end
 
-function this:tes3startScript(value) return self:Finish("tes3startScript", self:ObjectSummary(value)) end
+---@param value tes3startScript?
+---@return MCP.AnyMap?
+-- TODO Add start-script-specific summary fields.
+function this:tes3startScript(value)
+    return self:Finish("tes3startScript", self:ObjectSummary(value))
+end
 
-function this:tes3static(value) return self:Finish("tes3static", self:ObjectSummary(value)) end
+---@param value tes3static?
+---@return MCP.AnyMap?
+-- TODO Add static-specific summary fields.
+function this:tes3static(value)
+    return self:Finish("tes3static", self:ObjectSummary(value))
+end
 
-function this:tes3bountyData(value) return object.tes3bountyData(value) end
+---@param value tes3bountyData?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level bounty-data serializer.
+function this:tes3bountyData(value)
+    return object.tes3bountyData(value)
+end
 
-function this:tes3fader(value) return object.tes3fader(value) end
+---@param value tes3fader?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level fader serializer.
+function this:tes3fader(value)
+    return object.tes3fader(value)
+end
 
-function this:tes3inventoryTile(value) return object.tes3inventoryTile(value) end
+---@param value tes3inventoryTile?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level inventory-tile serializer.
+function this:tes3inventoryTile(value)
+    return object.tes3inventoryTile(value)
+end
 
-function this:tes3statistic(value) return object.tes3statistic(value) end
+---@param value tes3statistic?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level statistic serializer.
+function this:tes3statistic(value)
+    return object.tes3statistic(value)
+end
 
-function this:tes3weather(value) return object.tes3weather(value) end
+---@param value tes3weather?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level weather serializer.
+function this:tes3weather(value)
+    return object.tes3weather(value)
+end
 
-function this:tes3weatherController(value) return object.tes3weatherController(value) end
+---@param value tes3weatherController?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level weather-controller serializer.
+function this:tes3weatherController(value)
+    return object.tes3weatherController(value)
+end
 
-function this:tes3worldController(value) return object.tes3worldController(value) end
+---@param value tes3worldController?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level world-controller serializer.
+function this:tes3worldController(value)
+    return object.tes3worldController(value)
+end
 
-function this:tes3travelDestinationNode(value) return self:DestinationSummary(value) end
+---@param value tes3travelDestinationNode?
+---@return MCP.AnyMap?
+function this:tes3travelDestinationNode(value)
+    return self:DestinationSummary(value)
+end
 
-function this:tes3globalVariable(value) return object.tes3globalVariable(value) end
+---@param value tes3globalVariable?
+---@return number?
+-- TODO Add a summary-level global-variable serializer.
+function this:tes3globalVariable(value)
+    return object.tes3globalVariable(value)
+end
 
-function this:tes3effect(value) return object.tes3effect(value) end
+---@param value tes3effect?
+---@return MCP.AnyMap?
+-- TODO Reuse EffectSummary for summary-level effect serialization.
+function this:tes3effect(value)
+    return object.tes3effect(value)
+end
 
-function this:tes3soulGemData(value) return object.tes3soulGemData(value) end
+---@param value tes3soulGemData?
+---@return MCP.AnyMap?
+-- TODO Add a summary-level soul-gem-data serializer.
+function this:tes3soulGemData(value)
+    return object.tes3soulGemData(value)
+end
 
-function this:tes3itemData(value) return self:ItemDataSummary(value) end
+---@param value tes3itemData?
+---@return MCP.AnyMap?
+function this:tes3itemData(value)
+    return self:ItemDataSummary(value)
+end
 
+---@param value tes3mobileActor?
+---@return MCP.AnyMap?
 function this:tes3mobileActor(value)
     if not value then
         return nil
@@ -602,6 +869,8 @@ function this:tes3mobileActor(value)
     return self:Reference(value.reference)
 end
 
+---@param value tes3mobileCreature?
+---@return MCP.AnyMap?
 function this:tes3mobileCreature(value)
     if not value then
         return nil
@@ -612,6 +881,8 @@ function this:tes3mobileCreature(value)
     return self:Reference(value.reference)
 end
 
+---@param value tes3mobileNPC?
+---@return MCP.AnyMap?
 function this:tes3mobileNPC(value)
     if not value then
         return nil
@@ -622,6 +893,8 @@ function this:tes3mobileNPC(value)
     return self:Reference(value.reference)
 end
 
+---@param value tes3mobilePlayer?
+---@return MCP.AnyMap?
 function this:tes3mobilePlayer(value)
     if not value then
         return nil
@@ -632,6 +905,8 @@ function this:tes3mobilePlayer(value)
     return self:Reference(value.reference)
 end
 
+---@param value tes3mobileProjectile?
+---@return MCP.AnyMap?
 function this:tes3mobileProjectile(value)
     if not value then
         return nil
@@ -642,6 +917,8 @@ function this:tes3mobileProjectile(value)
     return self:Reference(value.reference)
 end
 
+---@param value tes3mobileSpellProjectile?
+---@return MCP.AnyMap?
 function this:tes3mobileSpellProjectile(value)
     if not value then
         return nil
@@ -652,8 +929,16 @@ function this:tes3mobileSpellProjectile(value)
     return self:Reference(value.reference)
 end
 
-function this:tes3reference(value) return self:Reference(value) end
+---@param value tes3reference?
+---@return MCP.AnyMap?
+function this:tes3reference(value)
+    return self:Reference(value)
+end
 
-function this:tes3anyObject(value) return self:AnyObject(value) end
+---@param value tes3baseObject|tes3mobileObject|nil
+---@return MCP.AnyMap?
+function this:tes3anyObject(value)
+    return self:AnyObject(value)
+end
 
 return this
