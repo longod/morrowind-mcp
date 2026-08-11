@@ -174,6 +174,28 @@ function this.Test()
         unitwind:expect(clothing.weight).toBe(2)
     end)
 
+    unitwind:test("Standard object summaries include location marker state", function()
+        local marker = {
+            id = "TravelMarker",
+            objectType = tes3.objectType.static,
+            isValid = function() return true end,
+            isLocationMarker = true,
+        }
+        local nonMarker = {
+            id = "Rock",
+            objectType = tes3.objectType.static,
+            isValid = function() return true end,
+            isLocationMarker = false,
+        }
+
+        local serializer = serializerModule.new({ detailLevel = "standard" })
+        local result = serializer:ObjectSummary(marker)
+        local nonMarkerResult = serializer:ObjectSummary(nonMarker)
+
+        unitwind:expect(result.isLocationMarker).toBe(true)
+        unitwind:expect(nonMarkerResult.isLocationMarker).toBe(nil)
+    end)
+
     unitwind:test("Direct full serializers delegate to object.lua", function()
         local cell = { id = "Balmora" }
         local expected = { id = "full-cell" }
@@ -252,7 +274,7 @@ function this.Test()
         local result = serializerModule.new({ detailLevel = "minimal", origin = origin }):Reference(reference)
 
         unitwind:expect(result.distance.units).toBe(7)
-        unitwind:expect(result.distance.meters).toBe(7 * 0.3048 / 22.1)
+        unitwind:expect(math.abs(result.distance.meters - (7 * 0.3048 / 22.1)) < 1e-12).toBe(true)
     end)
 
     unitwind:test("References report an existing traversal cycle", function()

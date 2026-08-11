@@ -210,6 +210,7 @@ function this:ObjectSummary(value)
     end
     output.name = value.name
     if self:IsStandard() then
+        output.isLocationMarker = value.isLocationMarker == true or nil
         output.mesh = value.mesh
         output.scale = value.scale
     end

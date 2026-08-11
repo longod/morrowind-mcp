@@ -8,6 +8,13 @@ local iter = require("morrowind-mcp.tes3.iterator")
 ---@class MCP.Tools.ReferenceFetch: MCP.ITool
 ---@field logger mwseLogger
 local this = {}
+---@param ref tes3reference
+---@return boolean
+local function IsNotLeveledCreature(ref)
+    local baseObject = ref.baseObject
+    return not baseObject or baseObject.objectType ~= tes3.objectType.leveledCreature
+end
+
 setmetatable(this, { __index = base })
 
 ---@param params table?
@@ -125,7 +132,8 @@ function this:Execute(arguments, context)
                         end
                         return nil
                     end,
-                    activators)
+                    activators,
+                    IsNotLeveledCreature)
             end
         end
         if category == nil or category["actors"] then
@@ -157,7 +165,11 @@ function this:Execute(arguments, context)
     else
         if category == nil or category["activators"] then
             for _, cell in ipairs(cells) do
-                iter.ForEachReferenceObject(cell.activators, function(i) return serializer:Reference(i) end, activators)
+                iter.ForEachReferenceObject(
+                    cell.activators,
+                    function(i) return serializer:Reference(i) end,
+                    activators,
+                    IsNotLeveledCreature)
             end
         end
         if category == nil or category["actors"] then

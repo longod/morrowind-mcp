@@ -68,17 +68,21 @@ end
 ---@param i tes3referenceList
 ---@param func (fun(i: tes3reference, o : MCP.AnyMap?): MCP.AnyMap?)|(fun(i: tes3reference): MCP.AnyMap?)
 ---@param o MCP.AnyMap[]|nil
+---@param filter? fun(ref: tes3reference): boolean Return false to skip a valid reference before serialization.
 ---@return MCP.AnyMap[]|nil
-function this.ForEachReferenceObject(i, func, o)
+function this.ForEachReferenceObject(i, func, o, filter)
     if not i then
         return nil
     end
     o = o or jsonrpc.array(table.size(i))
     for ref in this.ForEachReferenceList(i) do
         if ref:isValid() then
-            local c = func(ref)
-            if c then
-                table.insert(o, c)
+            -- Apply the predicate before serialization so callers can cheaply omit unsuitable base objects.
+            if not filter or filter(ref) then
+                local c = func(ref)
+                if c then
+                    table.insert(o, c)
+                end
             end
         end
     end

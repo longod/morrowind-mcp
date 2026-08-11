@@ -80,6 +80,46 @@ function this.Test()
         unitwind:expect(refs[3]).toBe(ref3)
     end)
 
+    unitwind:test("ForEachReferenceObject filters valid references before callback", function()
+        local leveledRef = {
+            id = "leveled",
+            baseObject = { objectType = "leveledCreature" },
+            isValid = function() return true end,
+        }
+        local regularRef = {
+            id = "regular",
+            baseObject = { objectType = "activator" },
+            isValid = function() return true end,
+        }
+        local invalidRef = {
+            id = "invalid",
+            baseObject = { objectType = "activator" },
+            isValid = function() return false end,
+        }
+        leveledRef.nextNode = regularRef
+        regularRef.nextNode = invalidRef
+
+        local callbackIds = {}
+        local referenceList = {
+            size = 3,
+            head = leveledRef,
+        } ---@type any
+        local values = iterator.ForEachReferenceObject(referenceList, function(ref)
+            table.insert(callbackIds, ref.id)
+            return { id = ref.id }
+        end, nil, function(ref)
+            return ref.baseObject.objectType ~= "leveledCreature"
+        end)
+
+        unitwind:expect(table.size(callbackIds)).toBe(1)
+        unitwind:expect(callbackIds[1]).toBe("regular")
+        unitwind:expect(values == nil).toBe(false)
+        if values then
+            unitwind:expect(table.size(values)).toBe(1)
+            unitwind:expect(values[1].id).toBe("regular")
+        end
+    end)
+
     unitwind:test("ForEachInventory expands variable stacks and skips uncarryable items", function()
         local itemA = { id = "itemA", canCarry = true }
         local itemB = { id = "itemB", canCarry = true }
