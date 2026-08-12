@@ -66,7 +66,7 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "The game UI menu controller must be loaded. The selected menu and action must be available at runtime."
+    return "You can only interact with the menu when it is displayed in main mode."
 end
 
 function this:CanExecute(arguments, context)
@@ -75,6 +75,14 @@ function this:CanExecute(arguments, context)
             availability.reason.menuControllerUnavailable,
             "Wait until the game UI menu controller has loaded."
         )
+    end
+    if not tes3.onMainMenu() then
+        if not tes3.menuMode() then
+        return false, availability.Unavailable(
+            availability.reason.notInMenuMode,
+            "You can only interact with the menu when it is displayed in main mode."
+        )
+        end
     end
     return true
 end

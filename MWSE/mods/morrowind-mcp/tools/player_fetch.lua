@@ -34,7 +34,7 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "A game must be active and the player must be loaded."
+    return "A game must be active and the player character must be loaded."
 end
 
 function this:CanExecute(arguments, context)
@@ -42,7 +42,8 @@ function this:CanExecute(arguments, context)
         return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
     end
     if not tes3.player or not tes3.mobilePlayer then
-        return false, availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+        return false,
+        availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player character has loaded.")
     end
     return true
 end

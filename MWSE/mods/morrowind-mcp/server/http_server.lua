@@ -1843,6 +1843,15 @@ function this:DebugNavigationCandidates(e)
     })
 end
 
+function this:DisableVanityMode()
+    if tes3.mobilePlayer then
+        if config.autoplay.vanityDisabled and not tes3.mobilePlayer.vanityDisabled then
+            tes3.mobilePlayer.vanityDisabled = true
+            self.logger:info("Vanity disabled")
+        end
+    end
+end
+
 function this:Start()
     if self.server then
         self.logger:warn("MCP server is already running")
@@ -1868,6 +1877,8 @@ function this:Start()
         self:BroadcastNotifications()
         self:CloseExpiredSessions()
         self:UpdateNavigationVisualizer()
+        -- Since it is set back to `true` when TPV becomes active during character generation, it always attempts to apply it.
+        self:DisableVanityMode()
     end
     event.register(tes3.event.enterFrame, self.enterFrameCallback)
 
@@ -1892,13 +1903,6 @@ function this:Start()
                     tes3.worldController.menuController.pathGridShown = config.development.pathGrid
                     self.logger:debug("Pathgrid changed to %s", tostring(config.development.pathGrid))
                 end
-            end
-        end
-
-        if tes3.mobilePlayer then
-            if config.autoplay.vanityDisabled and not tes3.mobilePlayer.vanityDisabled then
-                tes3.mobilePlayer.vanityDisabled = true
-                self.logger:info("Vanity disabled")
             end
         end
     end

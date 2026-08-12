@@ -102,7 +102,7 @@ function this.ForEachItem(inventory, func, o)
     end
     o = o or jsonrpc.array()
     for item, count, itemData in this.ForEachInventory(inventory) do
-        if item:isValid() then
+        if item and item:isValid() then
             local c = func(item, count, itemData)
             if c then
                 table.insert(o, c)

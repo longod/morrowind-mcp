@@ -8,6 +8,7 @@ local this = {}
 local reason = {
     gameNotActive = "game_not_active",
     menuControllerUnavailable = "menu_controller_unavailable",
+    notInMenuMode = "notInMenuMode",
     noActiveCells = "no_active_cells",
     playerUnavailable = "player_unavailable",
     inputBindingUnavailable = "input_binding_unavailable",

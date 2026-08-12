@@ -207,12 +207,12 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 | `notifications/initialized` | Yes |
 | `notifications/tasks/status` | No (undecided) |
 | `notifications/message` | Yes |
-| `notifications/progress` | Yes |
-| `notifications/prompts/list_changed` | Yes |
+| `notifications/progress` | Yes (but it isn't used) |
+| `notifications/prompts/list_changed` | Yes (but it won't change) |
 | `notifications/resources/list_changed` | Yes |
 | `notifications/resources/updated` | Yes |
 | `notifications/roots/list_changed` | No (undecided) |
-| `notifications/tools/list_changed` | Yes |
+| `notifications/tools/list_changed` | Yes (but it won't change) |
 | `notifications/elicitation/complete` | No (undecided) |
 | `ping` | Yes |
 | `tasks/get` | No (undecided) |

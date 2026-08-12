@@ -1,4 +1,3 @@
-
 -- who? only player? service actor? target? cursor? menu? inventory tile?
 
 local base = require("morrowind-mcp.core.itool")
@@ -44,7 +43,8 @@ function this:CanExecute(arguments, context)
         return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
     end
     if not tes3.mobilePlayer then
-        return false, availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+        return false,
+            availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
     end
     return true
 end
@@ -58,17 +58,16 @@ function this:Execute(arguments, context)
 
     self.logger:debug("Fetching inventory for player: %d", table.size(player.inventory))
     local items = jsonrpc.array(table.size(player.inventory))
-    for item, count, itemData in iter.ForEachInventory(player.inventory) do
-        self.logger:trace("Fetching item=%s count=%d itemData=%s", item.name, count, itemData and "itemData" or "nil")
-        local o = jsonrpc.object({
-            item = obj.tes3anyObject(item),
-            count = count,
-            itemData = obj.tes3itemData(itemData),
-        })
-        if o then
-            table.insert(items, o)
-        end
-    end
+    iter.ForEachItem(player.inventory, function(item, count, itemData)
+            self.logger:trace("Fetching item=%s count=%d itemData=%s", item.name, count, itemData and "itemData" or "nil")
+            local o = jsonrpc.object({
+                item = obj.tes3anyObject(item),
+                count = count,
+                itemData = obj.tes3itemData(itemData),
+            })
+            return o
+        end,
+        items)
 
     local structuredContent = jsonrpc.object({ inventory = items })
     return jsonrpc.CallToolResult(nil, structuredContent)
