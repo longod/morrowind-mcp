@@ -1,12 +1,8 @@
 local base = require("morrowind-mcp.core.itool")
-local inputvalidator = require("morrowind-mcp.core.inputvalidator")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local terrainSource = require("morrowind-mcp.navigation.terrain.source")
-
-local minMenuNameLength = 1
-local maxMenuNameLength = 255
 
 ---@class MCP.Tools.DebugAction: MCP.ITool
 ---@field logger mwseLogger

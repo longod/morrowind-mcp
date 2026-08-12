@@ -1,6 +1,6 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.toolavailability")
-local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local availability = require("morrowind-mcp.core.tool_availability")
+local inputvalidator = require("morrowind-mcp.core.input_validator")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local ui = require("morrowind-mcp.tes3.ui")
 

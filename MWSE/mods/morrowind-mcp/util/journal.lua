@@ -1,9 +1,6 @@
 local this = {}
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local logger = require("morrowind-mcp.logger").Get({ moduleName = "journal" })
-local pathutil = require("morrowind-mcp.core.pathutil")
-local mcp = require("morrowind-mcp.core.mcp")
-local settings = require("morrowind-mcp.settings")
 local dialogue = require("morrowind-mcp.util.dialogue")
 local datetime = require("morrowind-mcp.util.datetime")
 

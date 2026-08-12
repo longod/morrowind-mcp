@@ -11,10 +11,10 @@ function this.Test()
     local httpServer = require("morrowind-mcp.server.http_server")
     local iprompt = require("morrowind-mcp.core.iprompt")
     local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-    local promptvalidator = require("morrowind-mcp.core.promptvalidator")
+    local promptvalidator = require("morrowind-mcp.core.prompt_validator")
     local translate = require("morrowind-mcp.prompts.translate")
 
-    unitwind:start("morrowind-mcp.core.promptvalidator")
+    unitwind:start("morrowind-mcp.core.prompt_validator")
 
     local function HasErrorPath(result, path)
         for _, validationError in ipairs(result.errors) do

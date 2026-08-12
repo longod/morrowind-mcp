@@ -7,12 +7,12 @@ function this.Test()
         highlight = false,
     })
 
-    local inputvalidator = require("morrowind-mcp.core.inputvalidator")
-    local toolvalidator = require("morrowind-mcp.core.toolvalidator")
+    local inputvalidator = require("morrowind-mcp.core.input_validator")
+    local toolvalidator = require("morrowind-mcp.core.tool_validator")
     local itool = require("morrowind-mcp.core.itool")
     local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 
-    unitwind:start("morrowind-mcp.core.toolvalidator")
+    unitwind:start("morrowind-mcp.core.tool_validator")
 
     local function HasErrorPath(result, path)
         for _, validationError in ipairs(result.errors) do

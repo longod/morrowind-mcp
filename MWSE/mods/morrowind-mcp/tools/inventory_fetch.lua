@@ -1,7 +1,7 @@
 -- who? only player? service actor? target? cursor? menu? inventory tile?
 
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.toolavailability")
+local availability = require("morrowind-mcp.core.tool_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
 local iter = require("morrowind-mcp.tes3.iterator")

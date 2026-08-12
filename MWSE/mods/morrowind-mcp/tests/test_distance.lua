@@ -4,6 +4,7 @@ local this = {}
 function this.Test()
     local unitwind = require("unitwind").new({ enabled = true, highlight = false })
     local distance = require("morrowind-mcp.util.distance")
+    local epsilon = 1e-9
 
     unitwind:start("morrowind-mcp.util.distance")
     unitwind:test("Converts zero distance", function()
@@ -15,7 +16,10 @@ function this.Test()
     end)
 
     unitwind:test("Converts representative game distance", function()
-        unitwind:expect(distance.ToMeters(1100)).toBe(1100 * 0.3048 / 22.1)
+        local actual = distance.ToMeters(1100)
+        local expected = 1100 * 0.3048 / 22.1
+        local diff = math.abs(actual - expected)
+        unitwind:expect(diff < epsilon).toBe(true)
     end)
 
     unitwind:test("Converts zero meters", function()
@@ -27,7 +31,10 @@ function this.Test()
     end)
 
     unitwind:test("Converts representative meter distance", function()
-        unitwind:expect(distance.ToUnits(15.17)).toBe(15.17 * 22.1 / 0.3048)
+        local actual = distance.ToUnits(15.17)
+        local expected = 15.17 * 22.1 / 0.3048
+        local diff = math.abs(actual - expected)
+        unitwind:expect(diff < epsilon).toBe(true)
     end)
 
     local testsPassed = unitwind.testsPassed

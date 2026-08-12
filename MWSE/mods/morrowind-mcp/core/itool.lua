@@ -1,4 +1,4 @@
-local toolvalidator = require("morrowind-mcp.core.toolvalidator")
+local toolvalidator = require("morrowind-mcp.core.tool_validator")
 
 ---@class MCP.ITool
 ---@field definition MCP.Tool

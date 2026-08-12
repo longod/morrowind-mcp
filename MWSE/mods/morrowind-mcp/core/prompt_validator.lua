@@ -1,4 +1,4 @@
-local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local inputvalidator = require("morrowind-mcp.core.input_validator")
 
 local this = {}
 

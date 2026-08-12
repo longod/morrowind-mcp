@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.toolavailability")
+local availability = require("morrowind-mcp.core.tool_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local input_action = require("morrowind-mcp.util.input_action")
 

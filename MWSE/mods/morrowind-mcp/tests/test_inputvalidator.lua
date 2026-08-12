@@ -7,9 +7,9 @@ function this.Test()
         highlight = false,
     })
 
-    local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+    local inputvalidator = require("morrowind-mcp.core.input_validator")
 
-    unitwind:start("morrowind-mcp.core.inputvalidator")
+    unitwind:start("morrowind-mcp.core.input_validator")
 
     unitwind:test("ValidateUiText rejects reserved UI text characters", function()
         unitwind:expect(inputvalidator.ValidateUiText("plain text", "text").valid).toBe(true)

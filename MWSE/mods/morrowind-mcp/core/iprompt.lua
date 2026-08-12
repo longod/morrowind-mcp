@@ -1,4 +1,4 @@
-local promptvalidator = require("morrowind-mcp.core.promptvalidator")
+local promptvalidator = require("morrowind-mcp.core.prompt_validator")
 
 ---@class MCP.IPrompt
 ---@field definition MCP.Prompt

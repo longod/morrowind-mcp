@@ -1,5 +1,5 @@
 local this = {}
-local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local inputvalidator = require("morrowind-mcp.core.input_validator")
 
 -- inputvalidator owns safety decisions; pathutil only converts already-safe logical resource paths.
 

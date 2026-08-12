@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local inputvalidator = require("morrowind-mcp.core.inputvalidator")
+local inputvalidator = require("morrowind-mcp.core.input_validator")
 local mimeutil = require("morrowind-mcp.core.mimeutil")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local pathutil = require("morrowind-mcp.core.pathutil")
