@@ -8,7 +8,7 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 
 ## 目的
 - `tests/unit_test.ps1` を使って単体テストを実行する。
-- Test Runner Agent の共通手順で `unit_test` summary を一次根拠として判定する。
+- テストスクリプトが生成する `unit_test` summary を一次根拠として判定する。
 
 ## 使用タイミング
 - 単体テストスクリプトの実行を求められたとき。
@@ -26,11 +26,11 @@ description: Morrowind MCP の単体テストを実行し、 MWSE.log を確認�
 .\tests\unit_test.ps1 test_jsonrpc.lua test_http.lua
 ```
 
-3. 引数で指定したファイル名は `.unit-test-targets` に書き込まれ、そのファイルだけが実行される。
+3. 引数で指定したファイル名だけが実行される。
 
-4. 引数を付けずに実行した場合は、`.unit-test-targets` は空になり、全テストが実行される。
+4. 引数を付けずに実行した場合は、全テストが実行される。
 
-5. UnitWind の共有 API mock が通常ランタイムを壊していないことを確認する場合だけ、次を実行する。この opt-in mode は sentinel を作らず、全テスト後に MCP server の起動を待機してから Morrowind を停止するため、通常の単体テストより時間がかかる。
+5. UnitWind の共有 API mock が通常ランタイムを壊していないことを確認する場合だけ、次を実行する。この opt-in mode は全テスト後に MCP server の起動を待機してから Morrowind を停止するため、通常の単体テストより時間がかかる。
 
 ```powershell
 .\tests\unit_test.ps1 -VerifyRuntimeAfterTests

@@ -10,10 +10,9 @@ param(
 $MaxWaitSeconds = 10
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "mwmcp_test_context.ps1")
 
 $ExitCode = 0
-$CreatedSentinel = $false
-$SentinelOriginalContent = $null
 $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OutputDir = Join-Path $ScriptDir "logs\unit_test"
 $ExtractOutputPath = Join-Path $OutputDir "unitwind_$RunTimestamp.log"
@@ -45,8 +44,6 @@ Push-Location $ScriptDir
 try {
     $StartScriptPath = ".\start_server_mo2.ps1"
     $StopScriptPath = ".\stop_server.ps1"
-    # Sentinel file lists target test files. Empty content means run the full suite.
-    $SentinelPath = ".\..\MWSE\mods\morrowind-mcp\.unit-test-targets"
     $TargetLines = @($TestTargets | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
     if ($VerifyRuntimeAfterTests -and $TargetLines.Count -gt 0) {
@@ -64,43 +61,13 @@ try {
         Write-Host "[WARN] $StopScriptPath was not found. Forced stop will be skipped." -ForegroundColor Yellow
     }
 
-    $SentinelDir = Split-Path -Parent $SentinelPath
-    if ($VerifyRuntimeAfterTests -and (Test-Path -LiteralPath $SentinelPath)) {
-        Write-Host "[ERROR] -VerifyRuntimeAfterTests requires no existing sentinel: $SentinelPath" -ForegroundColor Red
-        exit 1
-    }
-    if (-not $VerifyRuntimeAfterTests -and (Test-Path -LiteralPath $SentinelDir)) {
-        $SentinelAlreadyExists = Test-Path -LiteralPath $SentinelPath
-        if ($SentinelAlreadyExists) {
-            $SentinelOriginalContent = Get-Content -LiteralPath $SentinelPath -Raw
-            Write-Host "[INFO] Sentinel file already exists. Reusing: $SentinelPath" -ForegroundColor DarkCyan
-        }
-        else {
-            New-Item -ItemType File -Path $SentinelPath -Force | Out-Null
-            $CreatedSentinel = $true
-            Write-Host "[INFO] Created sentinel file: $SentinelPath" -ForegroundColor DarkCyan
-        }
-
-        if ($TargetLines.Count -gt 0) {
-            Set-Content -LiteralPath $SentinelPath -Value $TargetLines -Encoding UTF8
-            Write-Host "[INFO] Wrote $($TargetLines.Count) target(s) to sentinel file." -ForegroundColor DarkCyan
-        }
-        else {
-            Clear-Content -LiteralPath $SentinelPath -ErrorAction SilentlyContinue
-            Write-Host "[INFO] Cleared sentinel file for full test run." -ForegroundColor DarkCyan
-        }
-
-        if ($TargetLines.Count -gt 0) {
-            Write-Host "[INFO] Planned unit test targets: $($TargetLines -join ', ')" -ForegroundColor DarkCyan
-        }
-        else {
-            Write-Host "[INFO] Planned unit test targets: all test files" -ForegroundColor DarkCyan
-        }
+    $UnitTestMode = if ($VerifyRuntimeAfterTests) { "run" } else { "run-and-exit" }
+    Set-MwmcpTestContext -UnitTestMode $UnitTestMode -UnitTestTargets $TargetLines -AcceptDisclaimer $VerifyRuntimeAfterTests
+    if ($TargetLines.Count -gt 0) {
+        Write-Host "[INFO] Planned unit test targets: $($TargetLines -join ', ')" -ForegroundColor DarkCyan
     }
     else {
-        if (-not $VerifyRuntimeAfterTests) {
-            Write-Host "[WARN] Sentinel directory was not found. Continue without sentinel: $SentinelDir" -ForegroundColor Yellow
-        }
+        Write-Host "[INFO] Planned unit test targets: all test files" -ForegroundColor DarkCyan
     }
 
     if ($VerifyRuntimeAfterTests) {
@@ -143,7 +110,7 @@ try {
             if ($HasStopScript) {
                 # Prevent hanging forever when sentinel did not trigger exit.
                 Write-Host "[WARN] Morrowind is still running after timeout. Running $StopScriptPath" -ForegroundColor Yellow
-                & $StopScriptPath
+                & powershell.exe -NoProfile -File $StopScriptPath
                 for ($i = 0; $i -lt 10; $i++) {
                     if (-not (Get-Process -Name $processName -ErrorAction SilentlyContinue)) {
                         break
@@ -229,9 +196,12 @@ try {
     }
 }
 finally {
+    Remove-MwmcpTestContext
+
     if ($VerifyRuntimeAfterTests -and $RuntimeProbeStarted -and $HasStopScript) {
         Write-Host "[INFO] Stopping Morrowind after runtime verification." -ForegroundColor DarkCyan
-        & $StopScriptPath
+        # Keep runner finalization isolated from the stop script.
+        & powershell.exe -NoProfile -File $StopScriptPath
         if ([int]$LASTEXITCODE -ne 0) {
             Write-Host "[WARN] $StopScriptPath exited non-zero: stop=$LASTEXITCODE" -ForegroundColor Yellow
             $ExitCode = 1
@@ -246,13 +216,8 @@ finally {
         Write-Host "[INFO] Saved MWSE.log copy: $(Convert-ToFileUri -Path $MwseCopyOutputPath)" -ForegroundColor DarkCyan
     }
 
-    # Restore or clean up the sentinel after the run.
-    if ($null -ne $SentinelOriginalContent) {
-        Set-Content -LiteralPath $SentinelPath -Value $SentinelOriginalContent -Encoding UTF8 -ErrorAction SilentlyContinue
-    }
-    elseif ($CreatedSentinel) {
-        Remove-Item -LiteralPath $SentinelPath -ErrorAction SilentlyContinue
-    }
+    Invoke-MwmcpTestRunSummary -TestType "unit_test" -RunTimestamp $RunTimestamp
+
     Pop-Location
 }
 

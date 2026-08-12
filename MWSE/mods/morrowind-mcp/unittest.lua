@@ -41,58 +41,42 @@ local function NormalizeTestTarget(line)
     return target
 end
 
----@param sentinelPath string
----@return boolean exists
+---@param targets string[]
 ---@return table<string, boolean>?
-local function LoadTestTargets(sentinelPath)
-    local file = io.open(sentinelPath, "r")
-    if not file then
-        return false, nil
-    end
-
+local function BuildTestTargets(targets)
     local targetSet = {}
-    for line in file:lines() do
+    for _, line in ipairs(targets) do
         local target = NormalizeTestTarget(line)
         if target ~= nil then
             targetSet[target] = true
         end
     end
-    file:close()
 
     if table.size(targetSet) == 0 then
-        return true, nil
+        return nil
     end
 
-    return true, targetSet
-end
-
-local function HasAutomatedServerTestFlag()
-    local settings = require("morrowind-mcp.settings")
-    local flagPath = settings.modDir .. ".server-test-running"
-    return lfs.attributes(flagPath, "mode") == "file"
+    return targetSet
 end
 
 function this.Run()
-    local settings = require("morrowind-mcp.settings")
-    local sentinelPath = settings.modDir .. ".unit-test-targets"
-    local hasTestSentinel, testTargets = LoadTestTargets(sentinelPath)
-
-    -- Unit-test runs must finish even if a stale server-test sentinel remains.
-    if not hasTestSentinel and HasAutomatedServerTestFlag() then
+    local testContext = require("morrowind-mcp.util.test_context").Load()
+    if testContext == nil or testContext.unitTest.mode == "skip" then
         return
     end
+    local settings = require("morrowind-mcp.settings")
+    local testTargets = BuildTestTargets(testContext.unitTest.targets)
+    local exitAfterTests = testContext.unitTest.mode == "run-and-exit"
 
     -- Log the planned targets before any test module starts executing.
     LogTestTargets(testTargets)
 
     -- Suppress logging for tests to avoid cluttering the test output.
-    if hasTestSentinel then
-        local config = require("morrowind-mcp.config")
-        config.development.logLevel = mwse.logLevel.info
-        config.development.logToConsole = false
-        local loggerFactory = require("morrowind-mcp.logger")
-        loggerFactory.ApplyConfigToAll({ level = config.development.logLevel, logToConsole = config.development.logToConsole })
-    end
+    local config = require("morrowind-mcp.config")
+    config.development.logLevel = mwse.logLevel.info
+    config.development.logToConsole = false
+    local loggerFactory = require("morrowind-mcp.logger")
+    loggerFactory.ApplyConfigToAll({ level = config.development.logLevel, logToConsole = config.development.logToConsole })
     local logger = require("morrowind-mcp.logger").Get({ moduleName = "unittest" })
 
     local totalPassed = 0
@@ -101,7 +85,7 @@ function this.Run()
     for file in lfs.dir(dir) do
         if string.endswith(file:lower(), ".lua") then
             local normalizedFile = file:lower()
-            -- An empty sentinel means run the full suite; otherwise only run the listed files.
+            -- An empty target list means run the full suite; otherwise only run the listed files.
             if testTargets == nil or testTargets[normalizedFile] then
                 local test = dofile(dir .. "\\" .. file)
                 if test then
@@ -134,7 +118,7 @@ function this.Run()
         logger:info("Unit test suite completed: tests_passed=%d tests_failed=%d", totalPassed, totalFailed)
     end
 
-    if hasTestSentinel then
+    if exitAfterTests then
         if totalFailed > 0 then
             os.exit(1)
         end

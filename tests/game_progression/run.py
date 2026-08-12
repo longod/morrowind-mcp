@@ -13,7 +13,7 @@ from typing import Any
 
 from diagnostics import IsToolPublished, MEMORY_DEBUG_DUMP_OPERATION, SuggestDiagnosticProbes
 from inspector import InspectorError, InvokeInspector
-from lifecycle import CreateServerTestSentinel, GetConfiguration, LifecycleError, StartServer, StopServer, WaitForServer
+from lifecycle import GetConfiguration, LifecycleError, RemoveTestContext, SetTestContext, StartServer, StopServer, WaitForServer
 from scenario import EvaluateAssertions, LoadScenario, ResolveTerminationPolicy, ScenarioValidationError
 
 
@@ -154,13 +154,13 @@ def Main() -> int:
     output_dir = repo_root / "tests" / "logs" / "game_progression" / datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=False)
     run = {"scenario": str(arguments.scenario), "policy": policy, "steps": [], "outcome": {"status": "failed"}}
-    sentinel, created_sentinel = CreateServerTestSentinel(repo_root)
     started = time.monotonic()
     endpoint = None
     last_operation = None
 
     try:
         configuration = GetConfiguration(repo_root)
+        SetTestContext(repo_root, "skip", True)
         StartServer(repo_root)
         connection = configuration["Connection"]
         WaitForServer(connection["host"], int(connection["port"]), 60)
@@ -200,8 +200,7 @@ def Main() -> int:
             shutil.copy2(mwse_log, output_dir / "MWSE.log")
         if not arguments.no_stop:
             StopServer(repo_root)
-        if created_sentinel:
-            sentinel.unlink(missing_ok=True)
+        RemoveTestContext(repo_root)
 
 
 if __name__ == "__main__":

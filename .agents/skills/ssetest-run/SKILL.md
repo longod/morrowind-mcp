@@ -9,7 +9,7 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 ## Purpose
 - `tests/sse_test.ps1` は Streamable HTTP / SSE の integration test として扱う。
 - リポジトリのルートからワークスペースのテストスクリプトを実行し、MCP session と SSE server-to-client notification 経路を検証する。
-- Test Runner Agent の共通手順で `sse_test` summary を一次根拠として判定する。
+- テストスクリプトが生成する `sse_test` summary を一次根拠として判定する。
 
 ## How to run
 ワークスペースのルートから以下を実行する。相対パスを使うため、カレントディレクトリの移動は不要です。

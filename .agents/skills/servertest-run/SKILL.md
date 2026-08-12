@@ -9,7 +9,7 @@ description: |
 
 ## Purpose
 - `tests/server_test.ps1` は integration test として扱う。
-- Test Runner Agent の共通手順で `server_test` summary を一次根拠として判定する。
+- テストスクリプトが生成する `server_test` summary を一次根拠として判定する。
 
 ## How to run
 ワークスペースのルートから以下を実行する。相対パスを使うため、カレントディレクトリの移動は不要です。

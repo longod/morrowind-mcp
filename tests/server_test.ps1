@@ -495,7 +495,9 @@ function Invoke-ServerTestCase {
 
     Write-Host "[CASE] $($TestCase.Name)" -ForegroundColor Cyan
     if ($TestCase.When -and -not (& $TestCase.When $Context)) {
-        Write-Host "[SKIPPED] $($TestCase.Name): unavailable in current server state." -ForegroundColor DarkYellow
+        $message = "[SKIPPED] $($TestCase.Name): unavailable in current server state."
+        Write-Host $message -ForegroundColor DarkYellow
+        Add-Content -LiteralPath $InspectorLogPath -Value $message
         return 0
     }
     try {
@@ -510,7 +512,9 @@ function Invoke-ServerTestCase {
                 & $TestCase.Capture $response.Result $Context
             }
             if (-not $TestCase.RetryUntil -or (& $TestCase.RetryUntil $response.Result $Context)) {
-                Write-Host "[PASSED] $($TestCase.Name)" -ForegroundColor Green
+                $message = "[PASSED] $($TestCase.Name)"
+                Write-Host $message -ForegroundColor Green
+                Add-Content -LiteralPath $InspectorLogPath -Value $message
                 return 0
             }
             if ($attempt -lt $TestCase.RetryAttempts) {
@@ -521,7 +525,9 @@ function Invoke-ServerTestCase {
         throw "Server state did not become ready after $($TestCase.RetryAttempts) attempts."
     }
     catch {
-        Write-Host "[FAILED] $($TestCase.Name): $($_.Exception.Message)" -ForegroundColor Red
+        $message = "[FAILED] $($TestCase.Name): $($_.Exception.Message)"
+        Write-Host $message -ForegroundColor Red
+        Add-Content -LiteralPath $InspectorLogPath -Value $message
         return 1
     }
 }
@@ -530,12 +536,9 @@ $TargetIP = $Config.Connection.host
 $TargetPort = [int]$Config.Connection.port
 $StartScriptPath = ".\start_server_mo2.ps1"
 $StopScriptPath = ".\stop_server.ps1"
-$ServerTestSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.server-test-running"
-$UnitTestSentinelPath = ".\..\MWSE\mods\morrowind-mcp\.unit-test-targets"
 
 $ExitCode = 0
-$CreatedServerTestSentinel = $false
-$UnitTestSentinelOriginalContent = $null
+. (Join-Path $ScriptDir "mwmcp_test_context.ps1")
 
 Push-Location $ScriptDir
 try {
@@ -551,27 +554,7 @@ try {
         return
     }
 
-    if (Test-Path -LiteralPath $UnitTestSentinelPath) {
-        $UnitTestSentinelOriginalContent = Get-Content -LiteralPath $UnitTestSentinelPath -Raw
-        Remove-Item -LiteralPath $UnitTestSentinelPath -Force
-        Write-Host "[INFO] Temporarily removed unit test sentinel: $UnitTestSentinelPath" -ForegroundColor DarkCyan
-    }
-
-    $ServerTestSentinelDir = Split-Path -Parent $ServerTestSentinelPath
-    if (Test-Path -LiteralPath $ServerTestSentinelDir) {
-        $ServerTestSentinelAlreadyExists = Test-Path -LiteralPath $ServerTestSentinelPath
-        if ($ServerTestSentinelAlreadyExists) {
-            Write-Host "[INFO] Server test sentinel already exists. Reusing: $ServerTestSentinelPath" -ForegroundColor DarkCyan
-        }
-        else {
-            New-Item -ItemType File -Path $ServerTestSentinelPath -Force | Out-Null
-            $CreatedServerTestSentinel = $true
-            Write-Host "[INFO] Created server test sentinel file: $ServerTestSentinelPath" -ForegroundColor DarkCyan
-        }
-    }
-    else {
-        Write-Host "[WARN] Server test sentinel directory was not found. Continue without sentinel: $ServerTestSentinelDir" -ForegroundColor Yellow
-    }
+    Set-MwmcpTestContext -UnitTestMode "skip" -AcceptDisclaimer $true
 
     & $StartScriptPath
     $StartExitCode = [int]$LASTEXITCODE
@@ -743,8 +726,11 @@ try {
 
 }
 finally {
+    Remove-MwmcpTestContext
+
     Write-Host "[INFO] Stopping the server..." -ForegroundColor Cyan
-    & $StopScriptPath
+    # Keep runner finalization isolated from the stop script.
+    & powershell.exe -NoProfile -File $StopScriptPath
     if ([int]$LASTEXITCODE -ne 0) {
         Write-Host "[WARN] $StopScriptPath exit code: $LASTEXITCODE" -ForegroundColor Yellow
     }
@@ -764,13 +750,7 @@ finally {
 
     Write-Host "[INFO] Inspector logs: $(Convert-ToFileUri -Path $InspectorLogPath)" -ForegroundColor Cyan
 
-    if ($CreatedServerTestSentinel) {
-        Remove-Item -LiteralPath $ServerTestSentinelPath -ErrorAction SilentlyContinue
-    }
-
-    if ($null -ne $UnitTestSentinelOriginalContent) {
-        Set-Content -LiteralPath $UnitTestSentinelPath -Value $UnitTestSentinelOriginalContent -Encoding UTF8 -NoNewline
-    }
+    Invoke-MwmcpTestRunSummary -TestType "server_test" -RunTimestamp $RunTimestamp
 
     Pop-Location
 }

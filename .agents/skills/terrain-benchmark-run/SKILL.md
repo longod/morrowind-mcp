@@ -45,7 +45,7 @@ description: |
 - foreground 化が必要な入力は送らないため、`-NoForeground` は既定 lifecycle モードでのみ意味を持つ。
 
 ## Verification
-Test Runner Agent の共通手順で `terrain_benchmark` summary を一次根拠として判定する。summary は `result_<timestamp>.json` の `ready` state、64/128/256 の `samples` と `height`、Inspector の non-zero exit を判定する。
+テストスクリプトが生成する `terrain_benchmark` summary を一次根拠として判定する。summary は `result_<timestamp>.json` の `ready` state、64/128/256 の `samples` と `height`、Inspector の non-zero exit を判定する。
 
 `failed` / `inconclusive` の場合だけ、summary evidence の保存済み result/Inspector/MWSE artifact を読んで切り分ける。ライブ `MWSE.log` は読まない。
 

@@ -14,10 +14,7 @@ $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $SseLogPath = Join-Path $LogsRoot "sse_$RunTimestamp.log"
 $MwseLogCopyPath = Join-Path $LogsRoot "mwse_$RunTimestamp.log"
 $MwseLogSourcePath = $null
-$ServerTestSentinelPath = Join-Path $ScriptDir "..\MWSE\mods\morrowind-mcp\.server-test-running"
-$UnitTestSentinelPath = Join-Path $ScriptDir "..\MWSE\mods\morrowind-mcp\.unit-test-targets"
-$CreatedServerTestSentinel = $false
-$UnitTestSentinelOriginalContent = $null
+. (Join-Path $ScriptDir "mwmcp_test_context.ps1")
 
 function Convert-ToFileUri {
     param(
@@ -177,27 +174,7 @@ $StopScriptPath = Join-Path $ScriptDir "stop_server.ps1"
 $ExitCode = 0
 
 try {
-    if (Test-Path -LiteralPath $UnitTestSentinelPath) {
-        $UnitTestSentinelOriginalContent = Get-Content -LiteralPath $UnitTestSentinelPath -Raw
-        Remove-Item -LiteralPath $UnitTestSentinelPath -Force
-        Write-SseLog "[INFO] Temporarily removed unit test sentinel: $UnitTestSentinelPath" -ForegroundColor Cyan
-    }
-
-    $ServerTestSentinelDir = Split-Path -Parent $ServerTestSentinelPath
-    if (Test-Path -LiteralPath $ServerTestSentinelDir) {
-        $ServerTestSentinelAlreadyExists = Test-Path -LiteralPath $ServerTestSentinelPath
-        if ($ServerTestSentinelAlreadyExists) {
-            Write-SseLog "[INFO] Server test sentinel already exists. Reusing: $ServerTestSentinelPath" -ForegroundColor Cyan
-        }
-        else {
-            New-Item -ItemType File -Path $ServerTestSentinelPath -Force | Out-Null
-            $CreatedServerTestSentinel = $true
-            Write-SseLog "[INFO] Created server test sentinel file: $ServerTestSentinelPath" -ForegroundColor Cyan
-        }
-    }
-    else {
-        Write-SseLog "[WARN] Server test sentinel directory was not found. Continue without sentinel: $ServerTestSentinelDir" -ForegroundColor Yellow
-    }
+    Set-MwmcpTestContext -UnitTestMode "skip" -AcceptDisclaimer $true
 
     if (-not $NoStart) {
         Write-SseLog "[INFO] Starting server..." -ForegroundColor Cyan
@@ -417,9 +394,12 @@ catch {
     $ExitCode = 1
 }
 finally {
+    Remove-MwmcpTestContext
+
     if (-not $NoStop) {
         Write-SseLog "[INFO] Stopping server..." -ForegroundColor Cyan
-        & $StopScriptPath
+        # Keep runner finalization isolated from the stop script.
+        & powershell.exe -NoProfile -File $StopScriptPath
         if ([int]$LASTEXITCODE -ne 0) {
             Write-SseLog "[WARN] stop_server.ps1 exit code: $LASTEXITCODE" -ForegroundColor Yellow
         }
@@ -440,13 +420,8 @@ finally {
 
     Write-SseLog "[INFO] SSE test log: $(Convert-ToFileUri -Path $SseLogPath)" -ForegroundColor Cyan
 
-    if ($CreatedServerTestSentinel) {
-        Remove-Item -LiteralPath $ServerTestSentinelPath -ErrorAction SilentlyContinue
-    }
+    Invoke-MwmcpTestRunSummary -TestType "sse_test" -RunTimestamp $RunTimestamp
 
-    if ($null -ne $UnitTestSentinelOriginalContent) {
-        Set-Content -LiteralPath $UnitTestSentinelPath -Value $UnitTestSentinelOriginalContent -Encoding UTF8 -NoNewline
-    }
 }
 
 exit $ExitCode

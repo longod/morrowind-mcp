@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -36,14 +37,37 @@ def GetConfiguration(repo_root: Path) -> dict[str, Any]:
     return configuration
 
 
-def CreateServerTestSentinel(repo_root: Path) -> tuple[Path, bool]:
-    """Disable skipMainMenu without removing a sentinel owned by another run."""
-    sentinel = repo_root / "MWSE" / "mods" / "morrowind-mcp" / ".server-test-running"
-    sentinel.parent.mkdir(parents=True, exist_ok=True)
-    if sentinel.exists():
-        return sentinel, False
-    sentinel.touch()
-    return sentinel, True
+def SetTestContext(repo_root: Path, mode: str, accept_disclaimer: bool) -> None:
+    """Create the shared test context through the PowerShell lifecycle helper."""
+    command = (
+        f". '{repo_root / 'tests' / 'mwmcp_test_context.ps1'}'; "
+        f"Set-MwmcpTestContext -UnitTestMode '{mode}' -AcceptDisclaimer ${str(accept_disclaimer).lower()}"
+    )
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if completed.returncode != 0:
+        raise LifecycleError(f"Failed to set test context: {completed.stderr.strip()}")
+
+
+def RemoveTestContext(repo_root: Path) -> None:
+    """Remove the shared test context through the PowerShell lifecycle helper."""
+    command = f". '{repo_root / 'tests' / 'mwmcp_test_context.ps1'}'; Remove-MwmcpTestContext"
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if completed.returncode != 0:
+        print(f"[WARN] Failed to remove test context: {completed.stderr.strip()}", file=sys.stderr)
 
 
 def StartServer(repo_root: Path) -> None:

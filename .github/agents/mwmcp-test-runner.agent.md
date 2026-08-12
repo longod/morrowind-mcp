@@ -12,7 +12,7 @@ argument-hint: "実行するテストまたは変更箇所を指定してくだ�
 ## 実行と検査
 1. 指定されたテストを優先し、未指定なら最小の関連テストを選ぶ。対応する test skill の suite 固有条件に従い、PowerShell で一度だけ実行する。
 2. 実行出力の primary artifact path から run timestamp を取得する。出力にない場合だけ、対象 suite の logs ディレクトリを `Get-ChildItem -LiteralPath` で列挙し、最新の primary artifact を選ぶ。
-3. `tests/summarize_test_runs.ps1 -TestType <suite> -RunTimestamp <timestamp>` を実行し、直後に同じ run の `summary_<timestamp>.json` を `read` する。ユーザー指定の `source:regex` は対応する `-RequirePattern` / `-ForbidPattern` にそのまま渡し、規則は推測しない。
+3. テストスクリプトが生成した同じ run の `summary_<timestamp>.json` を `read` する。summary が存在しない既存 run だけ `tests/summarize_test_runs.ps1 -TestType <suite> -RunTimestamp <timestamp>` を実行して生成する。生成できない場合は `inconclusive` として報告する。ユーザー指定の `source:regex` は対応する `-RequirePattern` / `-ForbidPattern` にそのまま渡し、規則は推測しない。
 4. summary の `status`、`counts`、`evidence` を一次根拠として報告する。終了コードだけで成否を決めない。
 5. `passed` または `skipped` なら完了する。`failed` または `inconclusive` の場合だけ、summary の `evidence` に列挙された同一 timestamp の artifact を `read` して失敗原因を補足する。
 

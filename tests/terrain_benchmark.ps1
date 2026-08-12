@@ -12,6 +12,7 @@ param(
 $InspectorPackage = "@modelcontextprotocol/inspector"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "mwmcp_config.ps1")
+. (Join-Path $ScriptDir "mwmcp_test_context.ps1")
 
 try {
     $Config = Get-MwmcpConfig
@@ -246,4 +247,5 @@ finally {
         Write-Host "[INFO] MWSE log copy: $MwseLogCopyPath" -ForegroundColor Cyan
     }
     Write-Host "[INFO] Inspector log: $InspectorLogPath" -ForegroundColor Cyan
+    Invoke-MwmcpTestRunSummary -TestType "terrain_benchmark" -RunTimestamp $RunTimestamp
 }

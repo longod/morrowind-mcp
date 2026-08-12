@@ -5,11 +5,6 @@ local ui_action = require("morrowind-mcp.util.ui_action")
 local input_action = require("morrowind-mcp.util.input_action")
 local unittest = require("morrowind-mcp.unittest")
 
-local function HasAutomatedServerTestFlag()
-    local flagPath = settings.modDir .. ".server-test-running"
-    return lfs.attributes(flagPath, "mode") == "file"
-end
-
 if config.development.unitTest then
     unittest.Run()
 end
@@ -57,7 +52,8 @@ local function SkipMainMenu(e)
 end
 
 local function RegisterSkipMainMenu()
-    if config.autoplay.skipMainMenu and not HasAutomatedServerTestFlag() then
+    local testContext = require("morrowind-mcp.util.test_context").Load()
+    if config.autoplay.skipMainMenu and (testContext == nil or not testContext.suppressAutoContinue) then
         event.register(tes3.event.enterFrame, SkipMainMenu)
     end
 end
@@ -119,9 +115,10 @@ end
 local function OnInitialized(e)
     local firstTime = config.disclaimer < disclaimer.version
     if firstTime then
-        if HasAutomatedServerTestFlag() then
+        local testContext = require("morrowind-mcp.util.test_context").Load()
+        if testContext ~= nil and testContext.acceptDisclaimer then
             local logger = require("morrowind-mcp.logger").Get({ moduleName = "disclaimer" })
-            logger:debug("Disclaimer auto-accepted for automated server test session.")
+            logger:debug("Disclaimer auto-accepted for automated test session.")
             StartRuntime()
             return
         end

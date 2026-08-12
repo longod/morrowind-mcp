@@ -152,10 +152,10 @@ $defaults = switch ($TestType) {
     }
     "server_test" {
         @(
-            Rule "server-passed" "primary" "\[PASSED\]"
-            Rule "server-failed" "primary" "\[FAILED\]"
-            Rule "server-skipped" "primary" "\[SKIPPED\]"
-            Rule "server-inspector-nonzero" "primary" "^\[EXIT\]\s+(?!0\s*$)-?\d+\s*$"
+            Rule "server-passed" "primary" "^\[PASSED\]\s"
+            Rule "server-failed" "primary" "^\[FAILED\]\s"
+            Rule "server-skipped" "primary" "^\[SKIPPED\]\s"
+            Rule "server-inspector-nonzero" "primary" "^\[EXIT\]\s+(?!0\s*$)-?\d+\s*$" "default" "execution-evidence"
             Rule "server-known-uv-handle-closing" "primary" "^\[KNOWN\] Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable\.$" "default" "known-issue"
         )
     }
@@ -218,7 +218,7 @@ $knownIssues = @()
     "server_test" {
         $inspect = Inspector $paths.primary
         $counts.passed = $byId["server-passed"].match_count
-        $counts.failed = $byId["server-failed"].match_count + $byId["server-inspector-nonzero"].match_count
+        $counts.failed = $byId["server-failed"].match_count
         $counts.skipped = $byId["server-skipped"].match_count
         $knownUvHandleClosing = $byId["server-known-uv-handle-closing"]
         if ($knownUvHandleClosing.match_count) {
@@ -240,7 +240,7 @@ $knownIssues = @()
         }
         elseif ($counts.failed) {
             $status = "failed"
-            $reasons += "Inspector artifact contains failure evidence."
+            $reasons += "Saved evidence contains [FAILED] case markers."
         }
         elseif ($counts.skipped -and -not $counts.passed) {
             $status = "skipped"
