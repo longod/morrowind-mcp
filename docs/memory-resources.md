@@ -79,6 +79,8 @@ Optional fields may be absent when the game cannot provide them. Preserve raw ID
 
 - `morrowind://memory/actors/index.json` (`actor_index`): traversal list of actors currently observed by Memory.
   - `data.actor_count` is the number of actor links. Each `actor` link description includes `data_type`, raw `base_id`, raw `reference_id`, `identity_kind`, and `interaction_state`.
+  - A save load or new game starts a new Memory scope: previously observed dynamic actors are unavailable until a new direct observation occurs.
+  - In development mode only, `mw-debug-action` action `memory:ObserveActiveCells` can explicitly add NPCs and creatures from active cells; their `source_kinds` includes `active_cells`.
 - `morrowind://memory/actors/{actor_id}/index.json` is dynamic. Follow its `actor` link; never guess `{actor_id}`.
   - `npc_summary` and `creature_summary` have `id`, `base_id`, `reference_id`, `identity_kind`, `is_instance`, `facts`, `interaction`, and optional `senses` and `risk`.
   - `identity_kind` is `unique`, `generic`, or `unknown`. It is a classification of current evidence, not a persistence guarantee.

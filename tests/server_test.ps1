@@ -701,6 +701,37 @@ try {
         } -Validate {
             param($result)
             Assert-ToolSuccess $result
+        }),
+        (New-ToolCallTestCase -Name "memory active-cell debug scan" -ToolName "mw-debug-action" -ToolArguments @{ action = "memory:ObserveActiveCells" } -When {
+            param($context)
+            $context.ToolNames -contains "mw-debug-action"
+        } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            if ($null -eq $result.structuredContent.PSObject.Properties["observations"]) {
+                throw "Active-cell debug scan is missing structuredContent.observations."
+            }
+            $observation = @($result.structuredContent.observations | Where-Object { $_.resource -eq "morrowind://memory/actors/index.json" } | Select-Object -First 1)[0]
+            if ($null -eq $observation) {
+                throw "Active-cell debug scan is missing the actor observation."
+            }
+            foreach ($field in @("cell_count", "scanned_actor_count", "changed_actor_count", "actor_count")) {
+                if ($null -eq $observation.PSObject.Properties[$field]) {
+                    throw "Active-cell debug scan is missing structuredContent.$field."
+                }
+            }
+            if ($observation.cell_count -isnot [ValueType] -or $observation.scanned_actor_count -isnot [ValueType] -or $observation.cell_count -lt 0 -or $observation.scanned_actor_count -lt 0) {
+                throw "Active-cell debug scan counts must be integers."
+            }
+            if ($observation.changed_actor_count -gt $observation.scanned_actor_count) {
+                throw "Active-cell debug scan changed count exceeds scanned count."
+            }
+            if ($observation.actor_count -lt $observation.changed_actor_count) {
+                throw "Active-cell debug scan actor count is less than changed count."
+            }
+            if ($null -eq $observation.PSObject.Properties["reason"] -or $observation.reason -ne "scanned") {
+                throw "Active-cell debug scan did not report a completed scan."
+            }
         })
     )
 

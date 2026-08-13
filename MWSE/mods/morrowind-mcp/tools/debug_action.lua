@@ -26,6 +26,7 @@ function this.new(params)
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
                     {
                         "memory:SaveDebugDocuments",
+                        "memory:ObserveActiveCells",
                         "terrain:ProbeRuntimeAccess",
                         "terrain:GetGridStatus",
                         "terrain:StartQualityComparison",
@@ -53,6 +54,12 @@ function this:Execute(arguments, context)
 
     if action == "memory:SaveDebugDocuments" then
         self.resource.memory:SaveDebugDocuments()
+    elseif action == "memory:ObserveActiveCells" then
+        return jsonrpc.CallToolResult(
+            jsonrpc.TextContent("Memory active-cell observation completed."),
+            self.resource.memory:ObserveActiveCells(),
+            false
+        )
     elseif action == "terrain:ProbeRuntimeAccess" then
         local result = terrainSource.ProbeRuntimeAccess()
         return jsonrpc.CallToolResult(

@@ -20,6 +20,7 @@ function this.Test()
     local unattributedDialogue = require("morrowind-mcp.resources.memory.unattributed_dialogue")
     local notification = require("morrowind-mcp.resources.memory.notification")
     local document = require("morrowind-mcp.resources.memory.document")
+    local jsonrpc = require("morrowind-mcp.server.jsonrpc")
     local datetime = require("morrowind-mcp.util.datetime")
 
     unitwind:start("morrowind-mcp.resources.memory.imodule")
@@ -296,6 +297,49 @@ function this.Test()
 
         unitwind:expect(table.size(published)).toBe(1)
         unitwind:expect(published[1]).toBe("morrowind://memory/index.json")
+    end)
+
+    testMemoryModule("Memory manager collects active-cell observations from contributing modules", function()
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local memory = manager.new({ resource = resource })
+        local contributingModule = imodule.new({ resource = resource })
+        function contributingModule:ObserveActiveCells()
+            return jsonrpc.object({ resource = "morrowind://memory/test/index.json", reason = "scanned" })
+        end
+        memory.modules = { imodule.new({ resource = resource }), contributingModule }
+
+        local result = memory:ObserveActiveCells()
+
+        unitwind:expect(result.observation_count).toBe(1)
+        unitwind:expect(result.observations[1].resource).toBe("morrowind://memory/test/index.json")
+        unitwind:expect(result.observations[1].reason).toBe("scanned")
+    end)
+
+    testMemoryModule("Memory manager lifecycle does not invoke active-cell observations", function()
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri) return true end,
+        }
+        local observationCount = 0
+        local module = imodule.new({ resource = resource, publishOnRegister = true })
+        function module:ObserveActiveCells()
+            observationCount = observationCount + 1
+            return nil
+        end
+        local descriptor = document.Descriptor("memory/lifecycle.json", "Lifecycle", "Lifecycle test.")
+        module.entries = { document.LiveEntry(descriptor, function()
+            return document.Document(document.documentType.collection, document.dataType.actorIndex, "Lifecycle")
+        end) }
+        local memory = manager.new({ resource = resource })
+        memory.modules = { module }
+
+        memory:PublishOnRegisterModules()
+        memory:OnLoaded({ claim = function() end, filename = "", newGame = false, quickload = false })
+
+        unitwind:expect(observationCount).toBe(0)
     end)
 
     testMemoryModule("Memory root index reports exclusive game lifecycle state", function()
@@ -704,7 +748,7 @@ function this.Test()
         unitwind:expect(memoryDocument.data.observations[1].repeat_count).toBe(2)
     end)
 
-    testMemoryModule("Memory Actor module manages observed actor instances internally", function()
+    testMemoryModule("Memory Actor module scans active cells only when explicitly requested", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -792,43 +836,163 @@ function this.Test()
         local actorLinks = module:GetLinksForParent("morrowind://memory/actors/index.json")
         local indexDocument = module:BuildIndexDocument()
 
-        unitwind:expect(table.size(published)).toBe(6)
+        unitwind:expect(table.size(published)).toBe(1)
         unitwind:expect(published[1]).toBe("morrowind://memory/actors/index.json")
         unitwind:expect(table.size(rootLinks)).toBe(1)
         unitwind:expect(rootLinks[1].uri).toBe("morrowind://memory/actors/index.json")
+        unitwind:expect(table.size(actorLinks)).toBe(0)
+        unitwind:expect(indexDocument.data.actor_count).toBe(0)
+        unitwind:expect(indexDocument.data.actors == nil).toBe(true)
+        unitwind:expect(table.size(indexDocument.links)).toBe(0)
+        unitwind:expect(module.indexEntry.cache.read_policy).toBe(document.readPolicy.live)
+        unitwind:expect(table.size(module.observedActors)).toBe(0)
+
+        local scanResult = module:ObserveActiveCells()
+        actorLinks = module:GetLinksForParent("morrowind://memory/actors/index.json")
+
+        unitwind:expect(scanResult.cell_count).toBe(1)
+        unitwind:expect(scanResult.scanned_actor_count).toBe(5)
+        unitwind:expect(scanResult.changed_actor_count).toBe(5)
+        unitwind:expect(scanResult.actor_count).toBe(5)
+        unitwind:expect(table.size(published)).toBe(6)
         unitwind:expect(table.size(actorLinks)).toBe(5)
-        unitwind:expect(actorLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/index.json")
         unitwind:expect(actorLinks[1].description).toBe(
         "data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=observed")
-        unitwind:expect(actorLinks[2].uri).toBe("morrowind://memory/actors/fargoth/index.json")
-        unitwind:expect(actorLinks[3].uri).toBe("morrowind://memory/actors/rat/index.json")
-        unitwind:expect(actorLinks[3].description).toBe(
-        "data_type=creature_summary base_id=rat reference_id=rat00000004 identity_kind=generic interaction_state=observed")
-        unitwind:expect(actorLinks[4].description).toBe(
-        "data_type=npc_summary base_id=imperial guard reference_id=imperial guard identity_kind=generic interaction_state=observed")
-        unitwind:expect(actorLinks[5].description).toBe(
-        "data_type=npc_summary base_id=din reference_id=din identity_kind=unique interaction_state=observed")
-        unitwind:expect(indexDocument.data.actor_count).toBe(5)
-        unitwind:expect(indexDocument.data.actors == nil).toBe(true)
-        unitwind:expect(table.size(indexDocument.links)).toBe(5)
-        unitwind:expect(module.indexEntry.cache.read_policy).toBe(document.readPolicy.live)
-        unitwind:expect(module.observedActors["caius-cosades"].entry.cache.read_policy).toBe(document.readPolicy.snapshot)
-        unitwind:expect(module.observedActors["caius-cosades"].subject.tes3_type).toBe("tes3npc")
-        unitwind:expect(module.observedActors["caius-cosades"].data_type).toBe("npc_summary")
-        unitwind:expect(module.observedActors["caius-cosades"].data.interaction.state).toBe("observed")
         unitwind:expect(module.observedActors["caius-cosades"].data.interaction.source_kinds[1]).toBe("active_cells")
-        unitwind:expect(module.observedActors["caius-cosades"].data.interaction.activation_count).toBe(0)
-        unitwind:expect(module.observedActors["rat"].subject.tes3_type).toBe("tes3creature")
-        unitwind:expect(module.observedActors["rat"].data_type).toBe("creature_summary")
-        unitwind:expect(module.observedActors["rat"].data.base_id).toBe("rat")
-        unitwind:expect(module.observedActors["rat"].data.reference_id).toBe("rat00000004")
-        unitwind:expect(module.observedActors["rat"].data.is_instance).toBe(true)
         unitwind:expect(module.observedActors["rat"].data.identity_kind).toBe("generic")
-        unitwind:expect(module.observedActors["imperial-guard"].data.identity_kind).toBe("generic")
         unitwind:expect(module.observedActors["din"].data.identity_kind).toBe("unique")
     end)
 
-    testMemoryModule("Memory Actor module adds activation target without clearing loaded actors", function()
+    testMemoryModule("Memory Actor module unpublishes dynamic entries on an ordinary save load", function()
+        local published = {}
+        local unpublished = {}
+        local resource = {
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                table.insert(unpublished, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(2)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        local actorEntry = document.SnapshotEntry(
+            document.Descriptor("memory/actors/caius-cosades/index.json", "Caius Cosades", "Actor test."),
+            document.Document(document.documentType.entity, document.dataType.npcSummary, "Caius Cosades")
+        )
+        local dialogueEntry = document.SnapshotEntry(
+            document.Descriptor("memory/actors/caius-cosades/dialogue.json", "Caius Dialogue", "Dialogue test."),
+            document.Document(document.documentType.observation, document.dataType.actorDialogueNotes, "Caius Dialogue")
+        )
+        module.entries = { module.indexEntry, actorEntry, dialogueEntry }
+        module.observedActors = {
+            ["caius-cosades"] = {
+                id = "caius-cosades",
+                title = "Caius Cosades",
+                descriptor = actorEntry.descriptor,
+                subject = document.Subject("tes3npc", "caius-cosades", "Caius Cosades"),
+                source_description = "Actor test.",
+                data_type = document.dataType.npcSummary,
+                data = jsonrpc.object(),
+            },
+        }
+        module.published = true
+
+        module:OnLoaded({ claim = function() end, filename = "", newGame = false, quickload = false })
+
+        unitwind:expect(table.size(unpublished)).toBe(2)
+        unitwind:expect(unpublished[1]).toBe("morrowind://memory/actors/caius-cosades/index.json")
+        unitwind:expect(unpublished[2]).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
+        unitwind:expect(table.size(module.entries)).toBe(1)
+        unitwind:expect(module.entries[1]).toBe(module.indexEntry)
+        unitwind:expect(table.size(module.observedActors)).toBe(0)
+        unitwind:expect(published[1]).toBe("morrowind://memory/actors/index.json")
+    end)
+
+    testMemoryModule("Memory Actor module unpublishes every owned entry on explicit unpublish", function()
+        local unpublished = {}
+        local resource = {
+            PublishResource = function(self, entry) return entry.descriptor.uri end,
+            UnpublishResource = function(self, uri)
+                table.insert(unpublished, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self) return document.Scope(1) end,
+            OnModuleVisibilityChanged = function(self, module) end,
+        }
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        local actorEntry = document.SnapshotEntry(
+            document.Descriptor("memory/actors/caius-cosades/index.json", "Caius Cosades", "Actor test."),
+            document.Document(document.documentType.entity, document.dataType.npcSummary, "Caius Cosades")
+        )
+        module.entries = { module.indexEntry, actorEntry }
+        module.published = true
+
+        module:Unpublish()
+
+        unitwind:expect(table.size(unpublished)).toBe(2)
+        unitwind:expect(unpublished[1]).toBe("morrowind://memory/actors/index.json")
+        unitwind:expect(unpublished[2]).toBe("morrowind://memory/actors/caius-cosades/index.json")
+        unitwind:expect(module.published).toBe(false)
+        unitwind:expect(table.size(module.entries)).toBe(1)
+    end)
+
+    testMemoryModule("Memory Actor module republishes direct observations after a new game", function()
+        local published = {}
+        local resource = {
+            PublishResource = function(self, entry)
+                table.insert(published, entry.descriptor.uri)
+                return entry.descriptor.uri
+            end,
+            UnpublishResource = function(self, uri)
+                return true
+            end,
+        }
+        local fakeManager = {
+            GetScope = function(self)
+                return document.Scope(2)
+            end,
+            OnModuleVisibilityChanged = function(self, module)
+            end,
+        }
+        local caius = {
+            id = "caius cosades",
+            objectType = tes3.objectType.reference,
+            object = {
+                id = "caius cosades",
+                name = "Caius Cosades",
+                objectType = tes3.objectType.npc,
+                attributes = {},
+                skills = {},
+            },
+            isValid = function(self)
+                return true
+            end,
+        }
+        caius.baseObject = caius.object
+        local module = actor.new({ resource = resource, manager = fakeManager })
+        module:Publish()
+
+        module:OnLoaded({ claim = function() end, filename = "", newGame = true, quickload = false })
+        unitwind:expect(module.published).toBe(true)
+        unitwind:expect(published[2]).toBe("morrowind://memory/actors/index.json")
+
+        unitwind:expect(module:ObserveReference(caius, "activation_target_changed")).toBe(true)
+        unitwind:expect(published[3]).toBe("morrowind://memory/actors/caius-cosades/index.json")
+        unitwind:expect(module:BuildIndexDocument().data.actor_count).toBe(1)
+    end)
+
+    testMemoryModule("Memory Actor module adds activation targets without active-cell reconstruction", function()
         local published = {}
         ---@type MCP.IResourceManager
         local resource = {
@@ -897,11 +1061,10 @@ function this.Test()
         local actorLinks = module:GetLinksForParent("morrowind://memory/actors/index.json")
         local indexDocument = module:BuildIndexDocument()
 
-        unitwind:expect(table.size(actorLinks)).toBe(2)
-        unitwind:expect(actorLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/index.json")
-        unitwind:expect(actorLinks[2].uri).toBe("morrowind://memory/actors/fargoth/index.json")
-        unitwind:expect(indexDocument.data.actor_count).toBe(2)
-        unitwind:expect(module.observedActors["caius-cosades"] ~= nil).toBe(true)
+        unitwind:expect(table.size(actorLinks)).toBe(1)
+        unitwind:expect(actorLinks[1].uri).toBe("morrowind://memory/actors/fargoth/index.json")
+        unitwind:expect(indexDocument.data.actor_count).toBe(1)
+        unitwind:expect(module.observedActors["caius-cosades"] == nil).toBe(true)
         unitwind:expect(module.observedActors["fargoth"].source_description).toBe(
         "Player looked at this actor.")
         unitwind:expect(module.observedActors["fargoth"].data.interaction.state).toBe("targeted")
@@ -989,9 +1152,8 @@ function this.Test()
         unitwind:expect(observedActor.data.interaction.state).toBe("activated")
         unitwind:expect(observedActor.data.interaction.activation_count).toBe(2)
         unitwind:expect(observedActor.data.interaction.conversation_count).toBe(0)
-        unitwind:expect(table.size(observedActor.data.interaction.source_kinds)).toBe(2)
-        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("active_cells")
-        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("activate")
+        unitwind:expect(table.size(observedActor.data.interaction.source_kinds)).toBe(1)
+        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("activate")
         unitwind:expect(actorDocument ~= nil).toBe(true)
         unitwind:expect(debugActorDocument ~= nil).toBe(true)
         ---@cast actorDocument MCP.MemoryDocument
@@ -1101,7 +1263,7 @@ function this.Test()
         unitwind:expect(caiusActor.data.interaction.combat_count).toBe(1)
         unitwind:expect(caiusActor.data.interaction.player_started_combat_count).toBe(1)
         unitwind:expect(caiusActor.data.interaction.actor_started_combat_count).toBe(0)
-        unitwind:expect(caiusActor.data.interaction.source_kinds[2]).toBe("combat_started")
+        unitwind:expect(caiusActor.data.interaction.source_kinds[1]).toBe("combat_started")
         unitwind:expect(caiusActor.data.risk.present).toBe(true)
         unitwind:expect(caiusActor.data.risk.combat).toBe(true)
         unitwind:expect(caiusActor.data.risk.risk_count).toBe(1)
@@ -1220,12 +1382,12 @@ function this.Test()
 
         unitwind:expect(table.size(actorLinks)).toBe(2)
         unitwind:expect(actorLinks[1].description).toBe(
-        "data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=observed")
+        "data_type=npc_summary base_id=caius cosades reference_id=caius cosades identity_kind=unique interaction_state=heard")
         unitwind:expect(actorLinks[2].description).toBe(
         "data_type=npc_summary base_id=fargoth reference_id=fargoth identity_kind=unique interaction_state=heard")
-        unitwind:expect(caiusActor.data.interaction.state).toBe("observed")
+        unitwind:expect(caiusActor.data.interaction.state).toBe("heard")
         unitwind:expect(caiusActor.data.interaction.heard).toBe(true)
-        unitwind:expect(caiusActor.data.interaction.source_kinds[2]).toBe("voiceover_sound")
+        unitwind:expect(caiusActor.data.interaction.source_kinds[1]).toBe("voiceover_sound")
         unitwind:expect(caiusActor.data.senses.heard).toBe(true)
         unitwind:expect(caiusActor.data.senses.heard_voiceover).toBe(true)
         unitwind:expect(caiusActor.data.senses.voiceover_count).toBe(1)
@@ -1335,9 +1497,8 @@ function this.Test()
         unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
         unitwind:expect(observedActor.data.interaction.activation_count).toBe(0)
         unitwind:expect(observedActor.data.interaction.conversation_count).toBe(2)
-        unitwind:expect(table.size(observedActor.data.interaction.source_kinds)).toBe(2)
-        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("active_cells")
-        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("menu_dialog")
+        unitwind:expect(table.size(observedActor.data.interaction.source_kinds)).toBe(1)
+        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("menu_dialog")
         unitwind:expect(actorDocument ~= nil).toBe(true)
         ---@cast actorDocument MCP.MemoryDocument
         local actorData = actorDocument.data
@@ -1438,7 +1599,7 @@ function this.Test()
         local actorChildLinks = module:GetLinksForParent("morrowind://memory/actors/caius-cosades/index.json")
 
         unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
-        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("info_response")
+        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("info_response")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
         unitwind:expect(actorChildLinks[1].rel).toBe("dialogue")
         unitwind:expect(actorChildLinks[1].uri).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
@@ -1566,7 +1727,7 @@ function this.Test()
         local dialogueDocument = module:BuildActorDialogueDocument("caius-cosades")
 
         unitwind:expect(observedActor.data.interaction.state).toBe("conversed")
-        unitwind:expect(observedActor.data.interaction.source_kinds[2]).toBe("info_get_text")
+        unitwind:expect(observedActor.data.interaction.source_kinds[1]).toBe("info_get_text")
         unitwind:expect(published[#published]).toBe("morrowind://memory/actors/caius-cosades/dialogue.json")
         ---@cast dialogueDocument MCP.MemoryDocument
         unitwind:expect(dialogueDocument.data.response_count).toBe(0)

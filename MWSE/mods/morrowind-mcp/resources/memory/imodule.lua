@@ -80,6 +80,12 @@ end
 function this:OnModuleVisibilityChanged(module)
 end
 
+--- Development-only explicit observation; never call this from normal lifecycle handling.
+---@return MCP.AnyMap?
+function this:ObserveActiveCells()
+    return nil
+end
+
 --- Publish current entries and invalidate cached Memory content for the next read.
 function this:Publish()
     local wasPublished = self.published

@@ -64,6 +64,24 @@ function this:GetRootLinks()
     return self:GetLinksForParent(nil)
 end
 
+--- Development-only explicit observation; never call this from normal lifecycle handling.
+---@return MCP.AnyMap
+function this:ObserveActiveCells()
+    local observations = jsonrpc.array()
+    for _, module in ipairs(self.modules) do
+        local observation = module:ObserveActiveCells()
+        if observation then
+            table.insert(observations, observation)
+        end
+    end
+    self.logger:debug("Memory active-cell observation completed: contributing_modules=%d total_modules=%d",
+        table.size(observations), table.size(self.modules))
+    return jsonrpc.object({
+        observation_count = table.size(observations),
+        observations = observations,
+    })
+end
+
 --- Invalidate every Memory module after broad state changes.
 function this:MarkAllDirty()
     for _, module in ipairs(self.modules) do

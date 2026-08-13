@@ -34,7 +34,7 @@ setmetatable(this, { __index = base })
 local collectionDescriptor = document.Descriptor(
     "memory/actors/index.json",
     "Observed Actor Memory",
-    "Memory collection of observed actors in active cells."
+    "Memory collection of actors observed in the current loaded game."
 )
 
 local collectionLink = document.Link(
@@ -657,6 +657,20 @@ function this:ClearObservedActors()
     self.logger:debug("Memory actor entries cleared: previous_count=%d", previousCount)
 end
 
+--- Unpublish dynamic actor resources while preserving the actor collection resource.
+--- A loaded-game transition invalidates every runtime actor reference, including child snapshots.
+function this:UnpublishObservedActorEntries()
+    local unpublishedCount = 0
+    for _, entry in ipairs(self.entries or {}) do
+        if entry ~= self.indexEntry then
+            if self.resource:UnpublishResource(entry.descriptor.uri) then
+                unpublishedCount = unpublishedCount + 1
+            end
+        end
+    end
+    self.logger:debug("Memory actor dynamic entries unpublished: count=%d", unpublishedCount)
+end
+
 --- Capture the current compact state of one observed actor into its snapshot entry.
 ---@param observedActor MCP.MemoryObservedActor
 ---@return boolean captured
@@ -788,33 +802,64 @@ function this:ObserveReference(ref, source, publishIfVisible)
     return true
 end
 
---- Rebuild dynamic actor entries from active cells; the manager still sees only this one module.
-function this:RefreshObservedActors()
-    self:ClearObservedActors()
+--- Add all actor references from active cells for an explicit development-time diagnostic scan.
+--- This is intentionally separate from normal publication and loaded-game lifecycle handling.
+---@return MCP.AnyMap result
+function this:ObserveActiveCells()
     if tes3.onMainMenu() then
-        self.logger:debug("Memory actor refresh skipped: reason=main_menu")
-        return
+        return jsonrpc.object({
+            resource = collectionDescriptor.uri,
+            cell_count = 0,
+            scanned_actor_count = 0,
+            changed_actor_count = 0,
+            actor_count = table.size(self.observedActors),
+            reason = "main_menu",
+        })
     end
 
     local cells = tes3.getActiveCells()
     if not cells then
-        self.logger:debug("Memory actor refresh skipped: reason=no_active_cells")
-        return
+        return jsonrpc.object({
+            resource = collectionDescriptor.uri,
+            cell_count = 0,
+            scanned_actor_count = 0,
+            changed_actor_count = 0,
+            actor_count = table.size(self.observedActors),
+            reason = "no_active_cells",
+        })
     end
 
     local cellCount = 0
-    local observedCount = 0
+    local scannedActorCount = 0
+    local changedActorCount = 0
     for _, cell in ipairs(cells) do
         cellCount = cellCount + 1
         if cell.actors then
             for ref in iter.ForEachReferenceList(cell.actors) do
-                if self:ObserveReference(ref, observationSource.activeCells, false) then
-                    observedCount = observedCount + 1
+                if IsActorReference(ref) then
+                    scannedActorCount = scannedActorCount + 1
+                    if self:ObserveReference(ref, observationSource.activeCells) then
+                        changedActorCount = changedActorCount + 1
+                    end
                 end
             end
         end
     end
-    self.logger:debug("Memory actor refresh completed: cells=%d observed=%d total=%d", cellCount, observedCount, table.size(self.observedActors))
+    self.logger:debug(
+        "Memory actor debug active-cell scan completed: cells=%d scanned_actors=%d changed_actors=%d total=%d",
+        cellCount,
+        scannedActorCount,
+        changedActorCount,
+        table.size(self.observedActors)
+    )
+    return jsonrpc.object({
+        resource = collectionDescriptor.uri,
+        cell_count = cellCount,
+        scanned_actor_count = scannedActorCount,
+        changed_actor_count = changedActorCount,
+        actor_count = table.size(self.observedActors),
+        reason = "scanned",
+    })
 end
 
 --- Observe the player's activation target when it changes.
@@ -1418,9 +1463,8 @@ function this:GetLinksForParent(parentUri)
     return jsonrpc.array()
 end
 
---- Refresh observed actor entries, then publish the collection and individual actor resources.
+--- Publish the actor collection. Dynamic actor resources are published only by direct observation events.
 function this:Publish()
-    self:RefreshObservedActors()
     self.logger:debug("Memory actor publish prepared: entries=%d actors=%d", table.size(self.entries), table.size(self.observedActors))
     base.Publish(self)
 end
@@ -1432,13 +1476,11 @@ function this:Unpublish()
     self.logger:debug("Memory actor unpublished and dynamic state cleared")
 end
 
---- Hide stale actor memory for a new game; otherwise publish after loading a save.
+--- Discard runtime actor references after any loaded-game transition before republishing the empty collection.
 ---@param e loadedEventData
 function this:OnLoaded(e)
-    if e.newGame then
-        self:Unpublish()
-        return
-    end
+    self:UnpublishObservedActorEntries()
+    self:ClearObservedActors()
     base.OnLoaded(self, e)
 end
 
@@ -1456,7 +1498,7 @@ function this:BuildIndexDocument()
         {
             scope = self.manager:GetScope(),
             links = links,
-            source = document.Source(document.sourceKind.liveState, nil, nil, "Observed actor registry for active cells."),
+            source = document.Source(document.sourceKind.liveState, nil, nil, "Actor registry for the current loaded game."),
         }
     )
 end

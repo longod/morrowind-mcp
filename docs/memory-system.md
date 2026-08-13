@@ -204,9 +204,10 @@ Observed actors:
 - `tes3npcInstance` and `tes3creatureInstance` are valid actor observations when reachable through references.
 - Whether an actor object is an instance is detected by the presence of `isInstance`.
 - Dynamic actor entries are owned internally by the actor module.
-- The loaded-game refresh intentionally rebuilds actor entries from active cells because broad dumps are useful during debugging.
-- `activationTargetChanged.current` is an additional observation source and may add one actor without clearing actors found by the loaded-game active-cell refresh.
-- Player `activate` events are an additional interaction source for actor targets. They update the existing actor entry when the actor is already observed, or add one actor when the activated target was not observed yet.
+- A save load or new game unpublishes and clears all dynamic actor entries because their runtime references belong to the previous scope. It then republishes the empty actor collection; later direct observation events add actor entries for the new scope.
+- The development-only `mw-debug-action` action `memory:ObserveActiveCells` asks each Memory module to contribute an active-cell observation. It returns `observation_count` and ordered `observations`. Actor Memory contributes `resource`, `cell_count`, `scanned_actor_count`, `changed_actor_count`, `actor_count`, and `reason`; `reason` is `scanned`, `main_menu`, or `no_active_cells`. Actor scanning adds active-cell references with source kind `active_cells` and is never called by normal publication or loaded-game handling.
+- `activationTargetChanged.current` adds an actor observation when the player looks at a valid actor target.
+- Player `activate` events add or update actor observations for actor targets.
 
 Actor ids:
 
@@ -236,7 +237,7 @@ Actor `facts` should be lightweight and human-oriented. They may include:
 Actor `interaction` includes:
 
 - `state`: strongest mechanical player interaction observed for this actor. Current values are `heard`, `observed`, `targeted`, `activated`, `combat`, and `conversed`.
-- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, `combat_started`, `voiceover_sound`, `menu_dialog`, `info_response`, and `info_get_text`.
+- `source_kinds`: mechanical sources that observed or updated this actor. Current values are `active_cells`, `activation_target_changed`, `activate`, `combat_started`, `voiceover_sound`, `menu_dialog`, `inventory_viewed`, `barter_viewed`, `info_response`, and `info_get_text`.
 - `heard`, `observed`, `targeted`, `activated`, `combat`, and `conversed`: booleans for observed interaction categories.
 - `activation_count`: number of player `activate` events observed for this actor.
 - `combat_count`: number of `combatStarted` events observed between the player and this actor.
@@ -260,7 +261,7 @@ Actor `risk` stores danger-oriented evidence separately from social or sensory e
 
 Normal actor Memory reads must not expose the full serialized TES3 reference by default. Actor documents should update the blackboard from each mechanical source:
 
-- `active_cells`: active-cell refresh saw the actor.
+- `active_cells`: the development-only `memory:ObserveActiveCells` debug action found the actor in an active cell.
 - `activation_target_changed`: `activationTargetChanged` exposed the actor as the current activation target.
 - `activate`: the player activated the actor.
 - `combat_started`: `combatStarted` exposed combat between the player and the actor. Combat between non-player actors is ignored.
@@ -294,7 +295,6 @@ Actor document `source.description` should use gameplay-facing prose such as `Se
 Actor interaction states are mechanical facts, not importance judgments:
 
 - `heard`: a weak sensory event identified the actor, currently actor voiceover sound.
-- `observed`: the actor was seen in active cells.
 - `targeted`: the actor was the player's current activation target.
 - `activated`: the actor was activated by the player.
 - `combat`: combat started between the player and the actor.
