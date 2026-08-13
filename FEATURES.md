@@ -29,6 +29,13 @@
 | `memory/unattributed/dialogue.json` | `morrowind://memory/unattributed/dialogue.json` | Unattributed Dialogue Memory | Dialogue text observed without a resolved actor. |
 | `memory/unattributed/notifications.json` | `morrowind://memory/unattributed/notifications.json` | Notification Memory | Transient notification text observed without a stable domain subject. |
 
+## Resource Templates
+
+| Name | URI Template | Description |
+|---|---|---|
+| `memory-entity` | `morrowind://memory/{collection}/{entity_id}/{document}.json` | Read a published dynamic Memory entity document; player and unattributed documents are listed resources. |
+| `screenshot` | `morrowind://screenshot/{file}` | Read a published JPEG or PNG screenshot. |
+
 ## Tools
 
 | Name | Title | Description | Input | Output | Annotations |

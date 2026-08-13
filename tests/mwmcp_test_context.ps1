@@ -17,7 +17,7 @@ function Remove-MwmcpTestContext {
 function Invoke-MwmcpTestRunSummary {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("unit_test", "server_test", "sse_test", "terrain_benchmark")]
+        [ValidateSet("unit_test", "server_test", "sse_test", "completion_test", "terrain_benchmark")]
         [string]$TestType,
         [Parameter(Mandatory = $true)]
         [string]$RunTimestamp

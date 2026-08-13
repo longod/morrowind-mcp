@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("unit_test", "server_test", "sse_test", "terrain_benchmark")]
+    [ValidateSet("unit_test", "server_test", "sse_test", "completion_test", "terrain_benchmark")]
     [string]$TestType,
     [ValidatePattern("^\d{8}_\d{6}$")]
     [string]$RunTimestamp,
@@ -24,6 +24,7 @@ $primaryMap = @{
     unit_test = @("unitwind", "log")
     server_test = @("inspector", "log")
     sse_test = @("sse", "log")
+    completion_test = @("completion", "log")
     terrain_benchmark = @("result", "json")
 }
 $primaryName, $primaryExtension = $primaryMap[$TestType]
@@ -165,6 +166,12 @@ $defaults = switch ($TestType) {
             Rule "sse-failed" "primary" "\[(FAILED|ERROR)\]"
         )
     }
+    "completion_test" {
+        @(
+            Rule "completion-pass" "primary" "\[PASSED\]\s+Completion responses are deterministic\."
+            Rule "completion-failed" "primary" "\[(FAILED|ERROR)\]"
+        )
+    }
     "terrain_benchmark" {
         @(
             Rule "terrain-inspector-nonzero" "inspector" "^\[EXIT\]\s+(?!0\s*$)-?\d+\s*$"
@@ -271,6 +278,25 @@ $knownIssues = @()
         }
         else {
             $reasons += "SSE artifact lacks a terminal notifications/message pass marker."
+        }
+    }
+    "completion_test" {
+        $counts.failed = $byId["completion-failed"].match_count
+        $counts.passed = $byId["completion-pass"].match_count
+
+        if (-not $primaryExists) {
+            $reasons += "Primary completion artifact is missing."
+        }
+        elseif ($counts.failed) {
+            $status = "failed"
+            $reasons += "Completion artifact contains [FAILED] or [ERROR]."
+        }
+        elseif ($counts.passed) {
+            $status = "passed"
+            $reasons += "Completion artifact contains the deterministic completion pass marker."
+        }
+        else {
+            $reasons += "Completion artifact lacks a terminal deterministic completion pass marker."
         }
     }
     "terrain_benchmark" {

@@ -177,6 +177,7 @@ function this.new(params)
         [mcp.method.logging_setlevel] = instance.OnLoggingSetLevel,
         [mcp.method.prompts_list] = instance.OnPromptsList,
         [mcp.method.prompts_get] = instance.OnPromptsGet,
+        [mcp.method.completion_complete] = instance.OnCompletionComplete,
         [mcp.method.resources_list] = instance.OnResourcesList,
         [mcp.method.resources_templates_list] = instance.OnResourcesTemplatesList,
         [mcp.method.resources_read] = instance.OnResourcesRead,
@@ -839,6 +840,7 @@ function this:OnInitialize(params)
     result.protocolVersion = protocolVersion
     -- TODO generator, can be flatten arguments
     result.capabilities = {
+        ["completions"] = jsonrpc.object(),
         ["logging"] = jsonrpc.object(),
         ["prompts"] = {
             ["listChanged"] = false,
@@ -908,6 +910,13 @@ end
 ---@return MCP.MethodResult
 function this:OnResourcesTemplatesList(params)
     return self.resource:OnResourcesTemplatesList(params)
+end
+
+--- Delegate resource-template argument completion to the resource manager.
+---@param params MCP.CompleteRequestParams
+---@return MCP.MethodResult
+function this:OnCompletionComplete(params)
+    return self.resource:OnCompletionComplete(params)
 end
 
 ---@param params MCP.ReadResourceRequestParams

@@ -7,6 +7,7 @@ This document defines the public contract of Morrowind MCP Memory resources for 
 - Memory is read-only, structured gameplay evidence. Use it to support a decision, then verify consequential actions with current UI, player, target, or world observations.
 - Start at `morrowind://memory/index.json`. Read the root before following Memory data from an older observation.
 - Read only URIs listed in a document's `links`. Do not construct actor or child-resource URIs from a name or id.
+- Clients that support MCP completion can use `morrowind://memory/{collection}/{entity_id}/{document}.json` to complete currently published dynamic entity paths. Player and unattributed documents are listed resources, not template matches. Completion does not make an unlinked URI available; links remain the authoritative traversal contract.
 - A resource not listed in `links` is currently unavailable, unobserved, or inapplicable. It does not prove that the in-game subject, item, dialogue, or location does not exist.
 - Resources describe the current loaded-game scope. When `scope.generation` changes, discard conclusions based on documents from the earlier generation.
 

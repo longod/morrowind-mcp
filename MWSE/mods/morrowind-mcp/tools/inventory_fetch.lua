@@ -40,7 +40,7 @@ function this:CanExecute(arguments, context)
     if not ok then
         return false, reason
     end
-    ok, reason = availability.PausedInMenuMode()
+    ok, reason = availability.IsCharGenFinished()
     if not ok then
         return false, reason
     end

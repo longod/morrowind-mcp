@@ -8,6 +8,8 @@ local mcp = require("morrowind-mcp.core.mcp")
 local base64 = require("morrowind-mcp.core.base64")
 local datetime = require("morrowind-mcp.util.datetime")
 local memory = require("morrowind-mcp.resources.memory.manager")
+local templates = require("morrowind-mcp.resources.templates")
+local completion = require("morrowind-mcp.resources.completion")
 
 
 ---@alias MCP.ResourceContentHandler fun(desc: MCP.Resource): MCP.ResourceContent[]?
@@ -24,6 +26,7 @@ local memory = require("morrowind-mcp.resources.memory.manager")
 ---@field updated table<MCP.ResourceUri, boolean> for subscription
 ---@field loadedCallback fun(e : loadedEventData)
 ---@field memory MCP.Resources.MemoryManager?
+---@field completionResultLimit integer
 local this = {}
 setmetatable(this, { __index = base })
 
@@ -36,6 +39,7 @@ function this.new(params)
     instance.resources = {}
     instance.updated = {}
     instance.changed = 0
+    instance.completionResultLimit = completion.NormalizeResultLimit(instance.completionResultLimit)
 
     instance.loadedCallback = function(e)
         instance:OnLoaded(e)
@@ -133,15 +137,31 @@ end
 ---@return MCP.MethodResult
 function this:OnResourcesTemplatesList(params)
     ---@type MCP.ListResourceTemplatesResult
-    local result = jsonrpc.ListResourceTemplatesResult()
-
-    -- TODO present templete path for resource finding.
-    -- TODO implementation to resources/
+    local result = jsonrpc.ListResourceTemplatesResult(templates.definitions)
 
     ---@type MCP.MethodResult
     return {
         http_response = http.response_code.ok,
         result = result,
+    }
+end
+
+--- Complete resource-template arguments from the currently published resource set.
+---@param params MCP.CompleteRequestParams
+---@return MCP.MethodResult
+function this:OnCompletionComplete(params)
+    local completed = completion.Complete(params, self.resources, self.completionResultLimit)
+    if not completed.valid then
+        self.logger:warn("Rejected resource completion: %s", completed.errors[1])
+        return {
+            http_response = http.response_code.bad_request,
+            error = jsonrpc.ErrorWithMessage(jsonrpc.error_code.invalid_params, completed.errors[1]),
+        }
+    end
+
+    return {
+        http_response = http.response_code.ok,
+        result = jsonrpc.CompleteResult(completed.values, completed.total, completed.hasMore),
     }
 end
 

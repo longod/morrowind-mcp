@@ -168,6 +168,30 @@ function this.Test()
         unitwind:expect(resourceLink.size).toBe(123)
     end)
 
+    unitwind:test("ResourceTemplate generator ignores primitive prefixes and copies icons", function()
+        jsonrpc.SetPrimitivePrefix("mw-", "[Morrowind] ", "[Morrowind] ")
+        local source = {
+            name = "screenshot",
+            title = "Screenshot",
+            uriTemplate = "morrowind://screenshot/{file}",
+            description = "Read a published screenshot.",
+            icons = { jsonrpc.Icon("morrowind://icon.png", "image/png") },
+            annotations = jsonrpc.Annotations({ "assistant" }),
+        }
+        local template = jsonrpc.ResourceTemplate(source)
+
+        unitwind:expect(template.name).toBe("screenshot")
+        unitwind:expect(template.title).toBe("Screenshot")
+        unitwind:expect(template.uriTemplate).toBe("morrowind://screenshot/{file}")
+        unitwind:expect(template.description).toBe("Read a published screenshot.")
+        unitwind:expect(getmetatable(template.icons).__jsontype).toBe("array")
+        unitwind:expect(template.icons[1].src).toBe("morrowind://icon.png")
+        unitwind:expect(template.annotations.audience[1]).toBe("assistant")
+        unitwind:expect(template == source).toBe(false)
+
+        ResetPrimitivePrefix()
+    end)
+
     unitwind:test("Common generators build annotations, icon and implementation", function()
         local annotations = jsonrpc.Annotations({ "user", "assistant" }, 0.75, "2026-07-11T00:00:00Z")
         unitwind:expect(getmetatable(annotations.audience).__jsontype).toBe("array")

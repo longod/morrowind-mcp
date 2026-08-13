@@ -153,6 +153,7 @@ Server-generated Lua output data can be inspected under `<paths.datafilesOverwri
   - By default, after connectivity is confirmed, it attempts to bring Morrowind to the foreground. This is required for tests that use keyboard key or mouse button input, because those inputs are not sent while Morrowind is in the background.
   - For tests that do not require input sending, run with `-NoForeground` to skip foreground activation and the capture click.
 - [tests/sse_test.ps1](tests/sse_test.ps1): Start Morrowind/MWSE server, open an SSE stream, verify a server-to-client notification
+- [tests/completion_test.ps1](tests/completion_test.ps1): Start Morrowind/MWSE server and verify deterministic resource-template completion through raw JSON-RPC
 - [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Launch Mod Organizer 2 to start Morrowind with MWSE and the MCP server
 - [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running Morrowind
 - [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests
@@ -199,7 +200,7 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 
 | MCP Method | Supported |
 |---|---|
-| `completion/complete` | `No` |
+| `completion/complete` | Yes |
 | `elicitation/create` | No (undecided) |
 | `initialize` | Yes |
 | `logging/setLevel` | Yes |
@@ -224,7 +225,7 @@ If the same session opens another SSE `GET`, the server replaces the previous SS
 | `resources/list` | Yes |
 | `resources/read` | Yes |
 | `resources/subscribe` | Yes |
-| `resources/templates/list` | `No` |
+| `resources/templates/list` | Yes |
 | `resources/unsubscribe` | Yes |
 | `roots/list` | No (undecided) |
 | `sampling/createMessage` | No (undecided) |

@@ -294,6 +294,21 @@ function this.ResourceLink(name, uri, title, description, mimeType, annotations,
     }
 end
 
+--- Normalize a resource template without mutating its source definition.
+---@param template MCP.ResourceTemplate
+---@return MCP.ResourceTemplate
+function this.ResourceTemplate(template)
+    local normalizedTemplate = this.object(7)
+    normalizedTemplate.icons = template.icons and this.array(template.icons) or nil
+    normalizedTemplate.name = template.name
+    normalizedTemplate.title = template.title
+    normalizedTemplate.uriTemplate = template.uriTemplate
+    normalizedTemplate.description = template.description
+    normalizedTemplate.mimeType = template.mimeType
+    normalizedTemplate.annotations = template.annotations
+    return normalizedTemplate
+end
+
 ---@param audience MCP.Role|MCP.Role[]|nil
 ---@param priority number?
 ---@param lastModified string|MCP.DateTime|nil
@@ -711,7 +726,7 @@ function this.CancelTaskResult()
     }
 end
 
----@param resourceTemplates table|number?
+---@param resourceTemplates MCP.ResourceTemplate[]?
 ---@param nextCursor string?
 ---@return MCP.ListResourceTemplatesResult
 function this.ListResourceTemplatesResult(resourceTemplates, nextCursor)
