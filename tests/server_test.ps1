@@ -354,6 +354,28 @@ function Assert-ToolError {
     }
 }
 
+function Find-ActionableMenuPath {
+    param(
+        [Parameter(Mandatory = $true)][object]$Node,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Action
+    )
+
+    if ($Node.name -eq $Name -and @($Node.actionable) -contains $Action) {
+        return $Node.path
+    }
+    foreach ($child in @($Node.children)) {
+        if ($null -eq $child) {
+            continue
+        }
+        $path = Find-ActionableMenuPath -Node $child -Name $Name -Action $Action
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            return $path
+        }
+    }
+    return $null
+}
+
 function Measure-JsonPayloadSize {
     param(
         [Parameter(Mandatory = $true)]
@@ -609,10 +631,28 @@ try {
             param($result)
             Assert-ToolSuccess $result
             if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }
+        } -Capture {
+            param($result, $context)
+            $context.MainMenuContinuePath = Find-ActionableMenuPath -Node $result.structuredContent.menu -Name "Pete_ContinueButton" -Action "mouseClick"
         }),
-        (New-ToolCallTestCase -Name "continue menu action" -ToolName "mw-menu-action" -ToolArguments @{
-            menu_name = "Pete_ContinueButton"
+        (New-ToolCallTestCase -Name "reject non-actionable menu path" -ToolName "mw-menu-action" -ToolArguments @{
+            menu_path = "/children/0"
             action = "mouseClick"
+        } -When { param($context) $context.ToolNames -contains "mw-menu-action" } -AllowToolError $true -Validate {
+            param($result)
+            Assert-ToolError $result
+            $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
+            if ($text -notmatch "does not support action mouseClick") { throw "Non-actionable path did not report an action mismatch." }
+        }),
+        (New-ServerTestCase -Name "continue menu action" -Arguments {
+            param($context)
+            if ([string]::IsNullOrWhiteSpace($context.MainMenuContinuePath)) {
+                throw "Pete_ContinueButton was not found as an actionable main-menu element."
+            }
+            New-ToolCallArguments -ToolName "mw-menu-action" -ToolArguments @{
+                menu_path = $context.MainMenuContinuePath
+                action = "mouseClick"
+            }
         } -When { param($context) $context.ToolNames -contains "mw-menu-action" } -Validate {
             param($result)
             Assert-ToolSuccess $result

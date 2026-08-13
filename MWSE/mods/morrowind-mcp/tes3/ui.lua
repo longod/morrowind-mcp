@@ -294,6 +294,21 @@ function this.tes3uiWidget(i, o)
     return o
 end
 
+--- Returns the actions that can be executed against a live UI element.
+--- This is shared by UI serialization and menu actions so advertised actions remain executable.
+---@param element tes3uiElement
+---@return string[]? properties
+function this.GetActionProperties(element)
+    local properties = ui_action.GetActionProperties(element)
+    if properties then
+        return properties
+    end
+    if element.widget then
+        return ui_action.GetWidgetActionProperties(element.widget)
+    end
+    return nil
+end
+
 ---@param i tes3uiElement
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?

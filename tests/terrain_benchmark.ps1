@@ -141,12 +141,39 @@ function Invoke-ToolAction {
     return $response.result
 }
 
+function Find-ActionableMenuPath {
+    param(
+        [Parameter(Mandatory = $true)][object]$Node,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Action
+    )
+
+    if ($Node.name -eq $Name -and @($Node.actionable) -contains $Action) {
+        return $Node.path
+    }
+    foreach ($child in @($Node.children)) {
+        if ($null -eq $child) {
+            continue
+        }
+        $path = Find-ActionableMenuPath -Node $child -Name $Name -Action $Action
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            return $path
+        }
+    }
+    return $null
+}
+
 function Invoke-MainMenuContinue {
     $tools = Invoke-MCPInspector -Arguments @("--method", "tools/list")
     if (@($tools.result.tools | Where-Object { $_.name -eq "mw-menu-action" }).Count -ne 1) {
         throw "mw-menu-action is not published while the main menu is active."
     }
-    Invoke-ToolAction -ToolName "mw-menu-action" -Arguments @{ menu_name = "Pete_ContinueButton"; action = "mouseClick" } | Out-Null
+    $menu = Invoke-ToolAction -ToolName "mw-menu-fetch" -Arguments @{}
+    $path = Find-ActionableMenuPath -Node $menu.structuredContent.menu -Name "Pete_ContinueButton" -Action "mouseClick"
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        throw "Pete_ContinueButton was not found as an actionable main-menu element."
+    }
+    Invoke-ToolAction -ToolName "mw-menu-action" -Arguments @{ menu_path = $path; action = "mouseClick" } | Out-Null
     Write-Host "[INFO] Requested Continue from the Morrowind main menu." -ForegroundColor Green
 }
 

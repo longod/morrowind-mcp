@@ -78,7 +78,7 @@ function this.NotInMenuMode()
         return false,
             av.Unavailable(
                 av.reason.paused_in_menu_mode,
-                "Leave the menu mode. This action with args is available only when the menu mode is not paused."
+                "Leave the menu mode or close dialog. This action with args is available only when the menu mode is not paused."
             )
     end
     return true

@@ -4,8 +4,6 @@ local inputvalidator = require("morrowind-mcp.core.input_validator")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local ui = require("morrowind-mcp.tes3.ui")
 
-local minMenuNameLength = 1
-local maxMenuNameLength = 255
 local minMenuPathLength = 1
 local maxMenuPathLength = 1024
 
@@ -23,22 +21,12 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "menu-action",
         description =
-        "Action to a non-root menu.",
+        "Action to a non-root menu element selected by its path.",
         inputSchema = jsonrpc.InputSchema(
             {
-                menu_id = jsonrpc.NumberSchema(
-                    "Menu ID",
-                    "(One selector required) Action to perform on the non-root menu by ID (key name is `id`). Specify exactly one of `menu_id`, `menu_name`, or `menu_path`."
-                ),
-                menu_name = jsonrpc.StringSchema(
-                    "Menu Name",
-                    "(One selector required) Action to perform on the non-root menu by name (key name is `name`). Specify exactly one of `menu_id`, `menu_name`, or `menu_path`.",
-                    minMenuNameLength,
-                    maxMenuNameLength
-                ),
                 menu_path = jsonrpc.StringSchema(
                     "Menu Path",
-                    "(One selector required) Action to perform using a `path` returned by mw-menu-fetch; paths use raw MWSE child indexes, not serialized array positions. Specify exactly one of `menu_id`, `menu_name`, or `menu_path`.",
+                    "Action to perform using a `path` returned by mw-menu-fetch; paths use raw MWSE child indexes, not serialized array positions.",
                     minMenuPathLength,
                     maxMenuPathLength
                 ),
@@ -58,7 +46,7 @@ function this.new(params)
                     1024
                 ),
             },
-            jsonrpc.array({ "action" }) -- TODO one of id or name. but specification is not exist.
+            jsonrpc.array({ "menu_path", "action" })
         ),
         annotations = jsonrpc.ToolAnnotations(nil, false, false)
     })
@@ -75,8 +63,6 @@ function this:CanExecute(arguments, context)
         return false, reason
     end
 
-    -- TODO invalid menu paths,
-    -- check mw-menu-fetch first.
     return true
 end
 
@@ -86,28 +72,12 @@ function this:Validate(params)
         return result
     end
 
-    -- The input schema cannot express these cross-field requirements.
+    -- The input schema cannot validate an RFC 6901 path or action-dependent text requirements.
     -- Text input reaches a live UI element, so validate UI-specific reserved characters before Execute mutates it.
     local arguments = params.arguments or {}
-    local menu_id = arguments["menu_id"]
-    local menu_name = arguments["menu_name"]
     local menu_path = arguments["menu_path"]
     local action = arguments["action"]
     local text = arguments["text"]
-    local targetCount = (menu_id ~= nil and 1 or 0) + (menu_name ~= nil and 1 or 0) + (menu_path ~= nil and 1 or 0)
-    if targetCount > 1 then
-        table.insert(result.errors, {
-            path = "$",
-            message = "Only one of menu_id, menu_name, or menu_path should be specified.",
-        })
-        result.valid = false
-    elseif targetCount == 0 then
-        table.insert(result.errors, {
-            path = "$",
-            message = "One of menu_id, menu_name, or menu_path should be specified.",
-        })
-        result.valid = false
-    end
     if menu_path ~= nil then
         local validPath, pathError = ui.ValidatePath(menu_path)
         if not validPath then
@@ -135,48 +105,48 @@ function this:Validate(params)
     return result
 end
 
+--- Checks whether the action advertised for the live UI element matches the requested action.
+---@param target tes3uiElement
+---@param action string
+---@return boolean supported
+local function SupportsAction(target, action)
+    local actionable = ui.GetActionProperties(target)
+    if not actionable then
+        return false
+    end
+    for _, actionableAction in ipairs(actionable) do
+        if actionableAction == action then
+            return true
+        end
+    end
+    return false
+end
+
 function this:Execute(arguments, context)
     -- Argument validation already covered schema, cross-field, and text-sink checks; this function handles live UI state.
-    local menu_id = arguments["menu_id"]
-    local menu_name = arguments["menu_name"]
     local menu_path = arguments["menu_path"]
     local action = arguments["action"]
 
     local menu = tes3.worldController.menuController.mainRoot
-    local target = nil
+    self.logger:debug("Searching for menu with path: %s", menu_path)
 
-    -- better distinguish between fineMenu and findChild, but arguments too complex, so just use findChild.
-
-    if menu_id ~= nil then
-        self.logger:debug("Searching for menu with ID: %d", menu_id)
-
-        target = menu:findChild(menu_id)
-    elseif menu_name ~= nil then
-        self.logger:debug("Searching for menu with Name: %s", menu_name)
-
-        target = menu:findChild(menu_name)
-    elseif menu_path ~= nil then
-        self.logger:debug("Searching for menu with path: %s", menu_path)
-
-        local pathError = nil
-        target, pathError = ui.ResolvePath(menu, menu_path)
-        if not target then
-            local errorContent = jsonrpc.TextContent(pathError or "Menu path could not be resolved.")
-            return jsonrpc.CallToolResult(errorContent, nil, true)
-        end
+    local target, pathError = ui.ResolvePath(menu, menu_path)
+    if not target then
+        local errorContent = jsonrpc.TextContent(pathError or "Menu path could not be resolved.")
+        return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
     -- Target availability can only be checked against the current UI tree at execution time.
-    if not target then
-        local errorContent = jsonrpc.TextContent("Menu not found.")
-        return jsonrpc.CallToolResult(errorContent, nil, true)
-    end
     if target.disabled then
         local errorContent = jsonrpc.TextContent("Menu is disabled.")
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
     if not target.visible then
         local errorContent = jsonrpc.TextContent("Menu is not visible.")
+        return jsonrpc.CallToolResult(errorContent, nil, true)
+    end
+    if not SupportsAction(target, action) then
+        local errorContent = jsonrpc.TextContent(string.format("Menu does not support action %s.", action))
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
@@ -188,6 +158,7 @@ function this:Execute(arguments, context)
     -- TODO use notifications/processing, sent responsse before triggerEvent, patch runtime code or skipping movie mod.
     if action == "textInput" then
         local text = arguments["text"]
+        -- The action check above confirms the advertised contract; retain this runtime type check for direct UI safety.
         if target.type ~= "textInput" then
             local errorContent = jsonrpc.TextContent("Menu is not a text input.")
             return jsonrpc.CallToolResult(errorContent, nil, true)

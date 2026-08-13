@@ -126,7 +126,7 @@ function this:Execute(arguments, context)
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Screenshot file already exists: " .. path), nil, true)
     end
 
-    -- it seems to save to files is no latency, syncronous. it can be readed immidiately.
+    -- MGE writes the image after this call returns, so this execution cannot read it.
     mge.saveScreenshot({ path = path, captureWithUI = capture_with_ui })
 
     local resourcePath = pathutil.FromResourceFilePath(path, settings.resourceRootDir)
@@ -173,6 +173,7 @@ function this:Execute(arguments, context)
         self.logger:debug("Published screenshot resource entry: %s", resourceUri)
     end
 
+    -- A screenshot does not exist as a file until the next frame.
     local content = jsonrpc.ResourceLink(res.name, res.uri, res.title, res.description, res.mimeType, res.annotations)
     return jsonrpc.CallToolResult(content)
 end

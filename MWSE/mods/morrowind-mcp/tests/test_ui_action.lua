@@ -94,6 +94,34 @@ function this.Test()
         unitwind:expect(table.size(properties)).toBe(0)
     end)
 
+    unitwind:test("tes3 ui action properties use widget actions when no native hint exists", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local button = NewElement("Button", "button")
+        button.widget = { element = button }
+
+        local properties = ui.GetActionProperties(button)
+
+        unitwind:expect(properties == nil).toBe(false)
+        if properties then
+            unitwind:expect(properties[1]).toBe("mouseClick")
+        end
+    end)
+
+    unitwind:test("tes3 ui action properties distinguish unsupported and non-widget elements", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local fillbar = NewElement("Fill", "fillbar")
+        fillbar.widget = { element = fillbar }
+        local layout = NewElement("Unknown", "layout")
+
+        local fillbarProperties = ui.GetActionProperties(fillbar)
+
+        unitwind:expect(fillbarProperties == nil).toBe(false)
+        if fillbarProperties then
+            unitwind:expect(table.size(fillbarProperties)).toBe(0)
+        end
+        unitwind:expect(ui.GetActionProperties(layout)).toBe(nil)
+    end)
+
     unitwind:test("GetActionProperties exposes scroll arrow mouse clicks", function()
         local root = NewElement(nil, "layout")
         local scrollBar = NewElement("Slider", "scrollBar", root)
@@ -125,6 +153,24 @@ function this.Test()
             unitwind:expect(serialized.path).toBe("")
             unitwind:expect(serialized.children[1].path).toBe("/children/0")
             unitwind:expect(serialized.children[2].path).toBe("/children/1")
+        end
+    end)
+
+    unitwind:test("tes3uiElement keeps widget actions off the parent element", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local element = NewElement("Button", "button")
+        element.children = {}
+        element.widget = { element = element }
+
+        local serialized = ui.tes3uiElement(element)
+
+        unitwind:expect(serialized == nil).toBe(false)
+        if serialized then
+            unitwind:expect(serialized.actionable).toBe(nil)
+            unitwind:expect(serialized.widget == nil).toBe(false)
+            if serialized.widget and serialized.widget.actionable then
+                unitwind:expect(serialized.widget.actionable[1]).toBe("mouseClick")
+            end
         end
     end)
 
