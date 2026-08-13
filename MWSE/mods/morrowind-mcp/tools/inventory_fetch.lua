@@ -1,11 +1,8 @@
--- who? only player? service actor? target? cursor? menu? inventory tile?
-
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.tool_availability")
+local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
 local iter = require("morrowind-mcp.tes3.iterator")
-
 
 ---@class MCP.Tools.InventoryFetch: MCP.ITool
 ---@field logger mwseLogger
@@ -21,7 +18,7 @@ function this.new(params)
     instance.definition = jsonrpc.Tool({
         name = "inventory-fetch",
         description =
-        "Fetch current inventory.",
+        "Fetch current player's inventory. or instead read the resource: morrowind://memory/player/inventory.json",
         inputSchema = jsonrpc.InputSchema(
         ),
         outputSchema = jsonrpc.OutputSchema(
@@ -35,16 +32,17 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "A game must be active and the player must be loaded."
+    return "A game must be active and loaded."
 end
 
 function this:CanExecute(arguments, context)
-    if tes3.onMainMenu() then
-        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
+    local ok, reason = availability.IsInGame()
+    if not ok then
+        return false, reason
     end
-    if not tes3.mobilePlayer then
-        return false,
-            availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+    ok, reason = availability.PausedInMenuMode()
+    if not ok then
+        return false, reason
     end
     return true
 end

@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.tool_availability")
+local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local ui = require("morrowind-mcp.tes3.ui")
 
@@ -56,15 +56,13 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "The game UI menu controller must be loaded."
+    return "The game UI must be displayed."
 end
 
 function this:CanExecute(arguments, context)
-    if not tes3.worldController or not tes3.worldController.menuController then
-        return false, availability.Unavailable(
-            availability.reason.menuControllerUnavailable,
-            "Wait until the game UI menu controller has loaded."
-        )
+    local ok, reason = availability.IsInitialized()
+    if not ok then
+        return false, reason
     end
     return true
 end

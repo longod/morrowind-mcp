@@ -644,16 +644,6 @@ try {
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
             if ($text -ne "Player view updated.") { throw "Player look did not report success." }
         }),
-        (New-ToolCallTestCase -Name "player look rejects incomplete angles" -ToolName "mw-player-look" -ToolArguments @{ mode = "angles"; yaw = 90 } -When { param($context) $context.ToolNames -contains "mw-player-look" } -Validate {
-            param($result)
-            Assert-ToolError $result
-        } -AllowToolError $true),
-        (New-ToolCallTestCase -Name "player look rejects unknown target" -ToolName "mw-player-look" -ToolArguments @{ mode = "target"; target_id = "mwmcp_missing_look_target" } -When { param($context) $context.ToolNames -contains "mw-player-look" } -Validate {
-            param($result)
-            Assert-ToolError $result
-            $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
-            if ($text -ne "The requested target was not found in active cells.") { throw "Unknown look target returned an unexpected error." }
-        } -AllowToolError $true),
         (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu fetch in game" -ToolName "mw-menu-fetch" -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),

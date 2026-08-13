@@ -53,10 +53,6 @@ function this.new(params)
     return instance
 end
 
-function this:CanExecute(arguments, context)
-    return true -- tes3.game.screenShotsEnabled does not work.
-end
-
 function this:Validate(params)
     local result = base.Validate(self, params)
     if not result.valid then

@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.tool_availability")
+local availability = require("morrowind-mcp.util.tes3_availability")
 local inputvalidator = require("morrowind-mcp.core.input_validator")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local ui = require("morrowind-mcp.tes3.ui")
@@ -66,24 +66,17 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "You can only interact with the menu when it is displayed in main mode."
+    return "You can only interact with the menu when it is displayed in menu mode."
 end
 
 function this:CanExecute(arguments, context)
-    if not tes3.worldController or not tes3.worldController.menuController then
-        return false, availability.Unavailable(
-            availability.reason.menuControllerUnavailable,
-            "Wait until the game UI menu controller has loaded."
-        )
+    local ok, reason = availability.PausedInMenuMode()
+    if not ok then
+        return false, reason
     end
-    if not tes3.onMainMenu() then
-        if not tes3.menuMode() then
-        return false, availability.Unavailable(
-            availability.reason.notInMenuMode,
-            "You can only interact with the menu when it is displayed in main mode."
-        )
-        end
-    end
+
+    -- TODO invalid menu paths,
+    -- check mw-menu-fetch first.
     return true
 end
 

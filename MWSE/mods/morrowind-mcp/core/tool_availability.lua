@@ -6,17 +6,18 @@ local this = {}
 
 ---@enum MCP.ToolAvailabilityReason
 local reason = {
-    gameNotActive = "game_not_active",
-    menuControllerUnavailable = "menu_controller_unavailable",
-    notInMenuMode = "notInMenuMode",
-    noActiveCells = "no_active_cells",
-    playerUnavailable = "player_unavailable",
-    inputBindingUnavailable = "input_binding_unavailable",
-    navigationUnavailable = "navigation_unavailable",
-    noActiveNavigation = "no_active_navigation",
-    pausedInMenu = "paused_in_menu",
-    movementUnavailable = "movement_unavailable",
+    uninitialized = "uninitialized",
+    not_in_game = "not_in_game",
+    not_in_menu_mode = "not_in_menu_mode",
+    paused_in_menu_mode = "paused_in_menu_mode",
+    character_generation_unfinished = "character_generation_unfinished",
     unsupported = "unsupported",
+    -- specified reasons below
+    input_binding_unavailable = "input_binding_unavailable",
+    target_not_found = "target_not_found",
+    movement_unavailable = "movement_unavailable",
+    navigation_unavailable = "navigation_unavailable",
+    no_active_navigation = "no_active_navigation",
 }
 
 this.reason = reason

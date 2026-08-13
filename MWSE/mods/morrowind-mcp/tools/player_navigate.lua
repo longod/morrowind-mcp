@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.tool_availability")
+local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local cellutil = require("morrowind-mcp.tes3.cell")
 
@@ -62,28 +62,25 @@ function this:CanExecute(arguments, context)
     if arguments["action"] == "cancel_navigation" then
         if not context or not context.CancelPlayerNavigation or not context.HasActivePlayerNavigation then
             return false, availability.Unavailable(
-                availability.reason.navigationUnavailable,
+                availability.reason.navigation_unavailable,
                 "Use a server that provides player navigation."
             )
         end
         if not context.HasActivePlayerNavigation() then
             return false, availability.Unavailable(
-                availability.reason.noActiveNavigation,
+                availability.reason.no_active_navigation,
                 "There is no active navigation to cancel."
             )
         end
         return true
     end
-    if tes3.onMainMenu() then
-        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
-    end
-    if not tes3.player then
-        return false,
-            availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+    local ok, reason = availability.IsInGame()
+    if not ok then
+        return false, reason
     end
     if arguments["action"] == "navigate" and (not context or not context.NavigatePlayer) then
         return false, availability.Unavailable(
-            availability.reason.navigationUnavailable,
+            availability.reason.navigation_unavailable,
             "Use a server that provides player navigation."
         )
     end

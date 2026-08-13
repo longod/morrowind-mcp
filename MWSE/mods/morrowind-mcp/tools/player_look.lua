@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.tool_availability")
+local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local playerController = require("morrowind-mcp.util.player_controller")
 local playerLook = require("morrowind-mcp.util.player_look")
@@ -74,11 +74,13 @@ end
 ---@return boolean
 ---@return MCP.ToolAvailability?
 function this:CanExecute(arguments, context)
-    if tes3.onMainMenu() then
-        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
+    local ok, reason = availability.IsInGame()
+    if not ok then
+        return false, reason
     end
-    if not tes3.player or not tes3.mobilePlayer then
-        return false, availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player has loaded.")
+    ok, reason = availability.NotInMenuMode()
+    if not ok then
+        return false, reason
     end
     return true
 end

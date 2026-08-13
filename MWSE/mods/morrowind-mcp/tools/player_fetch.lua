@@ -1,5 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
-local availability = require("morrowind-mcp.core.tool_availability")
+local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
 
@@ -38,12 +38,9 @@ function this:GetCapabilityConditions()
 end
 
 function this:CanExecute(arguments, context)
-    if tes3.onMainMenu() then
-        return false, availability.Unavailable(availability.reason.gameNotActive, "Start or continue a game.")
-    end
-    if not tes3.player or not tes3.mobilePlayer then
-        return false,
-        availability.Unavailable(availability.reason.playerUnavailable, "Wait until the player character has loaded.")
+    local ok, reason = availability.IsInGame()
+    if not ok then
+        return false, reason
     end
     return true
 end
