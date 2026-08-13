@@ -5,6 +5,7 @@ local availability = require("morrowind-mcp.util.tes3_availability")
 local obj = require("morrowind-mcp.tes3.object")
 local ui = require("morrowind-mcp.tes3.ui")
 local dist = require("morrowind-mcp.util.distance")
+local distanceUtil = require("morrowind-mcp.util.distance")
 
 
 ---@class MCP.Tools.TargetFetch: MCP.ITool
@@ -69,17 +70,17 @@ end
 
 function this:Execute(arguments, context)
     local serializer = summary.new({
-        detailLevel = arguments["detail_level"] or summary.level.standard,
+        detailLevel = arguments["detail_level"] or summary.level.standard, -- need distance
         origin = tes3.player and tes3.player.position or nil,
     })
-    local playerTarget = tes3.getPlayerTarget()   -- not include non-activatable objects.
+    local target = tes3.getPlayerTarget()   -- not include non-activatable objects.
     -- local helpLayerMenu = tes3ui.getCursor()      -- on item picking and dragging.
     -- local inventoryTile = tes3ui.getCursorTile()  -- on item picking and dragging.
     -- local serviceActor = tes3ui.getServiceActor() -- service or talking actor
     -- TODO pointing 3d object in menu?
 
-    local looking = nil
-    if not playerTarget then
+    local looking = target
+    if not target then
         local hit = tes3.rayTest({
             position = tes3.getPlayerEyePosition(),
             direction = tes3.getPlayerEyeVector(),
@@ -99,17 +100,31 @@ function this:Execute(arguments, context)
     --     serviceActor and tostring(serviceActor.actorType) or "nil"
     -- )
 
-    local target = serializer:Reference(playerTarget)
+    local playerTarget = serializer:Reference(target)
+    local lookingAt = looking and serializer:Reference(looking) or playerTarget
+    local distanceUnit = tes3.getPlayerActivationDistance()
+    local distanceMeter =  distanceUtil.ToMeters(distanceUnit)
+
+    local text = nil
+    if target and playerTarget then
+        text = string.format("Targeting the reference ID: %s, name: %s, %.2f meters away. And the target is within %.2f meters range.", playerTarget.id, playerTarget.name, playerTarget.distance.meters, distanceMeter)
+    elseif looking and lookingAt then -- and not pleyerTarget
+        text = string.format("Looking at the reference ID: %s, name: %s, %.2f meters away. And that's outside %.2f meters target range.", lookingAt.id, lookingAt.name, lookingAt.distance.meters, distanceMeter)
+    else -- no looking and no targeting
+        text = "No target found. Please look at a reference object."
+    end
+
+    local textContent = jsonrpc.TextContent(text)
 
     local structuredContent = jsonrpc.object({
         serialization = serializer:GetMetadata(),
-        playerTarget = target,
-        lookingAt = looking and serializer:Reference(looking) or target,
+        playerTarget = playerTarget,
+        lookingAt = lookingAt,
         -- helpLayerMenu = ui.tes3uiElement(helpLayerMenu),
         -- inventoryTile = obj.tes3inventoryTile(inventoryTile),
         -- serviceActor = serializer:tes3anyObject(serviceActor),
     })
-    return jsonrpc.CallToolResult(nil, structuredContent)
+    return jsonrpc.CallToolResult(textContent, structuredContent)
 end
 
 return this

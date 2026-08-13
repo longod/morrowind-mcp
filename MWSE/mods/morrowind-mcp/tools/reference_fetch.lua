@@ -132,6 +132,8 @@ function this:Execute(arguments, context)
     local activators = jsonrpc.array(activatorSize)
     local actors = jsonrpc.array(actorSize)
     local statics = jsonrpc.array(staticSize)
+
+    -- TODO distance filter
     if id then
         if category == nil or category["activators"] then
             for _, cell in ipairs(cells) do
