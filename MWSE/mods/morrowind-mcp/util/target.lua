@@ -25,19 +25,19 @@ local this = {}
 ---@field reference mwseSafeObjectHandle Safe handle; may no longer resolve when read.
 
 ---@class MCP.Target.HoverHistoryEntry
----@field spell tes3spell?
----@field magicObject tes3object?
+---@field spellId string?
+---@field magicObjectId string?
 ---@field attributeId integer?
 ---@field skillId integer?
----@field faction tes3faction?
+---@field factionId string?
 ---@field contentsRefId string? Immutable ID captured while the reference was valid.
 ---@field contentsRef mwseSafeObjectHandle? Safe handle; may no longer resolve when read.
----@field contentsContainer tes3object?
----@field dialogue tes3dialogue?
+---@field contentsContainerId string?
+---@field dialogueId string?
 ---@field dialogActorRefId string? Immutable ID captured while the actor was valid.
 ---@field dialogActorRef mwseSafeObjectHandle? Safe handle; may no longer resolve when read.
----@field alchemyObject tes3object?
----@field inventorySelectObject tes3object?
+---@field alchemyObjectId string?
+---@field inventorySelectObjectId string?
 
 ---@class MCP.Target.History
 ---@field crosshair MCP.Target.CrosshairHistoryEntry[]
@@ -67,6 +67,19 @@ local function SafeGetPropertyObject(element, property, typeCast)
         return value
     end
     return nil
+end
+
+---Captures an object ID without retaining the volatile Sol object returned by a UI property.
+---@param object tes3baseObject?
+---@return string?
+local function GetObjectId(object)
+    if not object then
+        return nil
+    end
+    local ok, id = pcall(function()
+        return object.id
+    end)
+    return ok and id or nil
 end
 
 ---Resolves a reference only while the safe handle remains valid.
@@ -152,29 +165,29 @@ local function GetHoverSignature(entry)
         end
     end
 
-    AddPart("spell", entry.spell and entry.spell.id or nil)
-    AddPart("magicObject", entry.magicObject and entry.magicObject.id or nil)
+    AddPart("spell", entry.spellId)
+    AddPart("magicObject", entry.magicObjectId)
     AddPart("attribute", entry.attributeId)
     AddPart("skill", entry.skillId)
-    AddPart("faction", entry.faction and entry.faction.id or nil)
+    AddPart("faction", entry.factionId)
     AddPart("contentsRef", entry.contentsRefId)
-    AddPart("contentsContainer", entry.contentsContainer and entry.contentsContainer.id or nil)
-    AddPart("dialogue", entry.dialogue and entry.dialogue.id or nil)
+    AddPart("contentsContainer", entry.contentsContainerId)
+    AddPart("dialogue", entry.dialogueId)
     AddPart("dialogActorRef", entry.dialogActorRefId)
-    AddPart("alchemyObject", entry.alchemyObject and entry.alchemyObject.id or nil)
-    AddPart("inventorySelectObject", entry.inventorySelectObject and entry.inventorySelectObject.id or nil)
+    AddPart("alchemyObject", entry.alchemyObjectId)
+    AddPart("inventorySelectObject", entry.inventorySelectObjectId)
     return table.concat(compact, "\31")
 end
 
 ---@param entry MCP.Target.HoverHistoryEntry
 ---@param element tes3uiElement
 local function ProbeElementProperties(entry, element)
-    if not entry.spell then
-        entry.spell = SafeGetPropertyObject(element, PROP_MAGIC_SPELL, "tes3spell")
+    if entry.spellId == nil then
+        entry.spellId = GetObjectId(SafeGetPropertyObject(element, PROP_MAGIC_SPELL, "tes3spell"))
     end
 
-    if not entry.magicObject then
-        entry.magicObject = SafeGetPropertyObject(element, PROP_MAGIC_OBJECT)
+    if entry.magicObjectId == nil then
+        entry.magicObjectId = GetObjectId(SafeGetPropertyObject(element, PROP_MAGIC_OBJECT))
     end
 
     if entry.attributeId == nil then
@@ -185,9 +198,9 @@ local function ProbeElementProperties(entry, element)
         end
     end
 
-    if entry.skillId == nil and not entry.faction then
-        entry.faction = SafeGetPropertyObject(element, PROP_STAT_MESSAGE, "tes3faction")
-        if not entry.faction then
+    if entry.skillId == nil and entry.factionId == nil then
+        entry.factionId = GetObjectId(SafeGetPropertyObject(element, PROP_STAT_MESSAGE, "tes3faction"))
+        if entry.factionId == nil then
             local name = element.name or ""
             local parentName = element.parent and element.parent.name or ""
             local isSkill = name:find("major", 1, true) or name:find("minor", 1, true) or name:find("misc", 1, true)
@@ -202,15 +215,15 @@ local function ProbeElementProperties(entry, element)
     if not entry.contentsRef then
         local contentsRef = SafeGetPropertyObject(element, PROP_CONTENTS_REF, "tes3reference") ---@type tes3reference?
         entry.contentsRef = MakeReferenceHandle(contentsRef)
-        entry.contentsRefId = contentsRef and contentsRef.id or nil
+        entry.contentsRefId = GetObjectId(contentsRef)
     end
 
-    if not entry.contentsContainer then
-        entry.contentsContainer = SafeGetPropertyObject(element, PROP_CONTENTS_CONTAINER)
+    if entry.contentsContainerId == nil then
+        entry.contentsContainerId = GetObjectId(SafeGetPropertyObject(element, PROP_CONTENTS_CONTAINER))
     end
 
-    if not entry.dialogue then
-        entry.dialogue = SafeGetPropertyObject(element, PROP_DIALOG_DIALOGUE, "tes3dialogue")
+    if entry.dialogueId == nil then
+        entry.dialogueId = GetObjectId(SafeGetPropertyObject(element, PROP_DIALOG_DIALOGUE, "tes3dialogue"))
     end
 
     if not entry.dialogActorRef then
@@ -219,12 +232,12 @@ local function ProbeElementProperties(entry, element)
         entry.dialogActorRefId = dialogActor and dialogActor.reference and dialogActor.reference.id or nil
     end
 
-    if not entry.alchemyObject then
-        entry.alchemyObject = SafeGetPropertyObject(element, PROP_ALCHEMY_OBJECT)
+    if entry.alchemyObjectId == nil then
+        entry.alchemyObjectId = GetObjectId(SafeGetPropertyObject(element, PROP_ALCHEMY_OBJECT))
     end
 
-    if not entry.inventorySelectObject then
-        entry.inventorySelectObject = SafeGetPropertyObject(element, PROP_INV_SELECT_OBJECT)
+    if entry.inventorySelectObjectId == nil then
+        entry.inventorySelectObjectId = GetObjectId(SafeGetPropertyObject(element, PROP_INV_SELECT_OBJECT))
     end
 end
 
@@ -308,7 +321,7 @@ function this.GetCrosshairHistory()
     return CopyHistory(this.history.crosshair)
 end
 
----Returns a copy of the game-data hover history. Stored handles may have expired.
+---Returns a copy of the game-data hover history. Only reference handles may have expired.
 ---@return MCP.Target.HoverHistoryEntry[]
 function this.GetHoverHistory()
     return CopyHistory(this.history.hover)

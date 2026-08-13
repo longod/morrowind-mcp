@@ -225,7 +225,7 @@ local function MenuInventoryAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the inventory menu is able.")
+                "This is available only when the inventory menu exists.")
     end
     return true
 end
@@ -243,7 +243,7 @@ local function MenuMagicAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the magic menu is able.")
+                "This is available only when the magic menu exists.")
     end
     return true
 end

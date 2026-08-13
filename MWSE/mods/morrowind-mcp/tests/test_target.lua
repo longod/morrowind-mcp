@@ -158,7 +158,8 @@ function this.Test()
 
             local history = target.GetHoverHistory()
             unitwind:expect(table.size(history)).toBe(1)
-            unitwind:expect(history[1].spell).toBe(spell)
+            unitwind:expect(history[1].spellId).toBe(spell.id)
+            unitwind:expect(history[1].spell).toBe(nil)
         end)
     end)
 
