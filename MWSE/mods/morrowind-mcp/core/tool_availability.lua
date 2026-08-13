@@ -10,6 +10,7 @@ local reason = {
     not_in_game = "not_in_game",
     not_in_menu_mode = "not_in_menu_mode",
     paused_in_menu_mode = "paused_in_menu_mode",
+    menu_unavailable = "menu_unavailable",
     character_generation_unfinished = "character_generation_unfinished",
     unsupported = "unsupported",
     -- specified reasons below
@@ -18,6 +19,7 @@ local reason = {
     movement_unavailable = "movement_unavailable",
     navigation_unavailable = "navigation_unavailable",
     no_active_navigation = "no_active_navigation",
+    journal_unavailable = "journal_unavailable",
 }
 
 this.reason = reason

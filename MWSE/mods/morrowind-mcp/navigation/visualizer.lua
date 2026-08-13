@@ -54,7 +54,7 @@ local this = {}
 ---@field SetTerrainEnabled fun(self: MCP.NavigationVisualizer, enabled: boolean)
 
 local defaultOptions = {
-    enabled = true,
+    enabled = false,
     graphEnabled = true,
     terrainEnabled = true,
     depthTest = true,

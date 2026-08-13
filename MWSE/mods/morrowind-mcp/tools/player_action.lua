@@ -21,6 +21,7 @@ local defaultHoldSeconds = 1.0
 -- tes3.transferInventory
 -- tes3.transferItem
 
+-- https://en.uesp.net/wiki/Morrowind:Controls
 
 
 ---@class MCP.Tools.PlayerAction: MCP.ITool
@@ -52,15 +53,15 @@ function this.new(params)
                         "activate",
                         "readyWeapon",
                         "readyMagic",
-                        "sneak",
-                        "run",
+                        "sneak", -- hold or toggle with mcp
+                        -- "run", -- hold shift
                         "alwaysRun",
                         -- "autoRun",
                         "jump",
-                        -- "nextWeapon",
-                        -- "previousWeapon",
-                        -- "nextSpell",
-                        -- "previousSpell",
+                        "nextWeapon",
+                        "previousWeapon",
+                        "nextSpell",
+                        "previousSpell",
                         -- "togglePOV",
                         "menuMode",
                         "journal",
@@ -140,13 +141,13 @@ local function ActivateAvailable()
     local target = tes3.getPlayerTarget()
     if not target then
         local distanceUnit = tes3.getPlayerActivationDistance()
-        local distanceMeter =  distanceUtil.ToMeters(distanceUnit)
+        local distanceMeter = distanceUtil.ToMeters(distanceUnit)
         -- tes3.rayTest()
         return false, availability.Unavailable(
             availability.reason.target_not_found,
             "Action activate is only available when the player is looking at a `supportsActivate` reference object within " ..
             string.format("%.2f meters.", distanceMeter) ..
-            " And Use the mw-target-fetch tool to find the current target reference object."
+            " And Use `mw-player-look` tool to look at and `mw-target-fetch` tool to find the current target reference object."
         )
     end
     return true
@@ -154,32 +155,116 @@ end
 
 ---@return boolean
 ---@return MCP.ToolAvailability?
+local function ActionAvailable()
+    local ok, reason = InGameAvailable()
+    if not ok then
+        return false, reason
+    end
+
+    -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
+    return tes3.mobilePlayer.canAct,
+        availability.Unavailable(
+            availability.reason.movement_unavailable,
+            "This is available only when the player is able to action.")
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function JumpAvailable()
+    local ok, reason = InGameAvailable()
+    if not ok then
+        return false, reason
+    end
+
+    -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
+    return tes3.mobilePlayer.canJump,
+        availability.Unavailable(
+            availability.reason.movement_unavailable,
+            "This is available only when the player is able to jump.")
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
 local function MovementAvailable()
     local ok, reason = InGameAvailable()
     if not ok then
-        return ok, reason
+        return false, reason
     end
 
     -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
     return tes3.mobilePlayer.canMove,
         availability.Unavailable(
             availability.reason.movement_unavailable,
-            "This action is available only when the player is able to move.")
+            "This is available only when the player is able to move.")
 end
 
 ---@return boolean
 ---@return MCP.ToolAvailability?
-local function MenuModeAvailable()
+local function CharGenFinishedAvailable()
     local ok, reason = InGameAvailable()
     if not ok then
-        return ok, reason
+        return false, reason
     end
     ok, reason = availability.IsCharGenFinished()
     if not ok then
-        return ok, reason
+        return false, reason
     end
     return true
 end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function MenuInventoryAvailable()
+    local ok, reason = InGameAvailable()
+    if not ok then
+        return false, reason
+    end
+    -- vanilla inventory menu shown after taking a scroll in character generation. since inventory menu is created.
+    local menu = tes3ui.findMenu(tes3ui.registerID("MenuInventory"))
+    if not menu then
+        return false,
+            availability.Unavailable(
+                availability.reason.menu_unavailable,
+                "This is available only when the inventory menu is able.")
+    end
+    return true
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function MenuMagicAvailable()
+    local ok, reason = InGameAvailable()
+    if not ok then
+        return false, reason
+    end
+    -- vanilla inventory menu shown after taking a scroll in character generation. since inventory menu is created.
+    local menu = tes3ui.findMenu(tes3ui.registerID("MenuMagic"))
+    if not menu then
+        return false,
+            availability.Unavailable(
+                availability.reason.menu_unavailable,
+                "This is available only when the magic menu is able.")
+    end
+    return true
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function MenuJournalAvailable()
+    local ok, reason = InGameAvailable()
+    if not ok then
+        return false, reason
+    end
+
+    -- any quest started.
+    -- Strictly, you can open a blank journal once the menu is complete.
+    ok, reason = availability.IsCharGenFinished()
+    if not ok then
+        return false, reason
+    end
+    return true
+end
+
 
 ---@type table<tes3.keybind, (fun(): boolean, MCP.ToolAvailability?)?>
 local testActionHandler = {
@@ -187,40 +272,40 @@ local testActionHandler = {
     [tes3.keybind.back] = MovementAvailable,
     [tes3.keybind.left] = MovementAvailable,
     [tes3.keybind.right] = MovementAvailable,
-    [tes3.keybind.use] = availability.AlwaysUnavailable,
+    [tes3.keybind.use] = ActionAvailable,
     [tes3.keybind.activate] = ActivateAvailable,
-    [tes3.keybind.readyWeapon] = availability.AlwaysUnavailable,
-    [tes3.keybind.readyMagic] = availability.AlwaysUnavailable,
-    [tes3.keybind.sneak] = availability.AlwaysUnavailable,
-    [tes3.keybind.run] = availability.AlwaysUnavailable,
-    [tes3.keybind.alwaysRun] = availability.AlwaysUnavailable,
-    [tes3.keybind.autoRun] = availability.AlwaysUnavailable,
-    [tes3.keybind.jump] = availability.AlwaysUnavailable,
-    [tes3.keybind.nextWeapon] = availability.AlwaysUnavailable,
-    [tes3.keybind.previousWeapon] = availability.AlwaysUnavailable,
-    [tes3.keybind.nextSpell] = availability.AlwaysUnavailable,
-    [tes3.keybind.previousSpell] = availability.AlwaysUnavailable,
-    [tes3.keybind.togglePOV] = availability.AlwaysUnavailable,
-    [tes3.keybind.menuMode] = MenuModeAvailable,
-    [tes3.keybind.journal] = MenuModeAvailable, -- later, after got first quest.
-    [tes3.keybind.rest] = availability.AlwaysUnavailable, -- later, go outside from office
-    [tes3.keybind.quickMenu] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick1] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick2] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick3] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick4] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick5] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick6] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick7] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick8] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick9] = availability.AlwaysUnavailable,
-    [tes3.keybind.quick10] = availability.AlwaysUnavailable,
-    [tes3.keybind.quickSave] = availability.AlwaysUnavailable,
-    [tes3.keybind.quickLoad] = availability.AlwaysUnavailable,
-    [tes3.keybind.escape] = availability.AlwaysUnavailable,
-    [tes3.keybind.console] = availability.AlwaysUnavailable,
-    [tes3.keybind.screenshot] = availability.AlwaysUnavailable,
-    [tes3.keybind.readyMagicMCP] = availability.AlwaysUnavailable,
+    [tes3.keybind.readyWeapon] = MenuInventoryAvailable,
+    [tes3.keybind.readyMagic] = MenuMagicAvailable,
+    [tes3.keybind.sneak] = MovementAvailable,
+    [tes3.keybind.run] = MovementAvailable, -- hold shift...
+    [tes3.keybind.alwaysRun] = MovementAvailable,
+    [tes3.keybind.autoRun] = MovementAvailable,
+    [tes3.keybind.jump] = JumpAvailable, -- strictly, jump is available once the menu is complete.
+    [tes3.keybind.nextWeapon] = MenuInventoryAvailable,
+    [tes3.keybind.previousWeapon] = MenuInventoryAvailable,
+    [tes3.keybind.nextSpell] = MenuMagicAvailable,
+    [tes3.keybind.previousSpell] = MenuMagicAvailable,
+    [tes3.keybind.togglePOV] = MenuInventoryAvailable, -- same timing inventory access in vanilla. or character portrait appears.
+    [tes3.keybind.menuMode] = MenuInventoryAvailable,
+    [tes3.keybind.journal] = MenuJournalAvailable,     -- later, after got first quest.
+    [tes3.keybind.rest] = CharGenFinishedAvailable,    -- later, go outside from office
+    [tes3.keybind.quickMenu] = MenuMagicAvailable,
+    [tes3.keybind.quick1] = MenuMagicAvailable,
+    [tes3.keybind.quick2] = MenuMagicAvailable,
+    [tes3.keybind.quick3] = MenuMagicAvailable,
+    [tes3.keybind.quick4] = MenuMagicAvailable,
+    [tes3.keybind.quick5] = MenuMagicAvailable,
+    [tes3.keybind.quick6] = MenuMagicAvailable,
+    [tes3.keybind.quick7] = MenuMagicAvailable,
+    [tes3.keybind.quick8] = MenuMagicAvailable,
+    [tes3.keybind.quick9] = MenuMagicAvailable,
+    [tes3.keybind.quick10] = MenuMagicAvailable,
+    [tes3.keybind.quickSave] = availability.AlwaysUnavailable,     -- sealed
+    [tes3.keybind.quickLoad] = availability.AlwaysUnavailable,     -- sealed
+    [tes3.keybind.escape] = availability.AlwaysUnavailable,        -- sealed
+    [tes3.keybind.console] = availability.AlwaysUnavailable,       -- sealed
+    [tes3.keybind.screenshot] = availability.AlwaysUnavailable,    -- sealed
+    [tes3.keybind.readyMagicMCP] = availability.AlwaysUnavailable, -- sealed
 }
 
 function this:CanExecute(arguments, context)
@@ -238,9 +323,11 @@ function this:CanExecute(arguments, context)
         )
     end
 
-    local handler = testActionHandler[action]
+    local handler = testActionHandler[key]
     if handler then
         return handler()
+    else
+        self.logger:warn("No availability handler for action %s (keybind %d)", action, key)
     end
 
     return true

@@ -30,7 +30,7 @@ function this.IsInitialized()
         return false,
         av.Unavailable(
             av.reason.uninitialized,
-            "Wait a moment while the system get ready."
+            "Wait a moment while the system initialized."
         )
     end
     return true
@@ -64,7 +64,7 @@ function this.PausedInMenuMode()
         return false,
             av.Unavailable(
                 av.reason.not_in_menu_mode,
-                "Enter the menu mode. This action with args is available only when the menu is displayed in the menu mode."
+                "Enter the menu mode using `mw-player-action`. This action with args is available only when the menu is displayed in the menu mode."
             )
     end
     return true
@@ -78,7 +78,7 @@ function this.NotInMenuMode()
         return false,
             av.Unavailable(
                 av.reason.paused_in_menu_mode,
-                "Leave the menu mode or close dialog. This action with args is available only when the menu mode is not paused."
+                "Leave the menu mode or close dialog. This action with args is available only when the menu mode is not paused. Call `mw-meun-fetch` to get the menu path of the element you want to interact with."
             )
     end
     return true

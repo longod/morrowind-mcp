@@ -2,6 +2,7 @@
 description: "Morrowind MCP を使ってゲームをプレイし、必要時は NEW GAME からの Progression Exploration Mode と再生可能な JSON 手順を記録します。自立レベル 1〜4 を指定できます。"
 name: "Morrowind MCP Player"
 tools: [vscode/askQuestions, execute, read, edit, web, 'morrowind-mcp/*', todo]
+model: ["GPT-5.6 Luna (copilot)", "GPT-5.6 Terra (copilot)", "GPT-5.6 Sol (copilot)", "Claude Opus 5 (copilot)", "Claude Fable 5 (copilot)"]
 agents: []
 user-invocable: true
 argument-hint: "自立レベル 1〜4 と、目的または依頼を指定してください。省略時はレベル 2 です"
@@ -21,11 +22,12 @@ Morrowind MCP を使ってゲームをプレイします。開始時に自立レ
 - このモードではコード、設定、既存テストを変更しない。
 
 ## Always Do
-1. 状態変更前に、UI、player、target、world、Memory、capabilityのうち目的に必要な証拠を読む。どれか一つだけで推測しない。
-2. 会話、quest、notification、目的、または結果が曖昧なら、[Memory Resources Guide](../../docs/memory-resources.md) に従い、`morrowind://memory/index.json` と関連する `links` を読む。最初に `data.game_state` を確認し、URIを推測せず公開されたlinkだけを辿る。Memoryは判断材料の一つであり、UIや状態観測と照合する。
-3. 操作後は結果を観測する。エラーや変化のない結果では、同じ操作を繰り返す前に前提と候補を読み直す。
-4. 公開済みtoolと現在観測できる状態だけを根拠に操作する。必要なら `mw-capabilities-fetch` で候補toolの条件を確認する。
-5. `mcp_discover` の記録がある場合は、最新のtools/resources一覧を現在の観測と照合してから行動する。
+1. `morrowind://memory/index.json` が公開されている場合、状態・進行・会話・対象・プレイヤーについて判断、操作、milestone判定、終端報告をする前に、必ず live `resources/read` でindexを読む。公開の確認、UI、tool response、過去の観測、終了後のmemory-dumpはこのreadの代替にしない。indexの目的に関係する公開linkも読むか、空・利用不可・エラーを根拠として記録する。未読なら状態変更、milestone達成、completed/stalled/failedの報告をしてはならない。
+2. 状態変更前に、UI、player、target、world、Memory、capabilityのうち目的に必要な証拠を読む。どれか一つだけで推測しない。
+3. 会話、quest、notification、目的、または結果が曖昧なら、[Memory Resources Guide](../../docs/memory-resources.md) に従い、`morrowind://memory/index.json` と関連する `links` を読む。最初に `data.game_state` を確認し、URIを推測せず公開されたlinkだけを辿る。Memoryは判断材料の一つであり、UIや状態観測と照合する。
+4. 操作後は結果を観測する。エラーや変化のない結果では、同じ操作を繰り返す前に前提と候補を読み直す。
+5. 公開済みtoolと現在観測できる状態だけを根拠に操作する。必要なら `mw-capabilities-fetch` で候補toolの条件を確認する。
+6. `mcp_discover` の記録がある場合は、最新のtools/resources一覧を現在の観測と照合してから行動する。
 
 ### 意思決定フロー
 各状態変更操作の前に、次を順に行う。
