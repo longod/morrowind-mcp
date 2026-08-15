@@ -170,6 +170,121 @@ function this.Test()
         unitwind:expect(ui.ExtractVisibleText(root)).toBe("First\nSecond")
     end)
 
+    unitwind:test("CollectActionable includes a live inventory tile with its raw-index path", function()
+        local tileElement = {
+            id = 3,
+            name = "itemTile",
+            type = "layout",
+            visible = true,
+            children = {},
+            isValid = function()
+                return true
+            end,
+            getTopLevelMenu = function()
+                return { name = "MenuInventory" }
+            end,
+        }
+        local root = {
+            visible = true,
+            children = {
+                {
+                    visible = false,
+                    children = {},
+                    isValid = function()
+                        return true
+                    end,
+                },
+                tileElement,
+            },
+            isValid = function()
+                return true
+            end,
+        }
+        local item = { id = "iron_spear", name = "Iron Spear" }
+        local tile = {
+            item = item,
+            count = 2,
+            isEquipped = false,
+            isBartered = false,
+            isBoundItem = false,
+            type = 0,
+        }
+        tileElement.getPropertyObject = function(_, property, typeCast)
+            if property == "MenuInventory_Thing" and typeCast == "tes3inventoryTile" then
+                return tile
+            end
+            return nil
+        end
+
+        local actions = ui.CollectActionable(root)
+
+        unitwind:expect(table.size(actions)).toBe(1)
+        unitwind:expect(actions[1].path).toBe("/children/1")
+        unitwind:expect(actions[1].actions[1]).toBe("mouseClick")
+        unitwind:expect(actions[1].inventory_tile.item.id).toBe("iron_spear")
+        unitwind:expect(actions[1].inventory_tile.inventory_pane).toBe("player")
+    end)
+
+    unitwind:test("CollectActionable distinguishes barter and contents inventory panes", function()
+        local function ValidElement(properties)
+            properties.isValid = function()
+                return true
+            end
+            properties.children = properties.children or {}
+            return properties
+        end
+
+        for _, expectedPane in ipairs({ "barter", "contents" }) do
+            local menuName = expectedPane == "barter" and "MenuBarter" or "MenuContents"
+            local property = expectedPane == "barter" and "MenuBarter_Thing" or "MenuContents_Thing"
+            local tileElement = ValidElement({
+                visible = true,
+                type = "layout",
+                children = {},
+                getTopLevelMenu = function()
+                    return { name = menuName }
+                end,
+            })
+            local tile = { count = 1, type = 0 }
+            tileElement.getPropertyObject = function(_, requestedProperty, typeCast)
+                if requestedProperty == property and typeCast == "tes3inventoryTile" then
+                    return tile
+                end
+                return nil
+            end
+
+            local actions = ui.CollectActionable(ValidElement({ visible = true, children = { tileElement } }))
+
+            unitwind:expect(table.size(actions)).toBe(1)
+            unitwind:expect(actions[1].inventory_tile.inventory_pane).toBe(expectedPane)
+        end
+    end)
+
+    unitwind:test("CollectActionable excludes elements with no executable action", function()
+        local fillbar = {
+            id = 2,
+            name = "Fill",
+            type = "fillbar",
+            visible = true,
+            children = {},
+            isValid = function()
+                return true
+            end,
+            widget = {
+                element = { type = "fillbar" },
+            },
+        }
+        local root = {
+            visible = true,
+            children = { fillbar },
+            isValid = function()
+                return true
+            end,
+        }
+
+        unitwind:expect(table.size(ui.CollectActionable(root))).toBe(0)
+    end)
+
     unitwind:test("mcpui marks and safely formats owned notifications", function()
         local receivedFormat = nil
         local receivedText = nil

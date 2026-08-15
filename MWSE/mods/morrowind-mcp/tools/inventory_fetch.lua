@@ -24,6 +24,7 @@ function this.new(params)
         outputSchema = jsonrpc.OutputSchema(
             {
                 inventory = jsonrpc.JsonArraySchema(),
+                -- equipped?
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
@@ -37,10 +38,6 @@ end
 
 function this:CanExecute(arguments, context)
     local ok, reason = availability.IsInGame()
-    if not ok then
-        return false, reason
-    end
-    ok, reason = availability.IsCharGenFinished()
     if not ok then
         return false, reason
     end

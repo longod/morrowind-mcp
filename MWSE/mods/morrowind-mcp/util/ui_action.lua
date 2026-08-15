@@ -6,6 +6,14 @@ local widgetutil = require("morrowind-mcp.tes3.widget")
 
 local defaultPathSeparator = "/"
 
+-- Each vanilla inventory pane stores its live tile pointer on the tile element.
+-- These names were verified against MenuInventory, MenuContents, and MenuBarter at runtime.
+local inventoryTileProperty = {
+    "MenuInventory_Thing",
+    "MenuContents_Thing",
+    "MenuBarter_Thing",
+}
+
 -- Native Morrowind menus can attach meaningful handlers to widgetless layout elements.
 -- Only keep properties that are plausible direct input actions for menu-action style triggering.
 local actionableProperty = {
@@ -344,8 +352,13 @@ end
 function this.RegisterEventHandlers()
     event.register(tes3.event.uiPreEvent, this.ObserveUiPreEvent)
     event.register(tes3.event.menuExit, OnMenuExit)
-    logger:debug("UI action observation event handler registered")
 end
+
+function this.UnregisterEventHandlers()
+    event.unregister(tes3.event.uiPreEvent, this.ObserveUiPreEvent)
+    event.unregister(tes3.event.menuExit, OnMenuExit)
+end
+
 
 --- Returns the observed or static executable event hint for an element.
 ---@param element tes3uiElement
@@ -379,12 +392,37 @@ end
 ---@param element tes3uiElement
 ---@return string[]? properties tes3.uiProperty names
 function this.GetActionProperties(element)
+    if this.GetInventoryTile(element) then
+        return { "mouseClick" }
+    end
     if IsValidElement(element) and widgetutil.IsScrollArrow(element) then
         return { "mouseClick" }
     end
 
     local hint = GetActionHint(element)
     return hint and hint.properties or nil
+end
+
+--- Returns the live inventory tile associated with an element, if it belongs to a supported vanilla pane.
+---@param element tes3uiElement?
+---@return tes3inventoryTile?
+function this.GetInventoryTile(element)
+    if element == nil then
+        return nil
+    end
+    if not IsValidElement(element) or type(element.getPropertyObject) ~= "function" then
+        return nil
+    end
+
+    for _, property in ipairs(inventoryTileProperty) do
+        local ok, tile = pcall(function()
+            return element:getPropertyObject(property, "tes3inventoryTile")
+        end)
+        if ok and tile then
+            return tile
+        end
+    end
+    return nil
 end
 
 --- Clears runtime-observed hints so tests do not leak fake UI data into normal play.

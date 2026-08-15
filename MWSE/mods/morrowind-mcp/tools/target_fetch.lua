@@ -100,8 +100,8 @@ function this:Execute(arguments, context)
     --     serviceActor and tostring(serviceActor.actorType) or "nil"
     -- )
 
-    local playerTarget = serializer:Reference(target)
-    local lookingAt = looking and serializer:Reference(looking) or playerTarget
+    local playerTarget = serializer:tes3reference(target)
+    local lookingAt = looking and serializer:tes3reference(looking) or playerTarget
     local distanceUnit = tes3.getPlayerActivationDistance()
     local distanceMeter =  distanceUtil.ToMeters(distanceUnit)
 

@@ -17,6 +17,8 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 local terrainGridManager = require("morrowind-mcp.navigation.terrain.manager")
 local debugGeometryProbe = require("morrowind-mcp.navigation.debug_geometry_probe")
 local visualizerModule = require("morrowind-mcp.navigation.visualizer")
+local ui_action = require("morrowind-mcp.util.ui_action")
+local input_action = require("morrowind-mcp.util.input_action")
 
 -- TODO split implementations, such as session manager?
 
@@ -1874,6 +1876,8 @@ function this:Start()
     end
     self.server:settimeout(0)
 
+    input_action.RegisterEventHandlers()
+    ui_action.RegisterEventHandlers()
     target:RegisterEvent()
     self.pathfinding:RegisterEventHandlers()
     self.terrainGridManager:RegisterEventHandlers()
@@ -1980,6 +1984,8 @@ function this:Shutdown()
 
     self.pathfinding:UnregisterEventHandlers()
     target:UnregisterEvent()
+    input_action.UnregisterEventHandlers()
+    ui_action.UnregisterEventHandlers()
 
     self.server:close()
     self.server = nil

@@ -309,6 +309,153 @@ function this.GetActionProperties(element)
     return nil
 end
 
+--- Builds the stable item identity included with an inventory tile action.
+---@param tile tes3inventoryTile
+---@param menu tes3uiElement?
+---@return MCP.AnyMap
+local function SerializeInventoryTile(tile, menu)
+    local item = tile.item
+    ---@type MCP.AnyMap
+    local metadata = jsonrpc.object({
+        item = item and jsonrpc.object({ id = item.id, name = item.name }) or nil,
+        count = tile.count,
+        is_equipped = tile.isEquipped,
+        is_bartered = tile.isBartered,
+        is_bound_item = tile.isBoundItem,
+        tile_type = tostring(tile.type),
+        menu_name = menu and menu.name or nil,
+    })
+
+    if menu and menu.name == "MenuInventory" then
+        metadata.inventory_pane = "player"
+    elseif menu and menu.name == "MenuBarter" then
+        metadata.inventory_pane = "barter"
+    elseif menu and menu.name == "MenuContents" then
+        metadata.inventory_pane = "contents"
+    end
+    return metadata
+end
+
+--- Finds a live element's raw-index path relative to a root so filtered action paths remain executable from mainRoot.
+---@param root tes3uiElement?
+---@param target tes3uiElement?
+---@return string? path
+function this.FindPath(root, target)
+    if not root or not target then
+        return nil
+    end
+    if root == target then
+        return ""
+    end
+
+    local function Visit(current, currentPath)
+        for childIndex, child in ipairs(current.children or {}) do
+            local childPath = currentPath .. "/children/" .. tostring(childIndex - 1)
+            if child == target then
+                return childPath
+            end
+            local found = Visit(child, childPath)
+            if found then
+                return found
+            end
+        end
+        return nil
+    end
+
+    return Visit(root, "")
+end
+
+--- Returns an element rectangle in the scaled UI viewport coordinate system.
+--- Top-level Morrowind menus are positioned relative to the viewport center.
+---@param element tes3uiElement?
+---@return MCP.AnyMap? rect
+function this.GetScreenRect(element)
+    if not element or type(tes3ui.getViewportSize) ~= "function" then
+        return nil
+    end
+
+    local viewportWidth, viewportHeight = tes3ui.getViewportSize()
+    if type(viewportWidth) ~= "number" or type(viewportHeight) ~= "number" then
+        return nil
+    end
+
+    local x = viewportWidth / 2
+    local y = -viewportHeight / 2
+    local current = element
+    while current do
+        x = x + (current.positionX or 0)
+        y = y + (current.positionY or 0)
+        current = current.parent
+    end
+    return jsonrpc.object({
+        x = x,
+        y = y,
+        width = element.width,
+        height = element.height,
+        viewport_width = viewportWidth,
+        viewport_height = viewportHeight,
+    })
+end
+
+--- Collects visible, enabled action targets with raw-index paths suitable for mw-menu-action.
+---@param root tes3uiElement?
+---@param rootPath string?
+---@return MCP.AnyMap[] actions
+function this.CollectActionable(root, rootPath)
+    local actions = jsonrpc.array()
+    if not root then
+        return actions
+    end
+
+    local function Visit(element, elementPath)
+        if not element or not element:isValid() or not element.visible then
+            return
+        end
+
+        local actionable = this.GetActionProperties(element)
+        if actionable and table.size(actionable) > 0 and not element.disabled then
+            local action = jsonrpc.object({
+                path = elementPath,
+                actions = jsonrpc.array(actionable),
+                id = element.id,
+                name = element.name,
+                type = element.type,
+                text = element.text,
+                screen_rect = this.GetScreenRect(element),
+            })
+            local tile = ui_action.GetInventoryTile(element)
+            if tile then
+                action.inventory_tile = SerializeInventoryTile(tile, element:getTopLevelMenu())
+            end
+            table.insert(actions, action)
+        end
+
+        for childIndex, child in ipairs(element.children or {}) do
+            Visit(child, elementPath .. "/children/" .. tostring(childIndex - 1))
+        end
+    end
+
+    Visit(root, rootPath or "")
+    return actions
+end
+
+--- Serializes the current cursor tile and associates it with its live action path.
+---@param mainRoot tes3uiElement
+---@return MCP.AnyMap? cursorTile
+function this.GetCursorTile(mainRoot)
+    local tile = tes3ui.getCursorTile()
+    if not tile then
+        return nil
+    end
+
+    local menu = tile.element and tile.element:getTopLevelMenu() or nil
+    local metadata = SerializeInventoryTile(tile, menu)
+    if tile.element and ui_action.GetInventoryTile(tile.element) then
+        metadata.path = this.FindPath(mainRoot, tile.element)
+    end
+    return metadata
+end
+
 ---@param i tes3uiElement
 ---@param o MCP.AnyMap?
 ---@return MCP.AnyMap?
@@ -325,6 +472,7 @@ function this.tes3uiElement(i, o, path)
     o = o or jsonrpc.object()
     -- This RFC 6901 pointer addresses the serialized tree, so duplicate names and IDs remain unambiguous.
     o.path = elementPath
+    o.screen_rect = this.GetScreenRect(i)
     -- o.absolutePosAlignX = i.absolutePosAlignX
     -- o.absolutePosAlignY = i.absolutePosAlignY
     -- o.alpha = i.alpha

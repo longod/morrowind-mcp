@@ -58,4 +58,4 @@ Validate a recording without launching the game:
 & "$HOME\.local\bin\python3.14.exe" .\tests\game_progression\run.py --scenario <scenario.json> --validate-only
 ```
 
-Replay launches through the existing PowerShell entry point, resolves configuration through `mwmcp_config.ps1`, and stops Morrowind with `stop_server.ps1` unless `--no-stop` is specified. A scenario whose recorded `outcome` is `failed` can still return success when its terminal `expected_error` is observed. Run artifacts, including `run.json` and an `MWSE.log` copy when available, are saved below `tests/logs/game_progression/`.
+Replay launches through the existing PowerShell entry point, resolves configuration through `mwmcp_config.ps1`, and stops Morrowind with `stop_server.ps1` unless `--no-stop` is specified. After shutdown, the runner copies the configured `MWSE.log` into the run directory. A scenario whose recorded `outcome` is `failed` can still return success when its terminal `expected_error` is observed. Run artifacts, including `run.json` and `MWSE.log` when available, are saved below `tests/logs/game_progression/`; missing or failed log copies are reported as warnings.

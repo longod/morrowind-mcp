@@ -2,6 +2,7 @@ local base = require("morrowind-mcp.core.itool")
 local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local obj = require("morrowind-mcp.tes3.object")
+local summary = require("morrowind-mcp.tes3.object_summary")
 
 -- rename player stats?
 
@@ -20,12 +21,17 @@ function this.new(params)
         name = "player-fetch",
         description =
         "Fetch current player state.",
-        inputSchema = jsonrpc.InputSchema(
-        ),
+        inputSchema = jsonrpc.InputSchema({
+            detail_level = jsonrpc.UntitledSingleSelectEnumSchema(
+                { "minimal", "standard", "full" },
+                "Detail Level",
+                "Serialization detail for game objects. The default is standard.",
+                "standard"
+            ),
+        }),
         outputSchema = jsonrpc.OutputSchema(
             {
                 player = jsonrpc.JsonObjectSchema(),
-                mobilePlayer = jsonrpc.JsonObjectSchema(),
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
@@ -53,11 +59,14 @@ function this:Execute(arguments, context)
         return jsonrpc.CallToolResult(errorContent, nil, true)
     end
 
-    -- too many fields, maybe need to filter out some fields.
+    local serializer = summary.new({
+        detailLevel = arguments["detail_level"] or summary.level.standard, -- need distance
+    })
+
+    -- TODO too many fields, maybe need to filter out some fields.
 
     local structuredContent = jsonrpc.object({
-        player = obj.tes3reference(player),
-        mobilePlayer = obj.tes3mobilePlayer(mobilePlayer),
+        player = serializer:tes3mobilePlayer(mobilePlayer),
     })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end

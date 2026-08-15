@@ -34,6 +34,12 @@ function this.new(params)
                     minMenuNameLength,
                     maxMenuNameLength
                 ),
+                output_mode = jsonrpc.UntitledSingleSelectEnumSchema(
+                    { "tree", "actions", "both" },
+                    "Output Mode",
+                    "Return the menu tree, flat actionable elements, or both. The default is both.",
+                    "both"
+                ),
                 -- filter?
                 -- contain help layer?
                 -- depth
@@ -48,6 +54,8 @@ function this.new(params)
             {
                 menu = jsonrpc.JsonObjectSchema(),
                 help = jsonrpc.JsonObjectSchema(),
+                actions = jsonrpc.JsonArraySchema(),
+                cursor_tile = jsonrpc.JsonObjectSchema(),
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
@@ -87,8 +95,10 @@ end
 function this:Execute(arguments, context)
     local menu_id = arguments["menu_id"]
     local menu_name = arguments["menu_name"]
+    local output_mode = arguments["output_mode"] or "both"
 
-    local menu = tes3.worldController.menuController.mainRoot
+    local mainRoot = tes3.worldController.menuController.mainRoot
+    local menu = mainRoot
     local help = tes3.worldController.menuController.helpRoot
 
     -- better distinguish between fineMenu and findChild, but arguments too complex, so just use findChild.
@@ -109,7 +119,16 @@ function this:Execute(arguments, context)
 
     -- TODO only tes3.getTopMenu() or tes3ui.getMenuOnTop()
 
-    local structuredContent = jsonrpc.object({ menu = ui.tes3uiElement(menu), help = ui.tes3uiElement(help) })
+    local structuredContent = jsonrpc.object()
+    if output_mode == "tree" or output_mode == "both" then
+        structuredContent.menu = ui.tes3uiElement(menu)
+        structuredContent.help = ui.tes3uiElement(help)
+    end
+    if output_mode == "actions" or output_mode == "both" then
+        local menuPath = ui.FindPath(mainRoot, menu)
+        structuredContent.actions = ui.CollectActionable(menu, menuPath or "")
+    end
+    structuredContent.cursor_tile = ui.GetCursorTile(mainRoot)
     return jsonrpc.CallToolResult(nil, structuredContent)
 end
 

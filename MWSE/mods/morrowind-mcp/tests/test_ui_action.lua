@@ -79,6 +79,21 @@ function this.Test()
         unitwind:expect(uiAction.GetActionProperties(button)).toBe(nil)
     end)
 
+    unitwind:test("GetInventoryTile resolves each supported inventory pane property", function()
+        for _, property in ipairs({ "MenuInventory_Thing", "MenuContents_Thing", "MenuBarter_Thing" }) do
+            local element = NewElement(nil, "layout")
+            local tile = {}
+            element.getPropertyObject = function(_, requestedProperty, typeCast)
+                if requestedProperty == property and typeCast == "tes3inventoryTile" then
+                    return tile
+                end
+                return nil
+            end
+
+            unitwind:expect(uiAction.GetInventoryTile(element)).toBe(tile)
+        end
+    end)
+
     unitwind:test("GetWidgetActionProperties returns supported actions", function()
         local buttonElement = NewElement("Button", "button")
         local properties = uiAction.GetWidgetActionProperties({ element = buttonElement })

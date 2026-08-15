@@ -195,11 +195,17 @@ def Main() -> int:
         return 1
     finally:
         WriteJson(output_dir / "run.json", run)
-        mwse_log = Path(configuration["Paths"]["morrowindInstallDir"]) / "MWSE.log" if "configuration" in locals() else None
-        if mwse_log and mwse_log.exists():
-            shutil.copy2(mwse_log, output_dir / "MWSE.log")
         if not arguments.no_stop:
             StopServer(repo_root)
+        mwse_log = Path(configuration["Paths"]["morrowindInstallDir"]) / "MWSE.log" if "configuration" in locals() else None
+        if mwse_log and mwse_log.exists():
+            try:
+                shutil.copy2(mwse_log, output_dir / "MWSE.log")
+                print(f"[INFO] Saved MWSE.log copy: {output_dir / 'MWSE.log'}")
+            except OSError as error:
+                print(f"[WARN] Failed to copy MWSE.log: {error}", file=sys.stderr)
+        elif mwse_log:
+            print(f"[WARN] MWSE.log not found: {mwse_log}", file=sys.stderr)
         RemoveTestContext(repo_root)
 
 

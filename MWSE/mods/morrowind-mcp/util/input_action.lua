@@ -582,6 +582,11 @@ function this.RegisterEventHandlers()
     event.register(tes3.event.simulate, OnSimulate)
 end
 
+function this.UnregisterEventHandlers()
+    event.unregister(tes3.event.loaded, OnLoaded)
+    event.unregister(tes3.event.simulate, OnSimulate)
+end
+
 --- Execute a tap for a resolved input binding.
 --- Only keyboard and mouse are supported at this layer.
 ---@param binding tes3inputConfig?

@@ -1,8 +1,6 @@
 local config = require("morrowind-mcp.config")
 local disclaimer = require("morrowind-mcp.disclaimer")
 local settings = require("morrowind-mcp.settings")
-local ui_action = require("morrowind-mcp.util.ui_action")
-local input_action = require("morrowind-mcp.util.input_action")
 local unittest = require("morrowind-mcp.unittest")
 
 if config.development.unitTest then
@@ -73,8 +71,6 @@ local function StartServer()
 end
 
 local function StartRuntime()
-    input_action.RegisterEventHandlers()
-    ui_action.RegisterEventHandlers()
     RegisterSkipMainMenu()
     StartServer()
 end

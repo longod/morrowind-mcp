@@ -21,6 +21,7 @@ description: "Start Morrowind from NEW GAME, discover how far current Morrowind 
 7. 繰り返し観測してもmilestoneがなく、新しいcapabilityがなく、SituationとEvidenceから導いた合理的なCandidate actionsを評価しても候補がない場合だけ `stalled` を報告する。`stalled` または `failed` の前に、未実行候補の除外理由を含む証拠と最終assessmentを記録する。公開されていれば、`mw-debug-action` で `memory:SaveDebugDocuments` を一度だけ呼び、結果と `<Paths.modDataDir>\memory-dump` を記録してからサーバーを停止する。
 8. `completed` は、個別のtool操作やscenario JSONの構造検証が成功しただけでは報告しない。探索開始時にcompletion goalと、そこへ至る複数の必須milestoneを定義し、各milestoneについて操作後の観測assertionが成功した場合だけ達成済みとする。必須milestoneが一つでも未達なら `completed` と報告せず、探索を継続する。
 9. `tests/game_progression/run.py --validate-only` でscenarioの構造を検証する。これはゲーム進行の完了判定ではない。必須milestoneの全assertion、最終状態の再観測、completion goalの達成を確認した場合だけ `completed` を報告する。全milestoneを達成する前に進行条件を満たせなくなった場合は、手順7の条件を満たすまで `stalled` と報告してはならない。最終報告にはcompletion goal、達成済みmilestone、未達milestone、最終観測を含める。
+10. 再生終了時は、ほかのテストと同じようにMorrowind停止後の `MWSE.log` を実行ディレクトリへコピーする。成果物は `run.json` と `MWSE.log` とし、ログが存在しない場合やコピーに失敗した場合は警告を記録する。
 
 ## 再生
 
