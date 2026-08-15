@@ -858,6 +858,37 @@ function this:tes3itemData(value)
     return self:ItemDataSummary(value)
 end
 
+--- Produce the shared minimal mobile-object representation from its placed reference.
+---@param value tes3mobileObject?
+---@return MCP.AnyMap?
+function this:MobileSummary(value)
+    if not value then
+        return nil
+    end
+    return self:Reference(value.reference)
+end
+
+--- Serialize a contiguous statistic array with its zero-based TES3 identifier and resolved name.
+---@param values tes3statistic[]|tes3statisticSkill[]?
+---@param getName fun(id: number): string
+---@return MCP.AnyMap[]?
+function this:NamedStatistics(values, getName)
+    if not values then
+        return nil
+    end
+    local output = jsonrpc.array(#values)
+    for index, statistic in ipairs(values) do
+        local id = index - 1
+        local summary = self:tes3statistic(statistic)
+        if summary then
+            summary.id = id
+            summary.name = getName(id)
+            table.insert(output, summary)
+        end
+    end
+    return table.size(output) > 0 and output or nil
+end
+
 ---@param value tes3mobileActor?
 ---@return MCP.AnyMap?
 function this:tes3mobileActor(value)
@@ -867,7 +898,25 @@ function this:tes3mobileActor(value)
     if self:IsFull() then
         return object.tes3mobileActor(value)
     end
-    return self:Reference(value.reference)
+    local output = self:MobileSummary(value)
+    if output then
+        output.health = value.health and self:tes3statistic(value.health)
+        output.magicka = value.magicka and self:tes3statistic(value.magicka)
+        output.fatigue = value.fatigue and self:tes3statistic(value.fatigue)
+    end
+    if output and self:IsStandard() then
+        output.actorType = enumname.actorType(value.actorType)
+        output.attributes = self:NamedStatistics(value.attributes, tes3.getAttributeName)
+        output.encumbrance = value.encumbrance and self:tes3statistic(value.encumbrance)
+        output.magickaMultiplier = value.magickaMultiplier and self:tes3statistic(value.magickaMultiplier)
+        output.inCombat = value.inCombat == true or nil
+        output.isDead = value.isDead == true or nil
+        output.isAttackingOrCasting = value.isAttackingOrCasting == true or nil
+        output.isMoving = (value.isMovingForward or value.isMovingBack or value.isMovingLeft or value.isMovingRight) == true or nil
+        output.isRunning = value.isRunning == true or nil
+        output.isSneaking = value.isSneaking == true or nil
+    end
+    return self:Finish("tes3mobileActor", output)
 end
 
 ---@param value tes3mobileCreature?
@@ -879,7 +928,13 @@ function this:tes3mobileCreature(value)
     if self:IsFull() then
         return object.tes3mobileCreature(value)
     end
-    return self:Reference(value.reference)
+    local output = self:tes3mobileActor(value)
+    if output and self:IsStandard() then
+        output.combat = value.combat and self:tes3statistic(value.combat)
+        output.magic = value.magic and self:tes3statistic(value.magic)
+        output.stealth = value.stealth and self:tes3statistic(value.stealth)
+    end
+    return self:Finish("tes3mobileCreature", output)
 end
 
 ---@param value tes3mobileNPC?
@@ -891,7 +946,11 @@ function this:tes3mobileNPC(value)
     if self:IsFull() then
         return object.tes3mobileNPC(value)
     end
-    return self:Reference(value.reference)
+    local output = self:tes3mobileActor(value)
+    if output and self:IsStandard() then
+        output.skills = self:NamedStatistics(value.skills, tes3.getSkillName)
+    end
+    return self:Finish("tes3mobileNPC", output)
 end
 
 ---@param value tes3mobilePlayer?
@@ -903,7 +962,17 @@ function this:tes3mobilePlayer(value)
     if self:IsFull() then
         return object.tes3mobilePlayer(value)
     end
-    return self:Reference(value.reference)
+    local output = self:tes3mobileNPC(value)
+    if output and self:IsStandard() then
+        output.alwaysRun = value.alwaysRun == true or nil
+        output.autoRun = value.autoRun == true or nil
+        output.firstPerson = value.is3rdPerson == false or nil
+        output.inJail = value.inJail == true or nil
+        output.sleeping = value.sleeping == true or nil
+        output.traveling = value.traveling == true or nil
+        output.waiting = value.waiting == true or nil
+    end
+    return self:Finish("tes3mobilePlayer", output)
 end
 
 ---@param value tes3mobileProjectile?
@@ -915,7 +984,17 @@ function this:tes3mobileProjectile(value)
     if self:IsFull() then
         return object.tes3mobileProjectile(value)
     end
-    return self:Reference(value.reference)
+    local output = self:MobileSummary(value)
+    if output and self:IsStandard() then
+        output.attackSwing = value.attackSwing
+        output.damage = value.damage
+        output.expire = value.expire
+        output.firingMobile = self:MobileSummary(value.firingMobile)
+        output.firingWeapon = self:ItemSummary(value.firingWeapon)
+        output.initialSpeed = value.initialSpeed
+        output.velocity = value.velocity
+    end
+    return self:Finish("tes3mobileProjectile", output)
 end
 
 ---@param value tes3mobileSpellProjectile?
@@ -927,7 +1006,12 @@ function this:tes3mobileSpellProjectile(value)
     if self:IsFull() then
         return object.tes3mobileSpellProjectile(value)
     end
-    return self:Reference(value.reference)
+    local output = self:tes3mobileProjectile(value)
+    if output and self:IsStandard() then
+        output.rotationSpeed = value.rotationSpeed
+        output.spellInstanceSerial = value.spellInstanceSerial
+    end
+    return self:Finish("tes3mobileSpellProjectile", output)
 end
 
 ---@param value tes3reference?

@@ -220,6 +220,89 @@ function this.Test()
         unitwind:expect(serializer:tes3mobileSpellProjectile(nil)).toBe(nil)
     end)
 
+    unitwind:test("Mobile summaries retain vitals and add named standard statistics", function()
+        local cell = {
+            id = "Balmora",
+            objectType = tes3.objectType.cell,
+            isValid = function() return true end,
+            isInterior = false,
+            gridX = -3,
+            gridY = -2,
+        }
+        local reference = {
+            id = "FargothRef",
+            isValid = function() return true end,
+            baseObject = { id = "Fargoth", objectType = tes3.objectType.npc, isValid = function() return true end, name = "Fargoth" },
+            cell = cell,
+        }
+        local mobile = {
+            reference = reference,
+            actorType = tes3.actorType.npc,
+            health = { current = 25, base = 30 },
+            magicka = { current = 15, base = 20 },
+            fatigue = { current = 10, base = 40 },
+            attributes = {
+                { current = 40, base = 40 },
+            },
+            skills = {
+                { current = 25, base = 20, type = tes3.skillType.major },
+            },
+            inCombat = true,
+            isMovingForward = true,
+            isRunning = true,
+            alwaysRun = true,
+        }
+        unitwind:mock(tes3, "getAttributeName", function(id)
+            unitwind:expect(id).toBe(0)
+            return "strength"
+        end)
+        unitwind:mock(tes3, "getSkillName", function(id)
+            unitwind:expect(id).toBe(0)
+            return "Block"
+        end)
+
+        local minimal = serializerModule.new({ detailLevel = "minimal" }):tes3mobilePlayer(mobile)
+        local standard = serializerModule.new({ detailLevel = "standard" }):tes3mobilePlayer(mobile)
+
+        unitwind:expect(minimal.id).toBe("FargothRef")
+        unitwind:expect(minimal.health.current).toBe(25)
+        unitwind:expect(minimal.attributes).toBe(nil)
+        unitwind:expect(standard.actorType).toBe("npc")
+        unitwind:expect(standard.health.current).toBe(25)
+        unitwind:expect(standard.attributes[1].id).toBe(0)
+        unitwind:expect(standard.attributes[1].name).toBe("strength")
+        unitwind:expect(standard.skills[1].id).toBe(0)
+        unitwind:expect(standard.skills[1].name).toBe("Block")
+        unitwind:expect(standard.skills[1].type).toBe("major")
+        unitwind:expect(standard.inCombat).toBe(true)
+        unitwind:expect(standard.isMoving).toBe(true)
+        unitwind:expect(standard.alwaysRun).toBe(true)
+    end)
+
+    unitwind:test("Standard spell projectile adds projectile-specific state", function()
+        local reference = {
+            id = "SpellProjectileRef",
+            isValid = function() return true end,
+            baseObject = { id = "Projectile", objectType = tes3.objectType.static, isValid = function() return true end },
+        }
+        local projectile = {
+            reference = reference,
+            damage = 20,
+            expire = 5,
+            initialSpeed = 100,
+            rotationSpeed = 2,
+            spellInstanceSerial = 99,
+        }
+
+        local result = serializerModule.new({ detailLevel = "standard" }):tes3mobileSpellProjectile(projectile)
+
+        unitwind:expect(result.damage).toBe(20)
+        unitwind:expect(result.expire).toBe(5)
+        unitwind:expect(result.initialSpeed).toBe(100)
+        unitwind:expect(result.rotationSpeed).toBe(2)
+        unitwind:expect(result.spellInstanceSerial).toBe(99)
+    end)
+
     unitwind:test("Debug validation rejects circular JSON output", function()
         local output = {}
         output.self = output
