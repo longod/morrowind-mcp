@@ -136,8 +136,19 @@ local function Validate(params)
     if type(params) ~= "table" or type(params.ref) ~= "table" then
         return false, { "Expected completion reference." }
     end
+    if params.ref.type == "ref/prompt" then
+        if type(params.ref.name) ~= "string" or params.ref.name == "" then
+            return false, { "Expected prompt completion reference name." }
+        end
+        if type(params.argument) ~= "table" or type(params.argument.name) ~= "string" or type(params.argument.value) ~= "string" then
+            return false, { "Expected completion argument name and string value." }
+        end
+        -- Prompts without dedicated candidate providers still complete successfully with no suggestions.
+        -- FIXME prompts completion providers and separate responsibilities files.
+        return true, errors
+    end
     if params.ref.type ~= "ref/resource" then
-        return false, { "Only resource-template completion is supported." }
+        return false, { "Expected resource-template or prompt completion reference." }
     end
     if params.ref.uri ~= templates.memoryEntity.uriTemplate and params.ref.uri ~= templates.screenshot.uriTemplate then
         return false, { "Unknown resource template." }

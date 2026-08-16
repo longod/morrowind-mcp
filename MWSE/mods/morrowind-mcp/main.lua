@@ -444,7 +444,7 @@ local function RegisterTestEvents()
     local function savedCallback(e)
         logger:trace("saved %s", FormatEventData(e))
     end
-    event.register(tes3.event.saved, savedCallback)
+    -- event.register(tes3.event.saved, savedCallback)
 
     ---@param e topicAddedEventData
     local function topicAddedCallback(e)
@@ -516,6 +516,12 @@ local function RegisterTestEvents()
         logger:trace("itemDropped %s", FormatEventData(e))
     end
     event.register(tes3.event.itemDropped, itemDroppedCallback)
+
+    --- @param e uiEventEventData
+    local function uiEventCallback(e)
+        logger:trace("uiEvent %s", FormatEventData(e))
+    end
+    -- event.register(tes3.event.uiEvent, uiEventCallback)
 
     --- @param e enterFrameEventData
     local function enterFrameCallback(e)

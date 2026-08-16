@@ -110,6 +110,18 @@ function this.Test()
         unitwind:expect(incomplete.valid).toBe(false)
     end)
 
+    unitwind:test("Prompt completion returns no candidates when no provider is registered", function()
+        local result = completion.Complete({
+            ref = { type = "ref/prompt", name = "mw-translate" },
+            argument = { name = "language", value = "en" },
+        })
+
+        unitwind:expect(result.valid).toBe(true)
+        unitwind:expect(#result.values).toBe(0)
+        unitwind:expect(result.total).toBe(0)
+        unitwind:expect(result.hasMore).toBe(false)
+    end)
+
     local testsPassed = unitwind.testsPassed
     local testsFailed = unitwind.testsFailed
     unitwind:finish()

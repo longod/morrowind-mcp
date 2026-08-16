@@ -226,6 +226,111 @@ function this.Test()
         end
     end)
 
+    unitwind:test("GetActionProperties returns static inventory background actions", function()
+        local root = NewElement(nil, "layout")
+        for _, menuName in ipairs({ "MenuContents", "MenuInventory" }) do
+            local menu = NewElement(menuName, "rect", root)
+            local border = NewElement("PartDragMenu_thick_border", "model", menu)
+            local center = NewElement("PartDragMenu_center_frame", "layout", border)
+            local frame = NewElement("PartDragMenu_drag_frame", "layout", center)
+            local firstNull = NewElement("null", "layout", frame)
+            local secondNull = NewElement("null", "layout", firstNull)
+            local main = NewElement("PartDragMenu_main", "layout", secondNull)
+            local scrollPane = NewElement(menuName .. "_scrollpane", "scrollPane", main)
+            local holder = NewElement("null", "layout", scrollPane)
+            local outerFrame = NewElement("PartScrollPane_outer_frame", "layout", holder)
+
+            if menuName == "MenuInventory" then
+                local bottom = NewElement("MenuInventory_bottom_layout", "layout", main)
+                local items = NewElement("MenuInventory_items_layout", "layout", bottom)
+                local null = NewElement("V_NULL", "layout", items)
+                scrollPane.parent = null
+            end
+
+            local properties = uiAction.GetActionProperties(outerFrame)
+
+            unitwind:expect(properties == nil).toBe(false)
+            if properties then
+                unitwind:expect(table.size(properties)).toBe(1)
+                unitwind:expect(properties[1]).toBe("mouseClick")
+            end
+
+            local effects = uiAction.GetActionEffects(outerFrame)
+            if menuName == "MenuContents" then
+                unitwind:expect(effects == nil).toBe(false)
+                if effects then
+                    unitwind:expect(table.size(effects)).toBe(1)
+                    unitwind:expect(effects[1].does).toBe("place_cursor_item_in_container")
+                end
+            end
+        end
+    end)
+
+    unitwind:test("GetActionProperties does not expose barter background action", function()
+        local root = NewElement(nil, "layout")
+        local menu = NewElement("MenuBarter", "rect", root)
+        local border = NewElement("PartDragMenu_thick_border", "model", menu)
+        local center = NewElement("PartDragMenu_center_frame", "layout", border)
+        local frame = NewElement("PartDragMenu_drag_frame", "layout", center)
+        local firstNull = NewElement("null", "layout", frame)
+        local secondNull = NewElement("null", "layout", firstNull)
+        local main = NewElement("PartDragMenu_main", "layout", secondNull)
+        local scrollPane = NewElement("MenuBarter_scrollpane", "scrollPane", main)
+        local holder = NewElement("null", "layout", scrollPane)
+        local outerFrame = NewElement("PartScrollPane_outer_frame", "layout", holder)
+
+        unitwind:expect(uiAction.GetActionProperties(outerFrame)).toBe(nil)
+    end)
+
+    unitwind:test("GetActionProperties returns static inventory portrait action", function()
+        local root = NewElement(nil, "layout")
+        local menu = NewElement("MenuInventory", "rect", root)
+        local border = NewElement("PartDragMenu_thick_border", "model", menu)
+        local center = NewElement("PartDragMenu_center_frame", "layout", border)
+        local frame = NewElement("PartDragMenu_drag_frame", "layout", center)
+        local firstNull = NewElement("null", "layout", frame)
+        local secondNull = NewElement("null", "layout", firstNull)
+        local main = NewElement("PartDragMenu_main", "layout", secondNull)
+        local bottom = NewElement("MenuInventory_bottom_layout", "layout", main)
+        local character = NewElement("MenuInventory_character_layout", "layout", bottom)
+        local characterBox = NewElement("MenuInventory_character_box", "layout", character)
+        local portrait = NewElement("MenuInventory_CharacterImage", "image", characterBox)
+
+        local properties = uiAction.GetActionProperties(portrait)
+
+        unitwind:expect(properties == nil).toBe(false)
+        if properties then
+            unitwind:expect(table.size(properties)).toBe(1)
+            unitwind:expect(properties[1]).toBe("mouseClick")
+        end
+    end)
+
+    unitwind:test("GetActionEffects returns conditional static inventory target outcomes", function()
+        local root = NewElement(nil, "layout")
+        local menu = NewElement("MenuInventory", "rect", root)
+        local border = NewElement("PartDragMenu_thick_border", "model", menu)
+        local center = NewElement("PartDragMenu_center_frame", "layout", border)
+        local frame = NewElement("PartDragMenu_drag_frame", "layout", center)
+        local firstNull = NewElement("null", "layout", frame)
+        local secondNull = NewElement("null", "layout", firstNull)
+        local main = NewElement("PartDragMenu_main", "layout", secondNull)
+        local bottom = NewElement("MenuInventory_bottom_layout", "layout", main)
+        local items = NewElement("MenuInventory_items_layout", "layout", bottom)
+        local null = NewElement("V_NULL", "layout", items)
+        local scrollPane = NewElement("MenuInventory_scrollpane", "scrollPane", null)
+        local holder = NewElement("null", "layout", scrollPane)
+        local outerFrame = NewElement("PartScrollPane_outer_frame", "layout", holder)
+
+        local effects = uiAction.GetActionEffects(outerFrame)
+
+        unitwind:expect(effects == nil).toBe(false)
+        if effects then
+            unitwind:expect(table.size(effects)).toBe(2)
+            unitwind:expect(effects[1].does).toBe("unequip_cursor_item_to_player_inventory")
+            unitwind:expect(effects[2].does).toBe("place_cursor_item_in_player_inventory")
+        end
+    end)
+
     unitwind:test("Observed properties override static properties", function()
         uiAction.ClearObservedHints()
 

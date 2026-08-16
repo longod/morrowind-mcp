@@ -44,6 +44,15 @@ After the click, the original tile path may be stale and is not reused. The curs
 
 ## Phase 2A: Discover MenuInventory Targets
 
+### Confirmed Targets
+
+Manual live probes confirmed these exact `mw-menu-action` destinations:
+
+- `MenuInventory_CharacterImage` accepts `mouseClick` as the equipment destination.
+- The MenuInventory `PartScrollPane_outer_frame` accepts `mouseClick` as the player inventory background destination.
+
+Both paths are published through curated `staticHints` in `util/ui_action.lua`; generic `image` or scroll-pane action discovery is intentionally not enabled. The probes established that the native element event routes the action, but they did not replace the release-based empty-grid probe required below.
+
 1. During the existing `menu mode on` to `menu mode off` interval in `tests/server_test.ps1`, fetch `mw-menu-fetch` with `output_mode=actions`.
 2. Record every visible executable action with its path, id, name, type, text, and widget/action metadata.
 3. Identify candidate targets for the player inventory region and character portrait from the returned action list and the corresponding tree output.
@@ -72,6 +81,10 @@ The next probe must therefore:
 Add a temporary release observer only to record the actual destination element; do not advertise it as an `inventory_target` until the probe succeeds.
 
 ## Phase 2B: Equip and Unequip Normal Paths
+
+### Routing Status
+
+The portrait and player inventory background targets have both completed manual `mouseClick` probes. The remaining work is to record the two post-destination fetches and cursor lifecycle in `tests/server_test.ps1` before this phase can meet its acceptance criteria.
 
 1. Select a non-equipped player item tile and retain its source snapshot.
 2. Click the source tile, then verify the expected `cursor_tile` in a later `mw-menu-fetch` call.

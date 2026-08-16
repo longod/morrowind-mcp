@@ -133,8 +133,11 @@ try {
     $expectedNames = @($links | ForEach-Object { $_.name })
     if (($firstValues -join "`0") -ne ($expectedNames -join "`0")) { throw "Completion result order does not match the generated screenshot names." }
 
-    Send-McpInvalidRequest -Client $client -Url $config.Connection.url -SessionId $session.SessionId -Message @{ jsonrpc = "2.0"; id = 7; method = "completion/complete"; params = @{ ref = @{ type = "ref/resource"; uri = "morrowind://unknown/{value}" }; argument = @{ name = "value"; value = "" } } }
-    Send-McpInvalidRequest -Client $client -Url $config.Connection.url -SessionId $session.SessionId -Message @{ jsonrpc = "2.0"; id = 8; method = "completion/complete"; params = @{ ref = @{ type = "ref/resource"; uri = "morrowind://memory/{collection}/{entity_id}/{document}.json" }; argument = @{ name = "document"; value = "" }; context = @{ arguments = @{ collection = "actors" } } } }
+    $promptCompletion = Send-McpRequest -Client $client -Url $config.Connection.url -SessionId $session.SessionId -Message @{ jsonrpc = "2.0"; id = 7; method = "completion/complete"; params = @{ ref = @{ type = "ref/prompt"; name = "mw-translate" }; argument = @{ name = "language"; value = "en" } } }
+    if (@($promptCompletion.completion.values).Count -ne 0 -or $promptCompletion.completion.total -ne 0 -or $promptCompletion.completion.hasMore) { throw "Prompt completion without a provider must return an empty result." }
+
+    Send-McpInvalidRequest -Client $client -Url $config.Connection.url -SessionId $session.SessionId -Message @{ jsonrpc = "2.0"; id = 8; method = "completion/complete"; params = @{ ref = @{ type = "ref/resource"; uri = "morrowind://unknown/{value}" }; argument = @{ name = "value"; value = "" } } }
+    Send-McpInvalidRequest -Client $client -Url $config.Connection.url -SessionId $session.SessionId -Message @{ jsonrpc = "2.0"; id = 9; method = "completion/complete"; params = @{ ref = @{ type = "ref/resource"; uri = "morrowind://memory/{collection}/{entity_id}/{document}.json" }; argument = @{ name = "document"; value = "" }; context = @{ arguments = @{ collection = "actors" } } } }
 
     $deleteRequest = New-McpRequest -Method "Delete" -Url $config.Connection.url -SessionId $session.SessionId -Body $null
     $deleteResponse = $client.SendAsync($deleteRequest).GetAwaiter().GetResult()

@@ -198,9 +198,12 @@ end
 ---@return MCP.AnyMap?
 function this.tes3uiScrollPane(i, o)
     o.contentPane = tes3uiElementWeak(i.contentPane)
-    o.positionX = i.positionX
-    o.positionY = i.positionY
+    o.horizontalScrollBar = tes3uiElementWeak(i.horizontalScrollBar)
+    -- The spot value -32588 or a negative number likely indicates that it cannot be scrolled in that direction. I guess.
+    o.scrollOffsetX = i.positionX >=0 and i.positionX or nil
+    o.scrollOffsetY = i.positionY >=0 and i.positionY or nil
     o.scrollbarVisible = i.scrollbarVisible
+    o.verticalScrollBar = tes3uiElementWeak(i.verticalScrollBar)
     return o
 end
 ---@param i tes3uiSlider
@@ -336,6 +339,36 @@ local function SerializeInventoryTile(tile, menu)
     return metadata
 end
 
+--- Serializes curated conditional outcomes without exposing the static hint implementation itself.
+---@param effects MCP.UIActionEffect[]?
+---@return MCP.AnyMap[]? serializedEffects
+local function SerializeActionEffects(effects)
+    if not effects then
+        return nil
+    end
+
+    local serializedEffects = jsonrpc.array()
+    for _, effect in ipairs(effects) do
+        table.insert(serializedEffects, jsonrpc.object({
+            when = jsonrpc.object(effect.when),
+            does = effect.does,
+        }))
+    end
+    return serializedEffects
+end
+
+--- Returns the top-level menu name when the live element exposes its owning menu.
+---@param element tes3uiElement
+---@return string? menuName
+local function GetTopLevelMenuName(element)
+    if type(element.getTopLevelMenu) ~= "function" then
+        return nil
+    end
+
+    local menu = element:getTopLevelMenu()
+    return menu and menu.name or nil
+end
+
 --- Finds a live element's raw-index path relative to a root so filtered action paths remain executable from mainRoot.
 ---@param root tes3uiElement?
 ---@param target tes3uiElement?
@@ -379,6 +412,7 @@ function this.GetScreenRect(element)
         return nil
     end
 
+    -- FIXME optimize, pass parent position down the tree instead of walking up to the root each time.
     local x = viewportWidth / 2
     local y = -viewportHeight / 2
     local current = element
@@ -392,8 +426,8 @@ function this.GetScreenRect(element)
         y = y,
         width = element.width,
         height = element.height,
-        viewport_width = viewportWidth,
-        viewport_height = viewportHeight,
+        -- viewport_width = viewportWidth,
+        -- viewport_height = viewportHeight,
     })
 end
 
@@ -421,8 +455,13 @@ function this.CollectActionable(root, rootPath)
                 name = element.name,
                 type = element.type,
                 text = element.text,
-                screen_rect = this.GetScreenRect(element),
+                -- screen_rect = this.GetScreenRect(element), -- currently, no nessary for action execution
+                menu_name = GetTopLevelMenuName(element),
             })
+            local effects = SerializeActionEffects(ui_action.GetActionEffects(element))
+            if effects then
+                action.action_effects = effects
+            end
             local tile = ui_action.GetInventoryTile(element)
             if tile then
                 action.inventory_tile = SerializeInventoryTile(tile, element:getTopLevelMenu())

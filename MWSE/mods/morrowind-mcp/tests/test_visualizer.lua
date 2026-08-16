@@ -31,7 +31,7 @@ function this.Test()
     unitwind:test("Global disable requests cleanup refresh", function()
         local graph = { edges = {}, nodes = {} } ---@cast graph MCP.Pathfinding
         local terrain = { grids = {} } ---@cast terrain MCP.TerrainGridManager
-        local visualizer = visualizerModule.new(graph, terrain)
+        local visualizer = visualizerModule.new(graph, terrain, { enabled = true }) ---@diagnostic disable-line: missing-fields
         visualizer.refreshRequested = false
         visualizer:SetEnabled(false)
         unitwind:expect(visualizer.options.enabled).toBe(false)

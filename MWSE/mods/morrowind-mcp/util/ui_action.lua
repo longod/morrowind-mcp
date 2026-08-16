@@ -128,6 +128,43 @@ local staticHints = {
         properties = { "mouseClick" },
         name = "MenuScroll_Close"
     },
+    {
+        path = "layout/MenuContents/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/MenuContents_scrollpane/null/PartScrollPane_outer_frame",
+        properties = { "mouseClick" },
+        name = "PartScrollPane_outer_frame",
+        effects = {
+            {
+                when = { cursor_tile_present = true },
+                does = "place_cursor_item_in_container",
+            },
+        },
+    },
+    {
+        path = "layout/MenuInventory/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/MenuInventory_bottom_layout/MenuInventory_items_layout/V_NULL/MenuInventory_scrollpane/null/PartScrollPane_outer_frame",
+        properties = { "mouseClick" },
+        name = "PartScrollPane_outer_frame",
+        effects = {
+            {
+                when = { cursor_tile_is_equipped = true },
+                does = "unequip_cursor_item_to_player_inventory",
+            },
+            {
+                when = { cursor_tile_is_equipped = false },
+                does = "place_cursor_item_in_player_inventory",
+            },
+        },
+    },
+    {
+        path = "layout/MenuInventory/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/MenuInventory_bottom_layout/MenuInventory_character_layout/MenuInventory_character_box/MenuInventory_CharacterImage",
+        properties = { "mouseClick" },
+        name = "MenuInventory_CharacterImage",
+        effects = {
+            {
+                when = { cursor_tile_present = true },
+                does = "equip_cursor_item",
+            },
+        },
+    },
 
 }
 
@@ -136,6 +173,11 @@ local staticHints = {
 ---@field properties string[] -- tes3.uiProperty names
 ---@field observed boolean?
 ---@field name string?
+---@field effects MCP.UIActionEffect[]?
+
+---@class MCP.UIActionEffect
+---@field when MCP.AnyMap
+---@field does string
 
 -- Runtime observations override static hints because they reflect the currently loaded UI tree.
 ---@type table<string, MCP.UIActionHint>
@@ -283,6 +325,7 @@ end
 ---@param e uiPreEventEventData
 function this.ObserveUiPreEvent(e)
     local source = e and e.source
+
     if not IsCollectableElement(source) then
         return nil
     end
@@ -364,7 +407,7 @@ end
 ---@param element tes3uiElement
 ---@return MCP.UIActionHint?
 local function GetActionHint(element)
-    if not IsCollectableElement(element) then
+    if not IsValidElement(element) or element.widget ~= nil then
         return nil
     end
 
@@ -374,9 +417,11 @@ local function GetActionHint(element)
     end
 
     -- Runtime observations win over static hints so modded or stateful menus can refine defaults.
-    local observedHint = observedHintByPath[path]
-    if observedHint then
-        return observedHint
+    if element.type == "layout" then
+        local observedHint = observedHintByPath[path]
+        if observedHint then
+            return observedHint
+        end
     end
 
     local staticHint = staticHintByPath[path]
@@ -401,6 +446,15 @@ function this.GetActionProperties(element)
 
     local hint = GetActionHint(element)
     return hint and hint.properties or nil
+end
+
+--- Returns verified, state-conditional outcomes for a curated native action target.
+--- Effects describe the expected vanilla operation; callers confirm success from later UI state.
+---@param element tes3uiElement
+---@return MCP.UIActionEffect[]? effects
+function this.GetActionEffects(element)
+    local hint = GetActionHint(element)
+    return hint and hint.effects or nil
 end
 
 --- Returns the live inventory tile associated with an element, if it belongs to a supported vanilla pane.
