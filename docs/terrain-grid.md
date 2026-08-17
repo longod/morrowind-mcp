@@ -25,7 +25,7 @@ Before implementing grid generation, the outdoor server test must establish that
 3. The experimental collision group can be inspected without crashing the runtime.
 4. Root-filtered `tes3.rayTest` calls can distinguish landscape, static-object, and pick-object scene graphs.
 
-If terrain geometry or height cannot be read safely, implementation stops until an alternative source is selected. Ray picking is scene-graph triangle testing, not a swept player collision shape, so any disagreement with movement collision must be recorded. Current MWSE exposes each triangle's index triplet through `niTriangle.vertices`; generated metadata incorrectly documents the property as `verticies`. Direct mesh sampling is preferred, with downward rays restricted to the cell landscape root retained as a fallback.
+If terrain geometry or height cannot be read safely, implementation stops until an alternative source is selected. Ray picking is scene-graph triangle testing, not a swept player collision shape, so any disagreement with movement collision must be recorded. MWSE exposes each triangle's three 0-based indices through `niTriangle.vertices`. Direct mesh sampling is preferred, with downward rays restricted to the cell landscape root retained as a fallback.
 
 ## Module Layout
 
@@ -137,4 +137,4 @@ These values are the builder's accumulated Step work duration from [result_20260
 - Scene-graph ray picking is an approximation for player-volume collision.
 - Normative behavior and future proposals are maintained in separate documents.
 - The Pelagiad outdoor server scene exposed 256 land shapes and 8,192 land triangles in the player cell. Its experimental collision group exposed zero `collidees` and 31 referenced `NiNode` records under `colliders`; code must not infer static or dynamic semantics from the array names alone.
-- Current MWSE metadata documents `niTriangle.verticies`, but runtime probing found the actual property is `niTriangle.vertices`, containing three 0-based indices. Grid generation uses these indices and retains root-filtered downward rays as a fallback.
+- `niTriangle.vertices` contains three 0-based indices. Grid generation uses these indices and retains root-filtered downward rays as a fallback.

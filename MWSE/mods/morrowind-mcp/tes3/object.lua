@@ -1651,9 +1651,6 @@ function this.tes3magicEffect(i, o)
     if not i then
         return nil
     end
-    -- actually tes3magicEffect actually  inherit tes3baseObject, but meta data is not inherit.
-    -- https://github.com/MWSE/MWSE/blob/7f2fab33b05627b46cd3d1357dbe3ad4ee1b073f/MWSE/TES3MagicEffect.h#L227
-    ---@diagnostic disable-next-line: param-type-mismatch
     o = tes3baseObject(i, o)
     if not o then
         return nil

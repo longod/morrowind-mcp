@@ -14,19 +14,6 @@ local exteriorCellSize = cellutil.exteriorCellSize
 ---@field triangle_count integer
 ---@field root_type string?
 
----@class MCP.TerrainIndexValueInspection
----@field value_type string Lua runtime type of the inspected value.
----@field [string] number|string? Numeric index values keyed by their diagnostic string index.
-
----@class MCP.TerrainTriangleAccessInspection
----@field available boolean
----@field triangle_type string?
----@field documented_property_ok boolean?
----@field corrected_property_ok boolean?
----@field verticies MCP.TerrainIndexValueInspection?
----@field vertices MCP.TerrainIndexValueInspection?
----@field direct MCP.TerrainIndexValueInspection?
-
 ---@class MCP.TerrainCollisionRecordsInspection
 ---@field available boolean
 ---@field record_count integer
@@ -65,7 +52,6 @@ local exteriorCellSize = cellutil.exteriorCellSize
 ---@field active_cell_count integer
 ---@field player_bounds MCP.TerrainPlayerBounds?
 ---@field landscape MCP.TerrainSceneRootInspection
----@field triangle_access MCP.TerrainTriangleAccessInspection
 ---@field world_landscape MCP.TerrainSceneRootInspection
 ---@field collision MCP.TerrainRuntimeCollisionInspection
 ---@field rays table<string, MCP.TerrainRayProbe>
@@ -105,51 +91,6 @@ local function InspectSceneRoot(root)
                 result.vertex_count = result.vertex_count + (node.data.vertexCount or 0)
                 result.triangle_count = result.triangle_count + (node.data.activeTriangleCount or 0)
             end
-        end
-    end
-    return result
-end
-
---- Inspect userdata as a possible index array while isolating unsupported accesses with pcall.
----@param value any
----@return MCP.TerrainIndexValueInspection
-local function InspectIndexValue(value)
-    local result = { value_type = type(value) }
-    if value == nil then
-        return result
-    end
-    for index = 0, 3 do
-        local ok, item = pcall(function() return value[index] end)
-        result[tostring(index)] = ok and item or nil
-    end
-    return result
-end
-
---- Compare documented and runtime triangle-index properties on the first available land triangle.
---- This probe records the MWSE metadata typo without making grid generation depend on diagnostics.
----@param root niNode?
----@return MCP.TerrainTriangleAccessInspection
-local function InspectTriangleAccess(root)
-    local result = { available = false }
-    if not root then
-        return result
-    end
-    for node in root:traverse({ type = ni.type.NiTriShape }) do
-        ---@cast node niTriShape
-        if node.data and node.data.activeTriangleCount > 0 then
-            local triangle = node.data.triangles[1]
-            result.available = triangle ~= nil
-            result.triangle_type = type(triangle)
-            if triangle then
-                local documentedOk, documented = pcall(function() return triangle.verticies end)
-                local correctedOk, corrected = pcall(function() return triangle.vertices end) ---@diagnostic disable-line: undefined-field
-                result.documented_property_ok = documentedOk
-                result.corrected_property_ok = correctedOk
-                result.verticies = InspectIndexValue(documentedOk and documented or nil)
-                result.vertices = InspectIndexValue(correctedOk and corrected or nil)
-                result.direct = InspectIndexValue(triangle)
-            end
-            return result
         end
     end
     return result
@@ -256,7 +197,6 @@ function this.ProbeRuntimeAccess()
 
     local landscapeRoot = cell and cell.landscape and cell.landscape.sceneNode or nil
     result.landscape = InspectSceneRoot(landscapeRoot)
-    result.triangle_access = InspectTriangleAccess(landscapeRoot)
     result.world_landscape = InspectSceneRoot(tes3.game.worldLandscapeRoot)
 
     local collisionOk, collisionOrError = pcall(function()
@@ -290,19 +230,46 @@ function this.ProbeRuntimeAccess()
 end
 
 ---@class MCP.TerrainSampleTriangle
----@field ax number
----@field ay number
----@field az number
----@field bx number
----@field by number
----@field bz number
----@field cx number
----@field cy number
----@field cz number
----@field normalZ number Absolute upward component of the face normal.
+---@field firstWeightX number
+---@field firstWeightY number
+---@field firstWeightOffset number
+---@field secondWeightX number
+---@field secondWeightY number
+---@field secondWeightOffset number
+---@field heightX number
+---@field heightY number
+---@field heightOffset number
+---@field inverseDenominator number Zero marks a degenerate triangle.
+---@field normalZSquared number Squared absolute upward component of the unit face normal.
+
+---@class MCP.TerrainSampleTriangleStore
+---@field firstWeightX number[]
+---@field firstWeightY number[]
+---@field firstWeightOffset number[]
+---@field secondWeightX number[]
+---@field secondWeightY number[]
+---@field secondWeightOffset number[]
+---@field heightX number[]
+---@field heightY number[]
+---@field heightOffset number[]
+---@field inverseDenominator number[]
+---@field normalZSquared number[]
 
 ---@class MCP.TerrainHeightSampler
----@field Sample fun(self: MCP.TerrainHeightSampler, x: number, y: number): number?, number?
+---@field Sample fun(self: MCP.TerrainHeightSampler, x: number, y: number): number?, number? Returns height and squared upward unit-normal component.
+
+---@class MCP.TerrainSamplerMetrics
+---@field mode "mesh"|"ray" Terrain sampling implementation selected at construction.
+---@field triangle_storage_mode "aos"|"soa" Shared representation used for temporary vertices and completed terrain triangles.
+---@field bucket_size number? Spatial bucket width used by mesh sampling.
+---@field bucket_count integer? Number of buckets per cell axis for mesh sampling.
+---@field transformed_vertex_count integer Number of source vertices transformed into world space.
+---@field triangle_count integer Number of usable land triangles stored by the sampler.
+---@field bucket_registration_count integer Number of triangle-to-bucket registrations.
+---@field bucket_occupancy_mean number Mean registrations per spatial bucket.
+---@field bucket_occupancy_max integer Largest number of triangle registrations in one bucket.
+---@field construction_elapsed_milliseconds number Wall-clock duration of sampler construction.
+---@field construction_memory_delta_kilobytes number Lua heap delta observed during sampler construction.
 
 ---@class MCP.TerrainSampler: MCP.TerrainHeightSampler
 ---@field mode "mesh"|"ray"
@@ -315,7 +282,10 @@ end
 ---@field bucketSize number?
 ---@field bucketCount integer?
 ---@field triangles MCP.TerrainSampleTriangle[]?
+---@field triangleStore MCP.TerrainSampleTriangleStore?
+---@field triangleStorageMode "aos"|"soa"
 ---@field buckets table<integer, integer[]>?
+---@field metrics MCP.TerrainSamplerMetrics Construction diagnostics retained after Release.
 ---@field errorCount integer
 ---@field Sample fun(self: MCP.TerrainSampler, x: number, y: number): number?, number?
 ---@field Release fun(self: MCP.TerrainSampler)
@@ -329,50 +299,103 @@ local function Clamp(value, minimum, maximum)
     return math.max(minimum, math.min(maximum, value))
 end
 
---- Interpolate a world-space height inside one projected XY triangle using barycentric coordinates.
---- Degenerate triangles and points outside the triangle return nil.
+--- Derive reusable barycentric and height-plane coefficients from one world-space triangle.
+---@param firstX number
+---@param firstY number
+---@param firstZ number
+---@param secondX number
+---@param secondY number
+---@param secondZ number
+---@param thirdX number
+---@param thirdY number
+---@param thirdZ number
+---@return MCP.TerrainSampleTriangle
+function this.CreateTriangleCoefficients(firstX, firstY, firstZ, secondX, secondY, secondZ, thirdX, thirdY, thirdZ)
+    local denominator = (secondY - thirdY) * (firstX - thirdX) + (thirdX - secondX) * (firstY - thirdY)
+    local inverseDenominator = math.abs(denominator) > 0.000001 and 1 / denominator or 0
+    local firstWeightX = (secondY - thirdY) * inverseDenominator
+    local firstWeightY = (thirdX - secondX) * inverseDenominator
+    local firstWeightOffset = -firstWeightX * thirdX - firstWeightY * thirdY
+    local secondWeightX = (thirdY - firstY) * inverseDenominator
+    local secondWeightY = (firstX - thirdX) * inverseDenominator
+    local secondWeightOffset = -secondWeightX * thirdX - secondWeightY * thirdY
+    local heightX = (firstZ - thirdZ) * firstWeightX + (secondZ - thirdZ) * secondWeightX
+    local heightY = (firstZ - thirdZ) * firstWeightY + (secondZ - thirdZ) * secondWeightY
+    local heightOffset = thirdZ + (firstZ - thirdZ) * firstWeightOffset + (secondZ - thirdZ) * secondWeightOffset
+    return {
+        firstWeightX = firstWeightX, firstWeightY = firstWeightY, firstWeightOffset = firstWeightOffset,
+        secondWeightX = secondWeightX, secondWeightY = secondWeightY, secondWeightOffset = secondWeightOffset,
+        heightX = heightX, heightY = heightY, heightOffset = heightOffset,
+        inverseDenominator = inverseDenominator,
+        normalZSquared = 0,
+    }
+end
+
+--- Sample one triangle using barycentric and height-plane coefficients prepared during mesh construction.
 ---@param triangle MCP.TerrainSampleTriangle
 ---@param x number
 ---@param y number
 ---@return number?
 local function SampleTriangle(triangle, x, y)
-    local denominator = (triangle.by - triangle.cy) * (triangle.ax - triangle.cx)
-        + (triangle.cx - triangle.bx) * (triangle.ay - triangle.cy)
-    if math.abs(denominator) <= 0.000001 then
+    if triangle.inverseDenominator == 0 then
         return nil
     end
-    local first = ((triangle.by - triangle.cy) * (x - triangle.cx)
-        + (triangle.cx - triangle.bx) * (y - triangle.cy)) / denominator
-    local second = ((triangle.cy - triangle.ay) * (x - triangle.cx)
-        + (triangle.ax - triangle.cx) * (y - triangle.cy)) / denominator
+    local first = triangle.firstWeightX * x + triangle.firstWeightY * y + triangle.firstWeightOffset
+    local second = triangle.secondWeightX * x + triangle.secondWeightY * y + triangle.secondWeightOffset
     local third = 1 - first - second
     if first < -0.0001 or second < -0.0001 or third < -0.0001 then
         return nil
     end
-    return triangle.az * first + triangle.bz * second + triangle.cz * third
+    return triangle.heightX * x + triangle.heightY * y + triangle.heightOffset
 end
 
---- Sample terrain height and upward normal from the selected source implementation.
+--- Sample one structure-of-arrays triangle using coefficients prepared during mesh construction.
+---@param triangles MCP.TerrainSampleTriangleStore
+---@param index integer
+---@param x number
+---@param y number
+---@return number?
+local function SampleTriangleStore(triangles, index, x, y)
+    if triangles.inverseDenominator[index] == 0 then
+        return nil
+    end
+    local first = triangles.firstWeightX[index] * x + triangles.firstWeightY[index] * y + triangles.firstWeightOffset[index]
+    local second = triangles.secondWeightX[index] * x + triangles.secondWeightY[index] * y + triangles.secondWeightOffset[index]
+    local third = 1 - first - second
+    if first < -0.0001 or second < -0.0001 or third < -0.0001 then
+        return nil
+    end
+    return triangles.heightX[index] * x + triangles.heightY[index] * y + triangles.heightOffset[index]
+end
+
+--- Sample terrain height and squared upward normal from the selected source implementation.
 --- Mesh mode uses spatial buckets; ray mode is a compatibility fallback restricted to the cell landscape root.
 ---@param x number
 ---@param y number
 ---@return number? height
----@return number? normalZ
+---@return number? normalZSquared
 function this:Sample(x, y)
     if self.mode == "mesh" then
         local column = Clamp(math.floor((x - self.originX) / self.bucketSize), 0, self.bucketCount - 1)
         local row = Clamp(math.floor((y - self.originY) / self.bucketSize), 0, self.bucketCount - 1)
         local bucket = self.buckets[row * self.bucketCount + column + 1]
-        local bestHeight, bestNormalZ = nil, nil
+        local bestHeight, bestNormalZSquared = nil, nil
         for _, triangleIndex in ipairs(bucket or {}) do
-            local triangle = self.triangles[triangleIndex]
-            local height = SampleTriangle(triangle, x, y)
+            local height, normalZSquared
+            if self.triangleStorageMode == "soa" then
+                height = SampleTriangleStore(self.triangleStore, triangleIndex, x, y)
+                normalZSquared = self.triangleStore.normalZSquared[triangleIndex]
+            else
+                local triangle = self.triangles[triangleIndex]
+                height = SampleTriangle(triangle, x, y)
+                normalZSquared = triangle.normalZSquared
+            end
             if height and (bestHeight == nil or height > bestHeight) then
                 bestHeight = height
-                bestNormalZ = triangle.normalZ
+                bestNormalZSquared = normalZSquared
             end
         end
-        return bestHeight, bestNormalZ
+        return bestHeight, bestNormalZSquared
     end
     -- Protected access prevents one unsupported scene-pick call from terminating an incremental builder callback.
     local ok, hitOrError = pcall(tes3.rayTest, {
@@ -390,7 +413,7 @@ function this:Sample(x, y)
     if not hit or not hit.intersection or not hit.normal then
         return nil, nil
     end
-    return hit.intersection.z, math.abs(hit.normal.z)
+    return hit.intersection.z, hit.normal.z * hit.normal.z
 end
 
 --- Drop scene and mesh references once the builder has copied all required samples.
@@ -398,6 +421,7 @@ function this:Release()
     self.root = nil
     self.direction = nil
     self.triangles = nil
+    self.triangleStore = nil
     self.buckets = nil
 end
 
@@ -405,69 +429,139 @@ end
 --- Current MWSE exposes triangle indices through `vertices`; a cell-root ray sampler is returned only as fallback.
 ---@param cell tes3cell
 ---@param bucketSize number? Spatial bucket width in world units.
+---@param triangleStorageMode "aos"|"soa"? Shared temporary-vertex and completed-triangle representation; the production default is SoA.
 ---@return MCP.TerrainSampler?
 ---@return string?
-function this.CreateCellSampler(cell, bucketSize)
+function this.CreateCellSampler(cell, bucketSize, triangleStorageMode)
+    local constructionStartedAt = os.clock()
+    local constructionMemoryBefore = collectgarbage("count")
     if not cell or cell.isInterior or not cell.landscape or not cell.landscape.sceneNode then
         return nil, "Active exterior landscape scene graph is unavailable."
     end
     bucketSize = bucketSize or 128
+    triangleStorageMode = triangleStorageMode or "soa"
     local originX = cell.gridX * exteriorCellSize
     local originY = cell.gridY * exteriorCellSize
     local bucketCount = math.ceil(exteriorCellSize / bucketSize)
     ---@type MCP.TerrainSampleTriangle[]
     local triangles = {}
+    ---@type MCP.TerrainSampleTriangleStore
+    local triangleStore = {
+        firstWeightX = {}, firstWeightY = {}, firstWeightOffset = {},
+        secondWeightX = {}, secondWeightY = {}, secondWeightOffset = {},
+        heightX = {}, heightY = {}, heightOffset = {}, inverseDenominator = {}, normalZSquared = {},
+    }
+    local triangleCount = 0
     ---@type table<integer, integer[]>
     local buckets = table.new(bucketCount * bucketCount, 0)
+    local transformedVertexCount = 0
+    local bucketRegistrationCount = 0
+    local bucketOccupancyMax = 0
     for node in cell.landscape.sceneNode:traverse({ type = ni.type.NiTriShape }) do
         ---@cast node niTriShape
         local data = node.data
         if data and data.vertexCount > 0 then
-            local vertices = table.new(data.vertexCount, 0)
-            -- Copy and transform shared model vertices before the active cell can unload its scene graph.
-            for index, vertex in ipairs(data.vertices) do
-                local world = node.worldTransform * vertex:copy()
-                vertices[index] = { x = world.x, y = world.y, z = world.z }
-            end
-            for triangleIndex = 1, data.activeTriangleCount do
-                local sourceTriangle = data.triangles[triangleIndex]
-                -- Current MWSE exposes this as `vertices`; generated metadata incorrectly says `verticies`.
-                local indices = sourceTriangle and sourceTriangle.vertices or nil ---@diagnostic disable-line: undefined-field
-                local first = indices and indices[1] ~= nil and vertices[indices[1] + 1] or nil
-                local second = indices and indices[2] ~= nil and vertices[indices[2] + 1] or nil
-                local third = indices and indices[3] ~= nil and vertices[indices[3] + 1] or nil
-                if first and second and third then
-                    local abx, aby, abz = second.x - first.x, second.y - first.y, second.z - first.z
-                    local acx, acy, acz = third.x - first.x, third.y - first.y, third.z - first.z
-                    local nx = aby * acz - abz * acy
-                    local ny = abz * acx - abx * acz
-                    local nz = abx * acy - aby * acx
-                    local normalLength = math.sqrt(nx * nx + ny * ny + nz * nz)
-                    local triangle = {
-                        ax = first.x, ay = first.y, az = first.z,
-                        bx = second.x, by = second.y, bz = second.z,
-                        cx = third.x, cy = third.y, cz = third.z,
-                        normalZ = normalLength > 0 and math.abs(nz / normalLength) or 0,
-                    }
-                    table.insert(triangles, triangle)
-                    local storedIndex = table.size(triangles)
-                    local minColumn = Clamp(math.floor((math.min(first.x, second.x, third.x) - originX) / bucketSize), 0, bucketCount - 1)
-                    local maxColumn = Clamp(math.floor((math.max(first.x, second.x, third.x) - originX) / bucketSize), 0, bucketCount - 1)
-                    local minRow = Clamp(math.floor((math.min(first.y, second.y, third.y) - originY) / bucketSize), 0, bucketCount - 1)
-                    local maxRow = Clamp(math.floor((math.max(first.y, second.y, third.y) - originY) / bucketSize), 0, bucketCount - 1)
-                    -- Bucket by projected bounds so each grid sample tests only nearby land triangles.
-                    for row = minRow, maxRow do
-                        for column = minColumn, maxColumn do
-                            local bucketIndex = row * bucketCount + column + 1
-                            buckets[bucketIndex] = buckets[bucketIndex] or {}
-                            table.insert(buckets[bucketIndex], storedIndex)
+            -- The layout is invariant for one sampler, so keep its hot loops branch-free.
+            if triangleStorageMode == "soa" then
+                local vertices = {
+                    x = table.new(data.vertexCount, 0),
+                    y = table.new(data.vertexCount, 0),
+                    z = table.new(data.vertexCount, 0),
+                }
+                for index, vertex in ipairs(data.vertices) do
+                    local world = node.worldTransform * vertex:copy()
+                    vertices.x[index], vertices.y[index], vertices.z[index] = world.x, world.y, world.z
+                    transformedVertexCount = transformedVertexCount + 1
+                end
+                for triangleIndex = 1, data.activeTriangleCount do
+                    local sourceTriangle = data.triangles[triangleIndex]
+                    local indices = sourceTriangle and sourceTriangle.vertices or nil ---@diagnostic disable-line: undefined-field
+                    local firstIndex = indices and indices[1] ~= nil and indices[1] + 1 or nil
+                    local secondIndex = indices and indices[2] ~= nil and indices[2] + 1 or nil
+                    local thirdIndex = indices and indices[3] ~= nil and indices[3] + 1 or nil
+                    if firstIndex and secondIndex and thirdIndex
+                        and vertices.x[firstIndex] ~= nil and vertices.x[secondIndex] ~= nil and vertices.x[thirdIndex] ~= nil then
+                        local firstX, firstY, firstZ = vertices.x[firstIndex], vertices.y[firstIndex], vertices.z[firstIndex]
+                        local secondX, secondY, secondZ = vertices.x[secondIndex], vertices.y[secondIndex], vertices.z[secondIndex]
+                        local thirdX, thirdY, thirdZ = vertices.x[thirdIndex], vertices.y[thirdIndex], vertices.z[thirdIndex]
+                        local abx, aby, abz = secondX - firstX, secondY - firstY, secondZ - firstZ
+                        local acx, acy, acz = thirdX - firstX, thirdY - firstY, thirdZ - firstZ
+                        local nx = aby * acz - abz * acy
+                        local ny = abz * acx - abx * acz
+                        local nz = abx * acy - aby * acx
+                        local normalLengthSquared = nx * nx + ny * ny + nz * nz
+                        local coefficients = this.CreateTriangleCoefficients(firstX, firstY, firstZ, secondX, secondY, secondZ, thirdX, thirdY, thirdZ)
+                        triangleCount = triangleCount + 1
+                        local storedIndex = triangleCount
+                        triangleStore.firstWeightX[storedIndex], triangleStore.firstWeightY[storedIndex], triangleStore.firstWeightOffset[storedIndex] = coefficients.firstWeightX, coefficients.firstWeightY, coefficients.firstWeightOffset
+                        triangleStore.secondWeightX[storedIndex], triangleStore.secondWeightY[storedIndex], triangleStore.secondWeightOffset[storedIndex] = coefficients.secondWeightX, coefficients.secondWeightY, coefficients.secondWeightOffset
+                        triangleStore.heightX[storedIndex], triangleStore.heightY[storedIndex], triangleStore.heightOffset[storedIndex] = coefficients.heightX, coefficients.heightY, coefficients.heightOffset
+                        triangleStore.inverseDenominator[storedIndex] = coefficients.inverseDenominator
+                        triangleStore.normalZSquared[storedIndex] = normalLengthSquared > 0 and (nz * nz) / normalLengthSquared or 0
+                        local minColumn = Clamp(math.floor((math.min(firstX, secondX, thirdX) - originX) / bucketSize), 0, bucketCount - 1)
+                        local maxColumn = Clamp(math.floor((math.max(firstX, secondX, thirdX) - originX) / bucketSize), 0, bucketCount - 1)
+                        local minRow = Clamp(math.floor((math.min(firstY, secondY, thirdY) - originY) / bucketSize), 0, bucketCount - 1)
+                        local maxRow = Clamp(math.floor((math.max(firstY, secondY, thirdY) - originY) / bucketSize), 0, bucketCount - 1)
+                        for row = minRow, maxRow do
+                            for column = minColumn, maxColumn do
+                                local bucketIndex = row * bucketCount + column + 1
+                                buckets[bucketIndex] = buckets[bucketIndex] or {}
+                                table.insert(buckets[bucketIndex], storedIndex)
+                                bucketRegistrationCount = bucketRegistrationCount + 1
+                                bucketOccupancyMax = math.max(bucketOccupancyMax, #buckets[bucketIndex])
+                            end
+                        end
+                    end
+                end
+            else
+                local vertices = table.new(data.vertexCount, 0)
+                for index, vertex in ipairs(data.vertices) do
+                    local world = node.worldTransform * vertex:copy()
+                    vertices[index] = { x = world.x, y = world.y, z = world.z }
+                    transformedVertexCount = transformedVertexCount + 1
+                end
+                for triangleIndex = 1, data.activeTriangleCount do
+                    local sourceTriangle = data.triangles[triangleIndex]
+                    local indices = sourceTriangle and sourceTriangle.vertices or nil ---@diagnostic disable-line: undefined-field
+                    local first = indices and indices[1] ~= nil and vertices[indices[1] + 1] or nil
+                    local second = indices and indices[2] ~= nil and vertices[indices[2] + 1] or nil
+                    local third = indices and indices[3] ~= nil and vertices[indices[3] + 1] or nil
+                    if first and second and third then
+                        local abx, aby, abz = second.x - first.x, second.y - first.y, second.z - first.z
+                        local acx, acy, acz = third.x - first.x, third.y - first.y, third.z - first.z
+                        local nx = aby * acz - abz * acy
+                        local ny = abz * acx - abx * acz
+                        local nz = abx * acy - aby * acx
+                        local normalLengthSquared = nx * nx + ny * ny + nz * nz
+                        local coefficients = this.CreateTriangleCoefficients(first.x, first.y, first.z, second.x, second.y, second.z, third.x, third.y, third.z)
+                        triangleCount = triangleCount + 1
+                        local storedIndex = triangleCount
+                        triangles[storedIndex] = {
+                            firstWeightX = coefficients.firstWeightX, firstWeightY = coefficients.firstWeightY, firstWeightOffset = coefficients.firstWeightOffset,
+                            secondWeightX = coefficients.secondWeightX, secondWeightY = coefficients.secondWeightY, secondWeightOffset = coefficients.secondWeightOffset,
+                            heightX = coefficients.heightX, heightY = coefficients.heightY, heightOffset = coefficients.heightOffset,
+                            inverseDenominator = coefficients.inverseDenominator,
+                            normalZSquared = normalLengthSquared > 0 and (nz * nz) / normalLengthSquared or 0,
+                        }
+                        local minColumn = Clamp(math.floor((math.min(first.x, second.x, third.x) - originX) / bucketSize), 0, bucketCount - 1)
+                        local maxColumn = Clamp(math.floor((math.max(first.x, second.x, third.x) - originX) / bucketSize), 0, bucketCount - 1)
+                        local minRow = Clamp(math.floor((math.min(first.y, second.y, third.y) - originY) / bucketSize), 0, bucketCount - 1)
+                        local maxRow = Clamp(math.floor((math.max(first.y, second.y, third.y) - originY) / bucketSize), 0, bucketCount - 1)
+                        for row = minRow, maxRow do
+                            for column = minColumn, maxColumn do
+                                local bucketIndex = row * bucketCount + column + 1
+                                buckets[bucketIndex] = buckets[bucketIndex] or {}
+                                table.insert(buckets[bucketIndex], storedIndex)
+                                bucketRegistrationCount = bucketRegistrationCount + 1
+                                bucketOccupancyMax = math.max(bucketOccupancyMax, #buckets[bucketIndex])
+                            end
                         end
                     end
                 end
             end
         end
     end
-    if table.size(triangles) > 0 then
+    if triangleCount > 0 then
         local sampler = {
             mode = "mesh",
             originX = originX,
@@ -475,7 +569,22 @@ function this.CreateCellSampler(cell, bucketSize)
             bucketSize = bucketSize,
             bucketCount = bucketCount,
             triangles = triangles,
+            triangleStore = triangleStore,
+            triangleStorageMode = triangleStorageMode,
             buckets = buckets,
+            metrics = {
+                mode = "mesh",
+                triangle_storage_mode = triangleStorageMode,
+                bucket_size = bucketSize,
+                bucket_count = bucketCount,
+                transformed_vertex_count = transformedVertexCount,
+                triangle_count = triangleCount,
+                bucket_registration_count = bucketRegistrationCount,
+                bucket_occupancy_mean = bucketRegistrationCount / (bucketCount * bucketCount),
+                bucket_occupancy_max = bucketOccupancyMax,
+                construction_elapsed_milliseconds = (os.clock() - constructionStartedAt) * 1000,
+                construction_memory_delta_kilobytes = collectgarbage("count") - constructionMemoryBefore,
+            },
             errorCount = 0,
         }
         setmetatable(sampler, { __index = this })
@@ -491,6 +600,18 @@ function this.CreateCellSampler(cell, bucketSize)
         rayOriginZ = maximumHeight + 1024,
         rayMaxDistance = math.max(4096, maximumHeight - minimumHeight + 2048),
         direction = tes3vector3.new(0, 0, -1),
+        triangleStorageMode = triangleStorageMode,
+        metrics = {
+            mode = "ray",
+            triangle_storage_mode = triangleStorageMode,
+            transformed_vertex_count = transformedVertexCount,
+            triangle_count = 0,
+            bucket_registration_count = 0,
+            bucket_occupancy_mean = 0,
+            bucket_occupancy_max = 0,
+            construction_elapsed_milliseconds = (os.clock() - constructionStartedAt) * 1000,
+            construction_memory_delta_kilobytes = collectgarbage("count") - constructionMemoryBefore,
+        },
         errorCount = 0,
     }
     setmetatable(sampler, { __index = this })

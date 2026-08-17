@@ -59,13 +59,14 @@ local directions = {
 ---@field height integer
 ---@field maxSlopeDegrees number
 ---@field maxSlopeRadians number
+---@field maxSlopeNormalZSquared number Squared upward unit-normal threshold for walkability.
 ---@field maxClimb number
 ---@field waterLevel number?
 ---@field storage MCP.TerrainGridStorage
 ---@field Index fun(self: MCP.TerrainGrid, column: integer, row: integer): integer?
 ---@field GridCoordinates fun(self: MCP.TerrainGrid, index: integer): integer, integer
 ---@field WorldPosition fun(self: MCP.TerrainGrid, index: integer): MCP.PathfindingPosition
----@field SetSample fun(self: MCP.TerrainGrid, column: integer, row: integer, height: number, normalZ: number)
+---@field SetSample fun(self: MCP.TerrainGrid, column: integer, row: integer, height: number, normalZSquared: number)
 ---@field SetUnavailable fun(self: MCP.TerrainGrid, column: integer, row: integer)
 ---@field IsWalkable fun(self: MCP.TerrainGrid, index: integer?): boolean
 ---@field GetNeighborIndex fun(self: MCP.TerrainGrid, fromIndex: integer, direction: MCP.TerrainGridDirection): integer?
@@ -92,6 +93,7 @@ function this.new(params)
         height = params.height,
         maxSlopeDegrees = params.maxSlopeDegrees or 46,
         maxSlopeRadians = math.rad(params.maxSlopeDegrees or 46),
+        maxSlopeNormalZSquared = math.cos(math.rad(params.maxSlopeDegrees or 46)) ^ 2,
         maxClimb = params.maxClimb or 34,
         waterLevel = params.waterLevel,
         storage = params.storage or storageModule.new(params.width * params.height),
@@ -133,13 +135,13 @@ function this:WorldPosition(index)
     }
 end
 
---- Classify one terrain sample from elevation and an upward-facing normal component.
+--- Classify one terrain sample from elevation and a squared upward-facing unit-normal component.
 --- Water and over-slope samples remain sampled but are not walkable in the walking-only model.
 ---@param column integer
 ---@param row integer
 ---@param height number
----@param normalZ number
-function this:SetSample(column, row, height, normalZ)
+---@param normalZSquared number
+function this:SetSample(column, row, height, normalZSquared)
     local index = self:Index(column, row)
     if not index then
         return
@@ -148,7 +150,7 @@ function this:SetSample(column, row, height, normalZ)
     local isWater = self.waterLevel ~= nil and height < self.waterLevel
     if isWater then
         flags = bit.bor(flags, waterFlag)
-    elseif normalZ >= math.cos(self.maxSlopeRadians) then
+    elseif normalZSquared >= self.maxSlopeNormalZSquared then
         flags = bit.bor(flags, walkableFlag)
     end
     self.storage:SetSample(index, height, flags)

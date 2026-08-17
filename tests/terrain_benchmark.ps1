@@ -5,6 +5,10 @@ param(
     [int]$PollIntervalSeconds = 1,
     [ValidateRange(1, 300)]
     [int]$ServerReadyTimeoutSeconds = 60,
+    [ValidateRange(1, 20)]
+    [int]$RepeatCount = 5,
+    [ValidateRange(0, 5)]
+    [int]$WarmupCount = 1,
     [switch]$UseRunningServer,
     [switch]$NoForeground
 )
@@ -124,6 +128,38 @@ function Invoke-DebugAction {
     return $response.result.structuredContent
 }
 
+function Get-Median {
+    param([Parameter(Mandatory = $true)][double[]]$Values)
+
+    if ($Values.Count -eq 0) {
+        throw "Cannot calculate a median from an empty value collection."
+    }
+    $sorted = @($Values | Sort-Object)
+    $middle = [math]::Floor($sorted.Count / 2)
+    if ($sorted.Count % 2 -eq 1) {
+        return $sorted[$middle]
+    }
+    return ($sorted[$middle - 1] + $sorted[$middle]) / 2
+}
+
+function Get-MedianProperty {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Entries,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    return Get-Median -Values @($Entries | ForEach-Object { [double]$_.PSObject.Properties[$PropertyName].Value })
+}
+
+function Get-MedianSamplerProperty {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Entries,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    return Get-Median -Values @($Entries | ForEach-Object { [double]$_.sampler.PSObject.Properties[$PropertyName].Value })
+}
+
 function Invoke-ToolAction {
     param(
         [Parameter(Mandatory = $true)][string]$ToolName,
@@ -229,31 +265,98 @@ try {
 
     $probe = Wait-ForExteriorCell
 
-    $started = Invoke-DebugAction -Action "terrain:StartQualityComparison"
-    if ($started.state -ne "building") {
-        throw "Terrain quality comparison did not start: $($started.state)"
+    $baselineCellId = $probe.cell_id
+    $expectedCaseKeys = $null
+    $measurementRuns = @()
+    $allRuns = @()
+    $totalRuns = $WarmupCount + $RepeatCount
+    for ($run = 1; $run -le $totalRuns; $run++) {
+        $started = Invoke-DebugAction -Action "terrain:StartQualityComparison"
+        if ($started.state -ne "building") {
+            throw "Terrain quality comparison did not start: $($started.state)"
+        }
+
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        do {
+            Start-Sleep -Seconds $PollIntervalSeconds
+            $status = Invoke-DebugAction -Action "terrain:GetQualityStatus"
+            if ($status.state -eq "failed") {
+                throw "Terrain quality comparison failed: $($status.error)"
+            }
+        } while ($status.state -ne "ready" -and (Get-Date) -lt $deadline)
+
+        if ($status.state -ne "ready") {
+            throw "Terrain quality comparison did not finish within $TimeoutSeconds seconds."
+        }
+        if ($status.cell_id -ne $baselineCellId) {
+            throw "Terrain benchmark cell changed from $baselineCellId to $($status.cell_id)."
+        }
+        $currentCaseKeys = @($status.case_keys)
+        if ($currentCaseKeys.Count -lt 1) {
+            throw "Terrain quality status did not provide benchmark case keys."
+        }
+        if ($null -eq $expectedCaseKeys) {
+            $expectedCaseKeys = $currentCaseKeys
+        }
+        elseif ($expectedCaseKeys.Count -ne $currentCaseKeys.Count -or
+            (Compare-Object -ReferenceObject $expectedCaseKeys -DifferenceObject $currentCaseKeys)) {
+            throw "Terrain benchmark case keys changed between runs."
+        }
+        foreach ($caseKey in $expectedCaseKeys) {
+            $entry = $status.results.PSObject.Properties[$caseKey].Value
+            if ($null -eq $entry -or $entry.samples -lt 1 -or $null -eq $entry.height -or $null -eq $entry.sampler) {
+                throw "Missing terrain quality or sampler result for case $caseKey."
+            }
+            if ($entry.sampler.mode -eq "mesh" -and ($entry.sampler.triangle_count -lt 1 -or
+                $entry.sampler.transformed_vertex_count -lt 1 -or $entry.sampler.bucket_registration_count -lt 1)) {
+                throw "Invalid mesh sampler metrics for case $caseKey."
+            }
+            if ($entry.sampler.bucket_occupancy_max -lt $entry.sampler.bucket_occupancy_mean) {
+                throw "Invalid bucket occupancy metrics for case $caseKey."
+            }
+        }
+        $runResult = [pscustomobject]@{
+            run = $run
+            warmup = $run -le $WarmupCount
+            results = $status.results
+        }
+        $allRuns += $runResult
+        if (-not $runResult.warmup) {
+            $measurementRuns += $runResult
+        }
     }
 
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    do {
-        Start-Sleep -Seconds $PollIntervalSeconds
-        $status = Invoke-DebugAction -Action "terrain:GetQualityStatus"
-        if ($status.state -eq "failed") {
-            throw "Terrain quality comparison failed: $($status.error)"
+    $median = [ordered]@{}
+    foreach ($caseKey in $expectedCaseKeys) {
+        $entries = @($measurementRuns | ForEach-Object { $_.results.PSObject.Properties[$caseKey].Value })
+        $median[$caseKey] = [ordered]@{
+            elapsed_milliseconds = Get-MedianProperty -Entries $entries -PropertyName "elapsed_milliseconds"
+            max_step_milliseconds = Get-MedianProperty -Entries $entries -PropertyName "max_step_milliseconds"
+            memory_delta_kilobytes = Get-MedianProperty -Entries $entries -PropertyName "memory_delta_kilobytes"
+            sampler = [ordered]@{
+                construction_elapsed_milliseconds = Get-MedianSamplerProperty -Entries $entries -PropertyName "construction_elapsed_milliseconds"
+                construction_memory_delta_kilobytes = Get-MedianSamplerProperty -Entries $entries -PropertyName "construction_memory_delta_kilobytes"
+                triangle_count = Get-MedianSamplerProperty -Entries $entries -PropertyName "triangle_count"
+                transformed_vertex_count = Get-MedianSamplerProperty -Entries $entries -PropertyName "transformed_vertex_count"
+                bucket_registration_count = Get-MedianSamplerProperty -Entries $entries -PropertyName "bucket_registration_count"
+                bucket_occupancy_mean = Get-MedianSamplerProperty -Entries $entries -PropertyName "bucket_occupancy_mean"
+                bucket_occupancy_max = Get-MedianSamplerProperty -Entries $entries -PropertyName "bucket_occupancy_max"
+            }
         }
-    } while ($status.state -ne "ready" -and (Get-Date) -lt $deadline)
-
-    if ($status.state -ne "ready") {
-        throw "Terrain quality comparison did not finish within $TimeoutSeconds seconds."
     }
-    foreach ($resolution in @("64", "128", "256")) {
-        $entry = $status.results.PSObject.Properties[$resolution].Value
-        if ($null -eq $entry -or $entry.samples -lt 1 -or $null -eq $entry.height) {
-            throw "Missing terrain quality result for resolution $resolution."
-        }
+    $result = [ordered]@{
+        # Keep the latest completed run in the legacy shape consumed by the test summary validator.
+        state = $status.state
+        cell_id = $baselineCellId
+        case_keys = $expectedCaseKeys
+        results = $status.results
+        warmup_count = $WarmupCount
+        repeat_count = $RepeatCount
+        runs = $allRuns
+        median = $median
     }
-    $status | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
-    Write-Host "[PASSED] Terrain benchmark completed for cell $($status.cell_id)." -ForegroundColor Green
+    $result | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
+    Write-Host "[PASSED] Terrain benchmark completed for cell $baselineCellId across $RepeatCount measured runs." -ForegroundColor Green
     Write-Host "[INFO] Result: $ResultPath" -ForegroundColor Cyan
     exit 0
 }

@@ -15,6 +15,7 @@ function this.Test()
         return {
             Sample = function(_, x, y) return x + y, 1 end,
             Release = function(self) self.released = true end,
+            metrics = { mode = "mesh", triangle_count = 1 },
         }
     end
 
@@ -25,6 +26,7 @@ function this.Test()
         unitwind:expect(builder:Step({ mode = "samples", maxSamples = 20 })).toBe("ready")
         unitwind:expect(builder.processedSamples).toBe(9)
         unitwind:expect(builder.cell).toBe(nil)
+        unitwind:expect(builder.samplerMetrics.triangle_count).toBe(1)
     end)
 
     unitwind:test("Time budget stops after the configured clock interval", function()
@@ -77,6 +79,25 @@ function this.Test()
         local builder = builderModule.new({ cell = Cell(), interval = 128, samplerFactory = function() return nil, "missing" end })
         unitwind:expect(builder:Step()).toBe("failed")
         unitwind:expect(builder.error).toBe("missing")
+    end)
+
+    unitwind:test("Explicit sampler options are forwarded to the sampler factory", function()
+        local receivedBucketSize = nil
+        local receivedTriangleStorageMode = nil
+        local builder = builderModule.new({
+            cell = Cell(),
+            interval = 128,
+            bucketSize = 256,
+            triangleStorageMode = "soa",
+            samplerFactory = function(_, bucketSize, triangleStorageMode)
+                receivedBucketSize = bucketSize
+                receivedTriangleStorageMode = triangleStorageMode
+                return SamplerFactory()
+            end,
+        })
+        builder:Step({ mode = "samples", maxSamples = 1 })
+        unitwind:expect(receivedBucketSize).toBe(256)
+        unitwind:expect(receivedTriangleStorageMode).toBe("soa")
     end)
 
     local testsPassed, testsFailed = unitwind.testsPassed, unitwind.testsFailed

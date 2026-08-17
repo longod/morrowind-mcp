@@ -2,14 +2,15 @@
 name: terrain-benchmark-run
 user-invocable: true
 description: |
-  Morrowind MCP の terrain grid 解像度ベンチマークを tests/terrain_benchmark.ps1 で実行し、64/128/256 の測定 JSON、Inspector log、MWSE.log を確認する。"terrain benchmark", "terrain grid benchmark", "地形ベンチマーク", "任意の場所で terrain を計測" で使用する。
+  Morrowind MCP の terrain grid bucket-size ベンチマークを tests/terrain_benchmark.ps1 で反復実行し、中央値 JSON、Inspector log、MWSE.log を確認する。"terrain benchmark", "terrain grid benchmark", "地形ベンチマーク", "任意の場所で terrain を計測" で使用する。
 ---
 
 # terrain-benchmark-run
 
 ## Purpose
 
-- `tests/terrain_benchmark.ps1` は terrain grid の 64、128、256 game-unit interval を比較する実機ベンチマークである。
+- `tests/terrain_benchmark.ps1` は terrain grid の AoS/SoA layout を比較する実機ベンチマークである。既定ケースは production bucket size の `64-64-aos/soa`、`128-128-aos/soa`、`256-128-aos/soa` で、`aos` は temporary vertices と completed triangles の両方を AoS、`soa` は両方を SoA とする。face-normal calculation は scalar に固定する。
+- 既定では 1 回の warmup を除外し、同一 exterior cell で 5 回測定して中央値を出力する。
 - 既定では Morrowind と server の起動、メインメニューの Continue、屋外セルでの測定、server 停止までをスクリプトが所有する。
 - `-UseRunningServer` は、すでに起動済みのゲームでプレイヤーを任意の屋外地点へ移動した後に、ゲーム状態を変更せず測定するための明示的なモードである。
 - 実行は Morrowind MCP Test Runner に委譲する。親エージェントは直接 PowerShell コマンドを実行しない。
@@ -28,7 +29,7 @@ description: |
 2. `start_server_mo2.ps1` により server が開始されること。
 3. `mw-menu-action` で `Pete_ContinueButton` が操作され、保存済みゲームがロードされること。
 4. player cell が exterior になること。
-5. 64、128、256 の各 resolution に samples と height metrics が返ること。
+5. 全 benchmark case に samples、height metrics、sampler construction metrics が返ること。
 6. 測定後、スクリプトが起動した Morrowind/server が `stop_server.ps1` により停止されること。
 
 ## Existing Server Run
@@ -45,7 +46,7 @@ description: |
 - foreground 化が必要な入力は送らないため、`-NoForeground` は既定 lifecycle モードでのみ意味を持つ。
 
 ## Verification
-テストスクリプトが生成する `terrain_benchmark` summary を一次根拠として判定する。summary は `result_<timestamp>.json` の `ready` state、64/128/256 の `samples` と `height`、Inspector の non-zero exit を判定する。
+テストスクリプトが生成する `terrain_benchmark` summary を一次根拠として判定する。summary は `result_<timestamp>.json` の `ready` state、全 benchmark case の `samples` と `height`、Inspector の non-zero exit を判定する。
 
 `failed` / `inconclusive` の場合だけ、summary evidence の保存済み result/Inspector/MWSE artifact を読んで切り分ける。ライブ `MWSE.log` は読まない。
 
@@ -67,9 +68,9 @@ description: |
 - メインメニューの UI がまだ初期化されていないか、server がロード途中である。
 - Inspector log と MWSE log を確認し、開始からの待機と tools/list の結果を確認する。
 
-### Missing 64, 128, or 256 result
+### Missing benchmark case result
 
-- `terrain:GetQualityStatus` の失敗状態、timeout、または terrain source の runtime error を確認する。
+- `terrain:GetQualityStatus` の失敗状態、timeout、case key の run 間不一致、または terrain source の runtime error を確認する。
 - Inspector log の該当 `tools/call` 応答と MWSE log の `Terrain grid build stopped`、`Terrain quality comparison`、Lua traceback を確認する。
 
 ### Nonzero Inspector exit
@@ -79,7 +80,9 @@ description: |
 
 ## Measurement Notes
 
-- 結果は地点依存である。異なる場所の比較では `cell_id`、測定日時、保存された JSON を必ず併記する。
-- 現行の 64-unit result は temporary reference surface との自己比較を含む。最終的な interval 決定には、独立した land-root ray reference と route-quality metrics が必要である。
+- 結果は地点依存である。異なる場所の比較では `cell_id`、測定日時、保存された JSON を必ず併記する。測定中に `cell_id` が変わる場合は benchmark が失敗する。
+- `-RepeatCount` と `-WarmupCount` で測定回数を調整できる。中央値は `median`、全 run の生データは `runs` に保存される。
+- `sampler.construction_elapsed_milliseconds` と総 `elapsed_milliseconds` を主な性能比較に用いる。heap delta は GC により負になり得るため補助指標である。
+- `64-64` の height result は temporary reference surface との自己比較を含む。最終的な interval 決定には、独立した land-root ray reference と route-quality metrics が必要である。
 - `elapsed_milliseconds` は builder の Step 作業時間の累積であり、フレーム間の待機時間を含まない。
 - `memory_delta_kilobytes` は signed heap snapshot difference のため、garbage collection により負になり得る診断値である。

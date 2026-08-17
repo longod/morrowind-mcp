@@ -12,6 +12,7 @@ function this.Test()
     unitwind:start("morrowind-mcp.navigation.terrain.manager")
     local releasedGridCount = 0
     local releasedIntervals = {}
+    local builderParams = {}
 
     local function Cell(id, x, y)
         return { id = id, isInterior = false, gridX = x, gridY = y, valid = true }
@@ -25,9 +26,16 @@ function this.Test()
     end
 
     local function Builder(params)
+        table.insert(builderParams, params)
         return {
             state = "sampling",
             processedSamples = 0,
+            samplerMetrics = {
+                mode = "mesh",
+                bucket_size = params.bucketSize,
+                triangle_storage_mode = params.triangleStorageMode,
+                triangle_count = params.interval,
+            },
             grid = {
                 interval = params.interval,
                 Release = function()
@@ -53,13 +61,17 @@ function this.Test()
         local neighbor = Cell("neighbor", 1, 0)
         unitwind:mock(tes3, "player", { cell = playerCell })
         unitwind:mock(tes3, "makeSafeObjectHandle", Handle)
-        local manager = managerModule.new({ builderFactory = Builder })
+        local manager = managerModule.new({
+            builderFactory = Builder,
+            qualityEvaluator = function() return { mae = 0 } end,
+        })
         manager:QueueCell(neighbor)
         manager:QueueCell(playerCell)
         manager:Step()
         local state, grid = manager:GetCellState(playerCell)
         unitwind:expect(state).toBe("ready")
         unitwind:expect(grid ~= nil).toBe(true)
+        unitwind:expect(builderParams[table.size(builderParams)].triangleStorageMode).toBe("soa")
         unitwind:expect(manager:GetCellState(neighbor)).toBe("pending")
     end)
 
@@ -214,10 +226,50 @@ function this.Test()
         unitwind:expect(status.state).toBe("ready")
         unitwind:expect(evaluated).toBe(3)
         unitwind:expect(status.results["128"].height.mae).toBe(64)
+        unitwind:expect(status.results["128"].sampler.triangle_count).toBe(128)
+        unitwind:expect(status.results["128"].sampler.triangle_storage_mode).toBe("soa")
         unitwind:expect(releasedGridCount - releaseCountBeforeEvaluation).toBe(3)
         unitwind:expect(releasedIntervals[releaseCountBeforeEvaluation + 1]).toBe(64)
         unitwind:expect(releasedIntervals[releaseCountBeforeEvaluation + 2]).toBe(128)
         unitwind:expect(releasedIntervals[releaseCountBeforeEvaluation + 3]).toBe(256)
+    end)
+
+    unitwind:test("Quality comparison retains distinct bucket-size cases at one resolution", function()
+        local cell = Cell("quality-buckets", 0, 0)
+        unitwind:mock(tes3, "makeSafeObjectHandle", Handle)
+        local manager = managerModule.new({
+            builderFactory = Builder,
+            qualityEvaluator = function() return { mae = 0 } end,
+        })
+        local started = manager:StartQualityComparison(cell, {
+            { key = "128-64", resolution = 128, bucketSize = 64, triangleStorageMode = "aos" },
+            { key = "128-256", resolution = 128, bucketSize = 256, triangleStorageMode = "aos" },
+        })
+        unitwind:expect(started).toBe(true)
+        manager:Step()
+        manager:Step()
+        manager:Step()
+        local status = manager:GetQualityStatus()
+        unitwind:expect(status.state).toBe("ready")
+        unitwind:expect(status.results["128-64"].sampler.bucket_size).toBe(64)
+        unitwind:expect(status.results["128-256"].sampler.bucket_size).toBe(256)
+        unitwind:expect(table.size(status.case_keys)).toBe(2)
+    end)
+
+    unitwind:test("Quality comparison forwards its triangle storage mode", function()
+        local cell = Cell("quality-soa", 0, 0)
+        unitwind:mock(tes3, "makeSafeObjectHandle", Handle)
+        local manager = managerModule.new({
+            builderFactory = Builder,
+            qualityEvaluator = function() return { mae = 0 } end,
+        })
+        manager:StartQualityComparison(cell, {
+            { key = "128-soa", resolution = 128, bucketSize = 128, triangleStorageMode = "soa" },
+        })
+        manager:Step()
+        manager:Step()
+        local status = manager:GetQualityStatus()
+        unitwind:expect(status.results["128-soa"].sampler.triangle_storage_mode).toBe("soa")
     end)
 
     local testsPassed, testsFailed = unitwind.testsPassed, unitwind.testsFailed

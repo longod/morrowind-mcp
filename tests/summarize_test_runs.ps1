@@ -321,9 +321,10 @@ $knownIssues = @()
                 $reasons += "Terrain result explicitly reports state=failed."
             }
             elseif ($result) {
-                $ready = $result.state -eq "ready"
-                foreach ($resolution in "64", "128", "256") {
-                    $entry = if ($result.results) { $result.results.PSObject.Properties[$resolution].Value }
+                $expectedCaseKeys = if ($result.case_keys) { @($result.case_keys) } else { @("64", "128", "256") }
+                $ready = $result.state -eq "ready" -and $expectedCaseKeys.Count -gt 0
+                foreach ($caseKey in $expectedCaseKeys) {
+                    $entry = if ($result.results) { $result.results.PSObject.Properties[$caseKey].Value }
                     if (-not $entry -or $entry.samples -lt 1 -or $null -eq $entry.height) {
                         $ready = $false
                     }
@@ -331,11 +332,11 @@ $knownIssues = @()
 
                 if ($ready) {
                     $status = "passed"
-                    $counts.passed = 3
-                    $reasons += "Terrain result has ready 64/128/256 measurements."
+                    $counts.passed = $expectedCaseKeys.Count
+                    $reasons += "Terrain result has ready measurements for every benchmark case."
                 }
                 else {
-                    $reasons += "Terrain result lacks ready 64/128/256 measurements."
+                    $reasons += "Terrain result lacks ready measurements for one or more benchmark cases."
                 }
             }
         }

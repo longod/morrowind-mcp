@@ -7,7 +7,7 @@ authors = ["longod"]
 version = "0.0.0"
 
 [dependencies.mwse]
-buildnumber = 5103
+buildnumber = 5334
 
 [dependencies.mge-xe]
 version = ">=0.15.0"

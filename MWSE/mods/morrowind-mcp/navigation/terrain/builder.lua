@@ -17,18 +17,23 @@ local exteriorCellSize = cellutil.exteriorCellSize
 ---@class MCP.TerrainGridBuilderParams
 ---@field cell tes3cell Active exterior cell being sampled.
 ---@field interval number? Distance in world units between samples.
+---@field bucketSize number? Spatial bucket width used by the sampler; omitted uses the production default.
+---@field triangleStorageMode "aos"|"soa"? Completed triangle representation; omitted uses the production SoA default.
 ---@field maxSlopeDegrees number? Steepest accepted walking slope.
 ---@field maxClimb number? Maximum accepted vertical step.
----@field samplerFactory (fun(cell: tes3cell, bucketSize: number?): MCP.TerrainSampler?, string?)? Injectable terrain source factory.
+---@field samplerFactory (fun(cell: tes3cell, bucketSize: number?, triangleStorageMode: "aos"|"soa"?): MCP.TerrainSampler?, string?)? Injectable terrain source factory.
 ---@field clock (fun(): number)? Injectable monotonic clock used by tests.
 
 ---@class MCP.TerrainGridBuilder
 ---@field state MCP.TerrainGridBuilderState
 ---@field cell tes3cell?
 ---@field interval number
+---@field bucketSize number?
+---@field triangleStorageMode "aos"|"soa"?
 ---@field grid MCP.TerrainGrid?
 ---@field sampler MCP.TerrainSampler?
----@field samplerFactory fun(cell: tes3cell, bucketSize: number?): MCP.TerrainSampler?, string?
+---@field samplerMetrics MCP.TerrainSamplerMetrics? Construction diagnostics retained after sampler release.
+---@field samplerFactory fun(cell: tes3cell, bucketSize: number?, triangleStorageMode: "aos"|"soa"?): MCP.TerrainSampler?, string?
 ---@field clock fun(): number
 ---@field nextSample integer
 ---@field processedSamples integer
@@ -52,6 +57,8 @@ function this.new(params)
         state = "queued",
         cell = cell,
         interval = interval,
+        bucketSize = params.bucketSize,
+        triangleStorageMode = params.triangleStorageMode,
         samplerFactory = params.samplerFactory or sourceModule.CreateCellSampler,
         clock = params.clock or os.clock,
         nextSample = 1,
@@ -74,6 +81,7 @@ function this.new(params)
             maxClimb = params.maxClimb or 34,
             waterLevel = cell.waterLevel,
         }),
+        samplerMetrics = nil,
     }
     setmetatable(instance, { __index = this })
     return instance
@@ -93,13 +101,15 @@ function this:Step(options)
     end
     local stepStartedAt = self.clock()
     if self.state == "queued" then
-        local sampler, errorMessage = self.samplerFactory(self.cell, math.min(self.interval, 128))
+        local bucketSize = self.bucketSize or math.min(self.interval, 128)
+        local sampler, errorMessage = self.samplerFactory(self.cell, bucketSize, self.triangleStorageMode)
         if not sampler then
             self.state = "failed"
             self.error = errorMessage or "Terrain sampler creation failed."
             return self.state
         end
         self.sampler = sampler
+        self.samplerMetrics = sampler.metrics
         self.state = "sampling"
     end
 
@@ -116,9 +126,9 @@ function this:Step(options)
         local row = math.floor(offset / self.grid.width)
         local x = self.grid.originX + column * self.interval
         local y = self.grid.originY + row * self.interval
-        local height, normalZ = self.sampler:Sample(x, y)
-        if height and normalZ then
-            self.grid:SetSample(column, row, height, normalZ)
+        local height, normalZSquared = self.sampler:Sample(x, y)
+        if height and normalZSquared then
+            self.grid:SetSample(column, row, height, normalZSquared)
         else
             self.grid:SetUnavailable(column, row)
         end

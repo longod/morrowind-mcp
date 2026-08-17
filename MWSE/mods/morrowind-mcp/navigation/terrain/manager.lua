@@ -19,7 +19,14 @@ local this = {}
 ---@field elapsed_milliseconds number Builder work duration excluding queue wait.
 ---@field max_step_milliseconds number Longest measured per-frame builder step.
 ---@field memory_delta_kilobytes number Lua memory delta observed by the builder.
+---@field sampler MCP.TerrainSamplerMetrics? Sampler construction diagnostics retained by the builder.
 ---@field height MCP.TerrainHeightMetrics? Height metrics populated after all resolutions finish.
+
+---@class MCP.TerrainQualityCase
+---@field key string Stable result key unique across resolution and bucket-size combinations.
+---@field resolution integer Sampling interval in world units.
+---@field bucketSize integer Spatial bucket width passed to the sampler.
+---@field triangleStorageMode "aos"|"soa" Completed triangle representation compared by benchmark cases.
 
 ---@alias MCP.TerrainQualityResultMap table<string, MCP.TerrainQualityResolutionResult>
 
@@ -27,8 +34,8 @@ local this = {}
 ---@field state "building"|"ready"|"failed"
 ---@field cellId MCP.CellIdentityKey?
 ---@field cellHandle mwseSafeObjectHandle?
----@field resolutions integer[] Ordered sampling intervals, finest first.
----@field resolutionIndex integer Index of the resolution currently being built.
+---@field cases MCP.TerrainQualityCase[] Ordered comparison cases, with the finest reference first.
+---@field caseIndex integer Index of the comparison case currently being built.
 ---@field builder MCP.TerrainGridBuilder?
 ---@field grids table<string, MCP.TerrainGrid> Temporary completed grids keyed by interval text.
 ---@field results MCP.TerrainQualityResultMap
@@ -49,6 +56,7 @@ local this = {}
 ---@field cell_id MCP.CellIdentityKey?
 ---@field resolution_index integer?
 ---@field resolution_count integer?
+---@field case_keys string[]?
 ---@field results MCP.TerrainQualityResultMap
 ---@field error string?
 
@@ -87,7 +95,7 @@ local this = {}
 ---@field RegisterEventHandlers fun(self: MCP.TerrainGridManager)
 ---@field Release fun(self: MCP.TerrainGridManager)
 ---@field GetStatus fun(self: MCP.TerrainGridManager): MCP.TerrainGridManagerStatus
----@field StartQualityComparison fun(self: MCP.TerrainGridManager, cell: tes3cell, resolutions: integer[]?): boolean, string?
+---@field StartQualityComparison fun(self: MCP.TerrainGridManager, cell: tes3cell, cases: MCP.TerrainQualityCase[]|integer[]?): boolean, string?
 ---@field GetQualityStatus fun(self: MCP.TerrainGridManager): MCP.TerrainQualityStatus
 ---@field StepQualityComparison fun(self: MCP.TerrainGridManager)
 ---@field CancelQualityComparison fun(self: MCP.TerrainGridManager)
@@ -132,6 +140,7 @@ function this:QueueCell(cell)
         interval = self.parameters.interval,
         maxSlopeDegrees = self.parameters.maxSlopeDegrees,
         maxClimb = self.parameters.maxClimb,
+        triangleStorageMode = "soa",
     })
     self.jobs[cellId] = { handle = handle, builder = builder }
     if tes3.player and tes3.player.cell == cell then
@@ -230,22 +239,45 @@ function this:Step()
     end
 end
 
---- Start a sequential resolution comparison for one active exterior cell.
+--- Start a sequential terrain comparison for one active exterior cell.
+--- Numeric compatibility inputs use production defaults; omitted cases compare triangle data layouts.
 ---@param cell tes3cell
----@param resolutions integer[]?
+---@param cases MCP.TerrainQualityCase[]|integer[]?
 ---@return boolean started
 ---@return string? errorMessage
-function this:StartQualityComparison(cell, resolutions)
+function this:StartQualityComparison(cell, cases)
     if not cell or cell.isInterior then
         return false, "An active exterior cell is required."
     end
     self:CancelQualityComparison()
+    local comparisonCases = cases
+    if not comparisonCases then
+        comparisonCases = {
+            { key = "64-64-aos", resolution = 64, bucketSize = 64, triangleStorageMode = "aos" },
+            { key = "64-64-soa", resolution = 64, bucketSize = 64, triangleStorageMode = "soa" },
+            { key = "128-128-aos", resolution = 128, bucketSize = 128, triangleStorageMode = "aos" },
+            { key = "128-128-soa", resolution = 128, bucketSize = 128, triangleStorageMode = "soa" },
+            { key = "256-128-aos", resolution = 256, bucketSize = 128, triangleStorageMode = "aos" },
+            { key = "256-128-soa", resolution = 256, bucketSize = 128, triangleStorageMode = "soa" },
+        }
+    elseif type(comparisonCases[1]) == "number" then
+        local numericCases = {}
+        for _, resolution in ipairs(comparisonCases) do
+            table.insert(numericCases, {
+                key = tostring(resolution),
+                resolution = resolution,
+                bucketSize = math.min(resolution, 128),
+                triangleStorageMode = "soa",
+            })
+        end
+        comparisonCases = numericCases
+    end
     self.qualityComparison = {
         state = "building",
         cellId = cellutil.GetIdentityKey(cell),
         cellHandle = tes3.makeSafeObjectHandle(cell),
-        resolutions = resolutions or { 64, 128, 256 },
-        resolutionIndex = 1,
+        cases = comparisonCases,
+        caseIndex = 1,
         builder = nil,
         grids = {},
         results = {},
@@ -265,24 +297,25 @@ function this:StepQualityComparison()
         comparison.error = "Benchmark cell became invalid."
         return
     end
-    local resolution = comparison.resolutions[comparison.resolutionIndex]
-    if not resolution then
+    local comparisonCase = comparison.cases[comparison.caseIndex]
+    if not comparisonCase then
         -- The finest completed grid acts as a stable temporary reference while coarser interpolation is measured.
-        local referenceGrid = comparison.grids[tostring(comparison.resolutions[1])]
+        local referenceCase = comparison.cases[1]
+        local referenceGrid = comparison.grids[referenceCase.key]
         local reference = {
             Sample = function(_, x, y)
                 local height = referenceGrid:InterpolateHeight(x, y)
                 return height, height and 1 or nil
             end,
         }
-        for _, measuredResolution in ipairs(comparison.resolutions) do
-            local key = tostring(measuredResolution)
+        for _, measuredCase in ipairs(comparison.cases) do
+            local key = measuredCase.key
             comparison.results[key].height = self.qualityEvaluator(reference, comparison.grids[key],
-                comparison.resolutions[1])
+                referenceCase.resolution)
         end
         -- The reference closure reads the finest grid while every coarser grid is evaluated.
-        for _, measuredResolution in ipairs(comparison.resolutions) do
-            comparison.grids[tostring(measuredResolution)]:Release()
+        for _, measuredCase in ipairs(comparison.cases) do
+            comparison.grids[measuredCase.key]:Release()
         end
         comparison.grids = {}
         comparison.builder = nil
@@ -295,7 +328,9 @@ function this:StepQualityComparison()
         local cell = comparison.cellHandle:getObject()
         comparison.builder = self.builderFactory({
             cell = cell,
-            interval = resolution,
+            interval = comparisonCase.resolution,
+            bucketSize = comparisonCase.bucketSize,
+            triangleStorageMode = comparisonCase.triangleStorageMode,
             maxSlopeDegrees = self.parameters.maxSlopeDegrees,
             maxClimb = self.parameters.maxClimb,
         })
@@ -308,17 +343,18 @@ function this:StepQualityComparison()
         timeCheckInterval = self.parameters.timeCheckInterval,
     })
     if state == "ready" then
-        local key = tostring(resolution)
+        local key = comparisonCase.key
         comparison.grids[key] = builder.grid
         comparison.results[key] = {
-            resolution = resolution,
+            resolution = comparisonCase.resolution,
             samples = builder.processedSamples,
             elapsed_milliseconds = builder.elapsedMilliseconds or 0,
             max_step_milliseconds = builder.maxStepMilliseconds or 0,
             memory_delta_kilobytes = builder.memoryDeltaKilobytes or 0,
+            sampler = builder.samplerMetrics,
         }
         comparison.builder = nil
-        comparison.resolutionIndex = comparison.resolutionIndex + 1
+        comparison.caseIndex = comparison.caseIndex + 1
     elseif state == "failed" or state == "cancelled" then
         comparison.state = "failed"
         comparison.error = builder.error or "Benchmark terrain build stopped."
@@ -348,11 +384,16 @@ function this:GetQualityStatus()
     if not comparison then
         return { state = "idle", results = {} }
     end
+    local caseKeys = {}
+    for _, comparisonCase in ipairs(comparison.cases) do
+        table.insert(caseKeys, comparisonCase.key)
+    end
     return {
         state = comparison.state,
         cell_id = comparison.cellId,
-        resolution_index = comparison.resolutionIndex,
-        resolution_count = table.size(comparison.resolutions),
+        resolution_index = comparison.caseIndex,
+        resolution_count = table.size(comparison.cases),
+        case_keys = caseKeys,
         results = comparison.results,
         error = comparison.error,
     }
