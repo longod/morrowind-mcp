@@ -275,6 +275,78 @@ function this.MouseRelease(button)
     return true
 end
 
+--- Applies a relative DirectInput mouse movement that the game consumes on its next input poll.
+---@param deltaX number
+---@param deltaY number
+---@return boolean?
+function this.MoveMouseBy(deltaX, deltaY)
+    if type(deltaX) ~= "number" or type(deltaY) ~= "number" then
+        logger:warn("MoveMouseBy rejected: deltas must be numbers")
+        return nil
+    end
+
+    local inputController = GetInputController()
+    if not inputController then
+        return nil
+    end
+
+    inputController.mouseState.x = deltaX
+    inputController.mouseState.y = deltaY
+    return true
+end
+
+--- Moves to a centered UI coordinate where Y increases down while raw cursor Y increases up.
+---@param targetX number
+---@param targetY number
+---@return MCP.AnyMap? movement
+function this.MoveMouseToUiPosition(targetX, targetY)
+    if type(targetX) ~= "number" or type(targetY) ~= "number" then
+        logger:warn("MoveMouseToUiPosition rejected: coordinates must be numbers")
+        return nil
+    end
+
+    local cursor = tes3.getCursorPosition()
+    if not cursor or type(cursor.x) ~= "number" or type(cursor.y) ~= "number" then
+        logger:warn("MoveMouseToUiPosition rejected: raw cursor position is unavailable")
+        return nil
+    end
+
+    local deltaX = targetX - cursor.x
+    local deltaY = targetY + cursor.y
+    if not this.MoveMouseBy(deltaX, deltaY) then
+        return nil
+    end
+
+    return {
+        cursor_before = { x = cursor.x, y = cursor.y },
+        target_ui = { x = targetX, y = targetY },
+        mouse_delta = { x = deltaX, y = deltaY },
+    }
+end
+
+--- Moves to a scaled UI viewport coordinate with its origin at the upper left.
+---@param targetX number
+---@param targetY number
+---@return MCP.AnyMap? movement
+function this.MoveMouseToViewportPosition(targetX, targetY)
+    if type(targetX) ~= "number" or type(targetY) ~= "number" or type(tes3ui.getViewportSize) ~= "function" then
+        logger:warn("MoveMouseToViewportPosition rejected: coordinates or UI viewport are unavailable")
+        return nil
+    end
+
+    local viewportWidth, viewportHeight = tes3ui.getViewportSize()
+    if type(viewportWidth) ~= "number" or type(viewportHeight) ~= "number" or targetX < 0 or targetY < 0 or targetX > viewportWidth or targetY > viewportHeight then
+        logger:warn("MoveMouseToViewportPosition rejected: target is outside the scaled UI viewport")
+        return nil
+    end
+
+    local movement = this.MoveMouseToUiPosition(targetX - viewportWidth / 2, targetY - viewportHeight / 2)
+    if movement then
+        movement.target_viewport = { x = targetX, y = targetY }
+    end
+    return movement
+end
+
 --- Perform a single mouse click by push + short hold + release.
 --- A same-frame release can be ignored by some bindings (for example menuMode on mouse),
 --- so tap keeps the button down briefly and releases via a fail-safe timer.

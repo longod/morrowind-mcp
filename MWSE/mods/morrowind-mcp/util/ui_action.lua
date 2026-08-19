@@ -140,6 +140,28 @@ local staticHints = {
         },
     },
     {
+        path = "layout/MenuContents/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/Buttons/Buttons/MenuContents_takeallbutton",
+        properties = { "mouseClick" },
+        name = "MenuContents_takeallbutton",
+        effects = {
+            {
+                when = { cursor_tile_present = false },
+                does = "transfer_all_from_container",
+            },
+        },
+    },
+    {
+        path = "layout/MenuBarter/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/null/null/MenuBarter_Offerbutton",
+        properties = { "mouseClick" },
+        name = "MenuBarter_Offerbutton",
+        effects = {
+            {
+                when = { cursor_tile_present = false },
+                does = "offer_barter",
+            },
+        },
+    },
+    {
         path = "layout/MenuInventory/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/MenuInventory_bottom_layout/MenuInventory_items_layout/V_NULL/MenuInventory_scrollpane/null/PartScrollPane_outer_frame",
         properties = { "mouseClick" },
         name = "PartScrollPane_outer_frame",
@@ -407,7 +429,7 @@ end
 ---@param element tes3uiElement
 ---@return MCP.UIActionHint?
 local function GetActionHint(element)
-    if not IsValidElement(element) or element.widget ~= nil then
+    if not IsValidElement(element) then
         return nil
     end
 
@@ -416,7 +438,7 @@ local function GetActionHint(element)
         return nil
     end
 
-    -- Runtime observations win over static hints so modded or stateful menus can refine defaults.
+    -- Runtime observations apply only to widgetless layouts, while static hints also annotate native widget buttons.
     if element.type == "layout" then
         local observedHint = observedHintByPath[path]
         if observedHint then

@@ -170,6 +170,87 @@ function this.Test()
         unitwind:expect(ui.ExtractVisibleText(root)).toBe("First\nSecond")
     end)
 
+    unitwind:test("Mouse-consuming descendants occupy input while MenuMulti-style containers remain transparent", function()
+        local nestedControl = {
+            positionX = 10,
+            positionY = -10,
+            width = 20,
+            height = 20,
+            visible = true,
+            consumeMouseEvents = true,
+            children = {},
+            isValid = function()
+                return true
+            end,
+        }
+        local consumingChild = {
+            positionX = 136,
+            positionY = 71,
+            width = 487,
+            height = 364,
+            visible = true,
+            consumeMouseEvents = true,
+            children = { nestedControl },
+            isValid = function()
+                return true
+            end,
+        }
+        nestedControl.parent = consumingChild
+        local transparentMenuMulti = {
+            name = "MenuMulti",
+            positionX = -640,
+            positionY = 360,
+            width = 1280,
+            height = 720,
+            visible = true,
+            consumeMouseEvents = false,
+            children = { consumingChild },
+            isValid = function()
+                return true
+            end,
+        }
+        consumingChild.parent = transparentMenuMulti
+        local root = {
+            children = { transparentMenuMulti },
+            isValid = function()
+                return true
+            end,
+        }
+        transparentMenuMulti.parent = root
+
+        unitwind:mock(ui, "GetScreenRect", function(element)
+            if element == consumingChild then
+                return { x = 136, y = 71, width = 487, height = 364 }
+            end
+            error("Only the consuming child should be converted into an occupied rectangle.")
+        end)
+
+        local occupiedRects = ui.GetMouseConsumingViewportRects(root, 1280, 720)
+
+        unitwind:expect(table.size(occupiedRects)).toBe(1)
+        unitwind:expect(occupiedRects[1].x).toBe(776)
+        unitwind:expect(occupiedRects[1].y).toBe(289)
+        unitwind:expect(occupiedRects[1].width).toBe(487)
+        unitwind:expect(occupiedRects[1].height).toBe(364)
+    end)
+
+    unitwind:test("GetMouseConsumingViewportRects ignores invalid top-level children", function()
+        local root = {
+            children = {
+                {
+                    isValid = function()
+                        return false
+                    end,
+                },
+            },
+            isValid = function()
+                return true
+            end,
+        }
+
+        unitwind:expect(table.size(ui.GetMouseConsumingViewportRects(root, 1280, 720))).toBe(0)
+    end)
+
     unitwind:test("CollectActionable includes a live inventory tile with its raw-index path", function()
         local tileElement = {
             id = 3,

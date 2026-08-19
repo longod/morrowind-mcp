@@ -398,7 +398,7 @@ function this.FindPath(root, target)
     return Visit(root, "")
 end
 
---- Returns an element rectangle in the scaled UI viewport coordinate system.
+--- Returns an element rectangle in centered scaled UI coordinates, with positive Y upward.
 --- Top-level Morrowind menus are positioned relative to the viewport center.
 ---@param element tes3uiElement?
 ---@return MCP.AnyMap? rect
@@ -429,6 +429,181 @@ function this.GetScreenRect(element)
         -- viewport_width = viewportWidth,
         -- viewport_height = viewportHeight,
     })
+end
+
+--- Converts a centered UI rectangle into scaled UI viewport coordinates with a top-left origin.
+--- The input x/y identifies the rectangle's top-left corner in the native Morrowind UI coordinate system.
+---@param viewportWidth number
+---@param viewportHeight number
+---@param rect MCP.AnyMap?
+---@return MCP.AnyMap? viewportRect
+function this.CenteredUiRectToViewportRect(viewportWidth, viewportHeight, rect)
+    if type(viewportWidth) ~= "number" or type(viewportHeight) ~= "number" or not rect then
+        return nil
+    end
+
+    local x = rect.x
+    local y = rect.y
+    local width = rect.width
+    local height = rect.height
+    if type(x) ~= "number" or type(y) ~= "number" or type(width) ~= "number" or type(height) ~= "number" then
+        return nil
+    end
+
+    return jsonrpc.object({
+        x = viewportWidth / 2 + x,
+        y = viewportHeight / 2 - y,
+        width = width,
+        height = height,
+    })
+end
+
+--- Finds an unoccupied viewport point and its surrounding minimum-size input band.
+---@param viewportWidth number
+---@param viewportHeight number
+---@param occupiedRects MCP.AnyMap[]
+---@param minimumWidth number
+---@param minimumHeight number
+---@param preference "bottom"|"top"?
+---@return MCP.AnyMap? point
+---@return MCP.AnyMap? band
+function this.FindUnoccupiedViewportPoint(viewportWidth, viewportHeight, occupiedRects, minimumWidth, minimumHeight, preference)
+    if type(viewportWidth) ~= "number" or type(viewportHeight) ~= "number" or type(minimumWidth) ~= "number" or type(minimumHeight) ~= "number" or
+        viewportWidth <= 0 or viewportHeight <= 0 or minimumWidth <= 0 or minimumHeight <= 0 or minimumWidth > viewportWidth or minimumHeight > viewportHeight then
+        return nil
+    end
+
+    local preferredBottom = preference ~= "top"
+    local candidateEdges = { preferredBottom and viewportHeight or 0 }
+    for _, rect in ipairs(occupiedRects or {}) do
+        local x = rect.x
+        local y = rect.y
+        local width = rect.width
+        local height = rect.height
+        if type(x) == "number" and type(y) == "number" and type(width) == "number" and type(height) == "number" and width > 0 and height > 0 then
+            table.insert(candidateEdges, preferredBottom and y or y + height)
+        end
+    end
+    table.sort(candidateEdges, function(left, right)
+        if preferredBottom then
+            return left > right
+        end
+        return left < right
+    end)
+
+    local viewportCenterX = viewportWidth / 2
+    for _, edge in ipairs(candidateEdges) do
+        local top = preferredBottom and edge - minimumHeight or edge
+        if top >= 0 and top + minimumHeight <= viewportHeight then
+            local intervals = {}
+            for _, rect in ipairs(occupiedRects or {}) do
+                local x = rect.x
+                local y = rect.y
+                local width = rect.width
+                local height = rect.height
+                if type(x) == "number" and type(y) == "number" and type(width) == "number" and type(height) == "number" and width > 0 and height > 0 and
+                    y < top + minimumHeight and y + height > top then
+                    table.insert(intervals, { left = math.max(0, x), right = math.min(viewportWidth, x + width) })
+                end
+            end
+            table.sort(intervals, function(left, right)
+                return left.left < right.left
+            end)
+
+            local gaps = {}
+            local occupiedRight = 0
+            for _, interval in ipairs(intervals) do
+                if interval.left > occupiedRight then
+                    table.insert(gaps, { left = occupiedRight, right = interval.left })
+                end
+                occupiedRight = math.max(occupiedRight, interval.right)
+            end
+            if occupiedRight < viewportWidth then
+                table.insert(gaps, { left = occupiedRight, right = viewportWidth })
+            end
+
+            local bestGap = nil
+            local bestDistance = nil
+            for _, gap in ipairs(gaps) do
+                if gap.right - gap.left >= minimumWidth then
+                    local center = math.max(gap.left + minimumWidth / 2, math.min(viewportCenterX, gap.right - minimumWidth / 2))
+                    local distance = math.abs(center - viewportCenterX)
+                    if not bestDistance or distance < bestDistance then
+                        bestGap = gap
+                        bestDistance = distance
+                    end
+                end
+            end
+            if bestGap then
+                local pointX = math.max(bestGap.left + minimumWidth / 2, math.min(viewportCenterX, bestGap.right - minimumWidth / 2))
+                return jsonrpc.object({ x = pointX, y = top + minimumHeight / 2 }),
+                    jsonrpc.object({ x = bestGap.left, y = top, width = bestGap.right - bestGap.left, height = minimumHeight })
+            end
+        end
+    end
+    return nil
+end
+
+--- Collects visible UI regions that consume mouse input, converting each from its local coordinates to viewport coordinates.
+--- Traversal stops at the first consuming ancestor because its complete rectangle already blocks every descendant.
+---@param mainRoot tes3uiElement?
+---@param viewportWidth number
+---@param viewportHeight number
+---@return MCP.AnyMap[] occupiedRects
+function this.GetMouseConsumingViewportRects(mainRoot, viewportWidth, viewportHeight)
+    local occupiedRects = {}
+    if not mainRoot or not mainRoot:isValid() then
+        return occupiedRects
+    end
+
+    local function Visit(element)
+        if not element or not element:isValid() or not element.visible then
+            return
+        end
+
+        -- A consuming element either handles a click or discards it, so neither case is a valid scene-drop target.
+        if element.consumeMouseEvents == true then
+            local centeredRect = this.GetScreenRect(element)
+            local viewportRect = this.CenteredUiRectToViewportRect(viewportWidth, viewportHeight, centeredRect)
+            if viewportRect then
+                table.insert(occupiedRects, viewportRect)
+            end
+            return
+        end
+
+        for _, child in ipairs(element.children or {}) do
+            Visit(child)
+        end
+    end
+
+    for _, menu in ipairs(mainRoot.children or {}) do
+        if menu and menu:isValid() then
+            Visit(menu)
+        end
+    end
+    return occupiedRects
+end
+
+--- Finds a conservative scene-input point by excluding visible mouse-consuming UI from the viewport.
+---@param mainRoot tes3uiElement?
+---@param minimumWidth number
+---@param minimumHeight number
+---@param preference "bottom"|"top"?
+---@return MCP.AnyMap? point
+---@return MCP.AnyMap? band
+function this.FindSceneInputPoint(mainRoot, minimumWidth, minimumHeight, preference)
+    if not mainRoot or not mainRoot:isValid() or type(tes3ui.getViewportSize) ~= "function" then
+        return nil
+    end
+
+    local viewportWidth, viewportHeight = tes3ui.getViewportSize()
+    if type(viewportWidth) ~= "number" or type(viewportHeight) ~= "number" then
+        return nil
+    end
+
+    local occupiedRects = this.GetMouseConsumingViewportRects(mainRoot, viewportWidth, viewportHeight)
+
+    return this.FindUnoccupiedViewportPoint(viewportWidth, viewportHeight, occupiedRects, minimumWidth, minimumHeight, preference)
 end
 
 --- Collects visible, enabled action targets with raw-index paths suitable for mw-menu-action.

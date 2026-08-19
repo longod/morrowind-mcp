@@ -45,6 +45,64 @@ function this.Test()
         unitwind:expect(ok).toBe(nil)
     end)
 
+    unitwind:test("MoveMouseBy updates direct mouse axes", function()
+        local mouseState = {}
+        local originalWorldController = tes3.worldController
+        ---@diagnostic disable-next-line: missing-fields, assign-type-mismatch
+        tes3.worldController = {
+            ---@diagnostic disable-next-line: missing-fields
+            inputController = {
+                mouseState = mouseState,
+            },
+        }
+
+        local ok = inputAction.MoveMouseBy(12, -8)
+
+        tes3.worldController = originalWorldController
+
+        unitwind:expect(ok).toBe(true)
+        unitwind:expect(mouseState.x).toBe(12)
+        unitwind:expect(mouseState.y).toBe(-8)
+    end)
+
+    unitwind:test("absolute mouse helpers convert centered UI and top-left viewport coordinates", function()
+        local mouseState = {}
+        local originalWorldController = tes3.worldController
+        local originalGetCursorPosition = tes3.getCursorPosition
+        local originalGetViewportSize = tes3ui.getViewportSize
+        ---@diagnostic disable-next-line: missing-fields, assign-type-mismatch
+        tes3.worldController = {
+            ---@diagnostic disable-next-line: missing-fields
+            inputController = {
+                mouseState = mouseState,
+            },
+        }
+        tes3.getCursorPosition = function()
+            return { x = 20, y = -10 }
+        end
+        tes3ui.getViewportSize = function()
+            return 1280, 720
+        end
+
+        local centeredMovement = inputAction.MoveMouseToUiPosition(320, 120)
+        local viewportMovement = inputAction.MoveMouseToViewportPosition(960, 480)
+
+        tes3.worldController = originalWorldController
+        tes3.getCursorPosition = originalGetCursorPosition
+        tes3ui.getViewportSize = originalGetViewportSize
+
+        unitwind:expect(centeredMovement.target_ui.x).toBe(320)
+        unitwind:expect(centeredMovement.target_ui.y).toBe(120)
+        unitwind:expect(centeredMovement.mouse_delta.x).toBe(300)
+        unitwind:expect(centeredMovement.mouse_delta.y).toBe(110)
+        unitwind:expect(viewportMovement.target_viewport.x).toBe(960)
+        unitwind:expect(viewportMovement.target_viewport.y).toBe(480)
+        unitwind:expect(viewportMovement.target_ui.x).toBe(320)
+        unitwind:expect(viewportMovement.target_ui.y).toBe(120)
+        unitwind:expect(mouseState.x).toBe(300)
+        unitwind:expect(mouseState.y).toBe(110)
+    end)
+
     unitwind:test("MouseTap keeps button down until timed release callback", function()
         local mouseButtons = {}
         local inputController = {

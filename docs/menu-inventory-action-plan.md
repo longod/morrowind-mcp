@@ -10,7 +10,7 @@ The completed Phase 1 contract is:
 2. `mw-menu-action` accepts a selected tile path.
 3. A later `mw-menu-fetch` returns `cursor_tile` with the selected item and count.
 
-After an item tile is clicked, its cursor representation is owned by the help layer rather than the inventory menu. `cursor_tile.path` is therefore not required and must not be used as a post-click locator.
+After an item tile is clicked, its cursor representation is owned by the help layer rather than the inventory menu. `cursor_tile.path` is therefore not required and must not be used as a post-click locator. Immediate cursor visibility is diagnostic only and does not block a same-call destination click.
 
 ## Scope
 
@@ -21,9 +21,20 @@ Included:
 - Player inventory tiles, player inventory drop region, character portrait, and the quantity UI reached from a Gold stack.
 - One separate probe for dropping an item into the 3D scene.
 
+Verified in development debug mode:
+
+- A count-one, non-bound `MenuContents` tile can be transferred to the player inventory through one source click followed by the curated player-inventory destination click.
+- `MenuContents_takeallbutton` is the fixed vanilla Take All shortcut. Its verified static path is `layout/MenuContents/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/Buttons/Buttons/MenuContents_takeallbutton`.
+- Take All closes `MenuContents`. Its completion is verified from an empty cursor and two stable, increased player `mw-inventory-fetch` snapshots; the closed menu is not reused.
+- A focused merchant probe can use `activate`, then click the live `MenuDialog_service_barter` choice to open `MenuBarter` without navigation or view changes.
+- `MenuBarter_Offerbutton` is a verified native Offer shortcut. Its fixed static path is `layout/MenuBarter/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/null/null/MenuBarter_Offerbutton`. The debug-only `offer` action resolves its curated effect, clicks its unique enabled live instance once with an empty cursor, and reports later UI observation as the postcondition. The live probe confirmed vanilla `MenuNotify3` activation.
+- A focused scene-drop probe moved to a live UI-free input point, initiated a timed DirectInput left tap, and verified an empty cursor, `common_pants_01` inventory count from 1 to 0, and a new nearby world reference.
+
+Each action remains development-debug-only. Do not implement a 3D drop workflow until its supported input path is measured.
+
 Deferred:
 
-- `MenuContents`, `MenuBarter`, pickpocket, and merchant operations.
+- Selecting player or merchant inventory tiles to construct a barter offer, pickpocket, and ownership or price semantics.
 - Automatic recovery if a destination click fails.
 - Inventory ownership, stealing, prices, and crime semantics.
 - Equipment-state postconditions. Equipment Memory may be used for later observation, but it is not a gate for this milestone.
@@ -51,34 +62,25 @@ Manual live probes confirmed these exact `mw-menu-action` destinations:
 - `MenuInventory_CharacterImage` accepts `mouseClick` as the equipment destination.
 - The MenuInventory `PartScrollPane_outer_frame` accepts `mouseClick` as the player inventory background destination.
 
-Both paths are published through curated `staticHints` in `util/ui_action.lua`; generic `image` or scroll-pane action discovery is intentionally not enabled. The probes established that the native element event routes the action, but they did not replace the release-based empty-grid probe required below.
+Both paths are published through curated `staticHints` in `util/ui_action.lua`; generic `image` or scroll-pane action discovery is intentionally not enabled. Vanilla inventory interaction is click-to-pick and click-to-place: selecting a tile enters the drag state without an OS-style pointer hold, and clicking another target attempts placement.
 
 1. During the existing `menu mode on` to `menu mode off` interval in `tests/server_test.ps1`, fetch `mw-menu-fetch` with `output_mode=actions`.
 2. Record every visible executable action with its path, id, name, type, text, and widget/action metadata.
 3. Identify candidate targets for the player inventory region and character portrait from the returned action list and the corresponding tree output.
 4. Do not promote a candidate to `inventory_target` merely because `triggerEvent(mouseClick)` is accepted. The `MenuInventory_character_box` probe was accepted but did not place `ring_keley` or clear the cursor.
-5. Vanilla placement requires a physical pointer position and mouse-button release instead of an element event. MWSE's drag-release dispatcher hit-tests mainRoot using the current mouse coordinates and dispatches the release to the element below it; it does not dispatch to `CursorIcon`.
-6. Determine the empty player inventory-grid cell that receives the release. Rerun `tests/server_test.ps1` after each focused probe and preserve the input/action evidence.
+5. Use the existing portrait and inventory-background static hints as the destination; no new destination discovery is required for this probe.
+6. Invoke exactly one source click and one destination click in the same `inventory-action` call, with no wait or retry between them. Record cursor observations after each click, but continue even when the immediate cursor is absent.
 
 Acceptance criteria:
 
 - Every published target completes its intended vanilla placement and clears the cursor in two subsequent fetches.
 - No target is inferred from a name alone or from an accepted `triggerEvent` without a successful placement probe.
 
-### Confirmed Routing Constraint
+### Same-Call Probe Constraint
 
-`tes3ui.getCursor()` and `tes3ui.getCursorTile()` expose the help-layer cursor representation. They are state-observation APIs, not drop destinations. A `triggerEvent` on `CursorIcon`, `MenuInventory_character_box`, or another element bypasses the native drag-release hit test and is not equivalent to a player drop.
+`tes3ui.getCursorTile()` exposes the help-layer cursor representation. It is an observation API, not a destination locator. The development-only `mw-inventory-action` probe records the cursor before and after each event but never gates its second click on an immediate cursor result.
 
-MWSE's `MenuInputController::dispatchMouseReleaseEvent` in `TES3UIMenuController.cpp` resolves the live pointer location against mainRoot while mouse drag capture is active, then sends the release to the element under that location. OpenMW's `mwgui/draganddrop.cpp` follows the same architecture: the dragged widget follows the cursor, while the destination is selected by GUI hit-testing.
-
-The next probe must therefore:
-
-1. Click a safe non-equipped tile and verify `cursor_tile`.
-2. Calculate an on-screen point within a confirmed empty inventory-grid cell.
-3. Move the actual Morrowind-window cursor to that point and release the primary mouse button through the existing direct mouse input path.
-4. Fetch twice and require an empty cursor while verifying that the item remains in player inventory.
-
-Add a temporary release observer only to record the actual destination element; do not advertise it as an `inventory_target` until the probe succeeds.
+The server test selects at most one equipped player tile, performs one unequip probe, and stops. It does not retry, choose a fallback item, attempt the reverse equip operation, or recover a remaining cursor item. The recorded Inspector and MWSE logs are the outcome of the probe whether it succeeds or fails.
 
 ## Phase 2B: Equip and Unequip Normal Paths
 
@@ -114,14 +116,15 @@ Acceptance criteria:
 
 ## Phase 2D: 3D Scene Drop Probe
 
-1. Select a disposable player inventory tile and confirm its cursor state.
-2. Use the existing player input/click mechanism to release it into the 3D scene, rather than an inventory target.
-3. Fetch cursor state twice and inspect memory/inventory output only as observational evidence.
+1. Start from a safe, open-area save with a disposable, count-one player item identified by ID.
+2. Select the item tile and scan visible mouse-consuming UI regions for the lowest UI-free input point.
+3. Move the DirectInput mouse to that UI-viewport point and initiate a timed left tap in the same debug-only tool call; its release occurs after the engine observes the press.
+4. Verify that the cursor is empty, player inventory decreases by one, and a new nearby world reference with the item ID is observed.
 
 Acceptance criteria:
 
-- The probe establishes whether the existing UI/input surface can express a scene drop.
-- This result does not publish a `drop` workflow or add it to `mw-inventory-action`.
+- The probe establishes whether the existing UI/input surface can start a same-call scene drop, with completion observed by later fetches.
+- Any failed postcondition stops the workflow; no retry, recovery click, or fallback item is attempted.
 
 ## Test Sequence
 

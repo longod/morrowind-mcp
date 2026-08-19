@@ -151,6 +151,75 @@ function this.Test()
         end
     end)
 
+    unitwind:test("FindUnoccupiedViewportPoint prefers the lowest available band", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local point, band = ui.FindUnoccupiedViewportPoint(100, 100, {
+            { x = 0, y = 0, width = 100, height = 40 },
+        }, 20, 20, "bottom")
+
+        unitwind:expect(point == nil).toBe(false)
+        if point and band then
+            unitwind:expect(point.x).toBe(50)
+            unitwind:expect(point.y).toBe(90)
+            unitwind:expect(band.y).toBe(80)
+        end
+    end)
+
+    unitwind:test("FindUnoccupiedViewportPoint honors top preference", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local rectangles = { { x = 0, y = 0, width = 20, height = 20 } }
+        local topPoint = ui.FindUnoccupiedViewportPoint(100, 100, rectangles, 20, 20, "top")
+        local bottomPoint = ui.FindUnoccupiedViewportPoint(100, 100, rectangles, 20, 20, "bottom")
+
+        unitwind:expect(topPoint == nil).toBe(false)
+        unitwind:expect(bottomPoint == nil).toBe(false)
+        if topPoint and bottomPoint then
+            unitwind:expect(topPoint.y).toBe(10)
+            unitwind:expect(bottomPoint.y).toBe(90)
+        end
+    end)
+
+    unitwind:test("FindUnoccupiedViewportPoint selects the gap nearest the viewport center", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local point, band = ui.FindUnoccupiedViewportPoint(100, 100, {
+            { x = 48, y = 0, width = 4, height = 20 },
+        }, 20, 20, "top")
+
+        unitwind:expect(point == nil).toBe(false)
+        if point and band then
+            unitwind:expect(point.x).toBe(38)
+            unitwind:expect(band.x).toBe(0)
+            unitwind:expect(band.width).toBe(48)
+        end
+    end)
+
+    unitwind:test("FindUnoccupiedViewportPoint skips a bottom band with gaps that are too narrow", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local point = ui.FindUnoccupiedViewportPoint(100, 100, {
+            { x = 20, y = 80, width = 60, height = 20 },
+        }, 30, 20, "bottom")
+
+        unitwind:expect(point == nil).toBe(false)
+        if point then
+            unitwind:expect(point.y).toBe(70)
+        end
+    end)
+
+    unitwind:test("FindUnoccupiedViewportPoint rejects full occupancy and handles many rectangles", function()
+        local ui = require("morrowind-mcp.tes3.ui")
+        local fullPoint = ui.FindUnoccupiedViewportPoint(100, 100, {
+            { x = 0, y = 0, width = 100, height = 100 },
+        }, 20, 20, "bottom")
+        unitwind:expect(fullPoint).toBe(nil)
+
+        local rectangles = {}
+        for index = 1, 100 do
+            table.insert(rectangles, { x = index - 1, y = 0, width = 1, height = 50 })
+        end
+        local point = ui.FindUnoccupiedViewportPoint(200, 100, rectangles, 20, 20, "bottom")
+        unitwind:expect(point == nil).toBe(false)
+    end)
+
     unitwind:test("tes3uiElement emits unique structural paths for duplicate names", function()
         local ui = require("morrowind-mcp.tes3.ui")
         local root = NewElement(nil, "layout")
@@ -280,6 +349,64 @@ function this.Test()
         local outerFrame = NewElement("PartScrollPane_outer_frame", "layout", holder)
 
         unitwind:expect(uiAction.GetActionProperties(outerFrame)).toBe(nil)
+    end)
+
+    unitwind:test("GetActionEffects returns the static MenuContents Take All shortcut", function()
+        local root = NewElement(nil, "layout")
+        local menu = NewElement("MenuContents", "rect", root)
+        local border = NewElement("PartDragMenu_thick_border", "model", menu)
+        local center = NewElement("PartDragMenu_center_frame", "layout", border)
+        local frame = NewElement("PartDragMenu_drag_frame", "layout", center)
+        local firstNull = NewElement("null", "layout", frame)
+        local secondNull = NewElement("null", "layout", firstNull)
+        local main = NewElement("PartDragMenu_main", "layout", secondNull)
+        local firstButtons = NewElement("Buttons", "layout", main)
+        local secondButtons = NewElement("Buttons", "layout", firstButtons)
+        local takeAll = NewElement("MenuContents_takeallbutton", "button", secondButtons)
+        takeAll.widget = { element = takeAll }
+
+        local properties = uiAction.GetActionProperties(takeAll)
+        unitwind:expect(properties == nil).toBe(false)
+        if properties then
+            unitwind:expect(table.size(properties)).toBe(1)
+            unitwind:expect(properties[1]).toBe("mouseClick")
+        end
+
+        local effects = uiAction.GetActionEffects(takeAll)
+        unitwind:expect(effects == nil).toBe(false)
+        if effects then
+            unitwind:expect(table.size(effects)).toBe(1)
+            unitwind:expect(effects[1].does).toBe("transfer_all_from_container")
+        end
+    end)
+
+    unitwind:test("GetActionEffects returns the static MenuBarter Offer shortcut", function()
+        local root = NewElement(nil, "layout")
+        local menu = NewElement("MenuBarter", "rect", root)
+        local border = NewElement("PartDragMenu_thick_border", "model", menu)
+        local center = NewElement("PartDragMenu_center_frame", "layout", border)
+        local frame = NewElement("PartDragMenu_drag_frame", "layout", center)
+        local firstNull = NewElement("null", "layout", frame)
+        local secondNull = NewElement("null", "layout", firstNull)
+        local main = NewElement("PartDragMenu_main", "layout", secondNull)
+        local firstButtons = NewElement("null", "layout", main)
+        local secondButtons = NewElement("null", "layout", firstButtons)
+        local offer = NewElement("MenuBarter_Offerbutton", "button", secondButtons)
+        offer.widget = { element = offer }
+
+        local properties = uiAction.GetActionProperties(offer)
+        unitwind:expect(properties == nil).toBe(false)
+        if properties then
+            unitwind:expect(table.size(properties)).toBe(1)
+            unitwind:expect(properties[1]).toBe("mouseClick")
+        end
+
+        local effects = uiAction.GetActionEffects(offer)
+        unitwind:expect(effects == nil).toBe(false)
+        if effects then
+            unitwind:expect(table.size(effects)).toBe(1)
+            unitwind:expect(effects[1].does).toBe("offer_barter")
+        end
     end)
 
     unitwind:test("GetActionProperties returns static inventory portrait action", function()
