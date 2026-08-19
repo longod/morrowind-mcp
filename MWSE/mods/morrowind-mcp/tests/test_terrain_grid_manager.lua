@@ -204,8 +204,49 @@ function this.Test()
         unitwind:expect(attempts).toBe(2)
     end)
 
-    unitwind:test("Quality comparison builds resolutions sequentially and releases temporary grids", function()
-        local cell = Cell("quality", 0, 0)
+    ---@param warnings string[] Receives every formatted warning raised while a test runs.
+    local function CapturingLogger(warnings)
+        return {
+            debug = function() end,
+            warn = function(_, format, ...) table.insert(warnings, string.format(format, ...)) end,
+        }
+    end
+
+    unitwind:test("Heightfield rejection is reported for the affected cell", function()
+        local cell = Cell("fallback", 2, -3)
+        unitwind:mock(tes3, "makeSafeObjectHandle", Handle)
+        local manager = managerModule.new({
+            builderFactory = function(params)
+                local builder = Builder(params)
+                builder.samplerMetrics.heightfield_fallback_reason = "Landscape height grid is incomplete."
+                return builder
+            end,
+            qualityEvaluator = function() return { mae = 0 } end,
+        })
+        local warnings = {}
+        manager.logger = CapturingLogger(warnings) ---@diagnostic disable-line: assign-type-mismatch, missing-fields
+        manager:QueueCell(cell)
+        manager:Step()
+        unitwind:expect(table.size(warnings)).toBe(1)
+        unitwind:expect(warnings[1]).toBe(
+            "Terrain heightfield sampling rejected: cell=exterior:fallback:2,-3 reason=Landscape height grid is incomplete.")
+    end)
+
+    unitwind:test("Ready grids without a rejection reason stay silent", function()
+        local cell = Cell("accepted", 0, 0)
+        unitwind:mock(tes3, "makeSafeObjectHandle", Handle)
+        local manager = managerModule.new({
+            builderFactory = Builder,
+            qualityEvaluator = function() return { mae = 0 } end,
+        })
+        local warnings = {}
+        manager.logger = CapturingLogger(warnings) ---@diagnostic disable-line: assign-type-mismatch, missing-fields
+        manager:QueueCell(cell)
+        manager:Step()
+        unitwind:expect(table.size(warnings)).toBe(0)
+    end)
+
+    unitwind:test("Quality comparison builds resolutions sequentially and releases temporary grids", function()        local cell = Cell("quality", 0, 0)
         unitwind:mock(tes3, "makeSafeObjectHandle", Handle)
         local evaluated = 0
         local manager = managerModule.new({

@@ -2,14 +2,15 @@
 name: terrain-benchmark-run
 user-invocable: true
 description: |
-  Morrowind MCP の terrain grid bucket-size ベンチマークを tests/terrain_benchmark.ps1 で反復実行し、中央値 JSON、Inspector log、MWSE.log を確認する。"terrain benchmark", "terrain grid benchmark", "地形ベンチマーク", "任意の場所で terrain を計測" で使用する。
+  Morrowind MCP の terrain grid height source ベンチマークを tests/terrain_benchmark.ps1 で反復実行し、中央値 JSON、Inspector log、MWSE.log を確認する。"terrain benchmark", "terrain grid benchmark", "地形ベンチマーク", "任意の場所で terrain を計測" で使用する。
 ---
 
 # terrain-benchmark-run
 
 ## Purpose
 
-- `tests/terrain_benchmark.ps1` は terrain grid の AoS/SoA layout を比較する実機ベンチマークである。既定ケースは production bucket size の `64-64-aos/soa`、`128-128-aos/soa`、`256-128-aos/soa` で、`aos` は temporary vertices と completed triangles の両方を AoS、`soa` は両方を SoA とする。face-normal calculation は scalar に固定する。
+- `tests/terrain_benchmark.ps1` は terrain sampler の実装と layout を比較する実機ベンチマークである。既定ケースは mesh sampler の `64-64-aos/soa`、`128-128-aos/soa`、`256-128-aos/soa` と、production の heightfield sampler の `64-heightfield`、`128-heightfield`、`256-heightfield` である。`aos` は temporary vertices と completed triangles の両方を AoS、`soa` は両方を SoA とする。`heightfield` は land record の 65x65 height grid を直接参照し、triangle と bucket を構築しない。face-normal calculation は scalar に固定する。
+- heightfield case の `sampler.triangle_count` と `bucket_*` は 0 になる。性能比較には `sampler.construction_elapsed_milliseconds` を使う。
 - 既定では 1 回の warmup を除外し、同一 exterior cell で 5 回測定して中央値を出力する。
 - 既定では Morrowind と server の起動、メインメニューの Continue、屋外セルでの測定、server 停止までをスクリプトが所有する。
 - `-UseRunningServer` は、すでに起動済みのゲームでプレイヤーを任意の屋外地点へ移動した後に、ゲーム状態を変更せず測定するための明示的なモードである。

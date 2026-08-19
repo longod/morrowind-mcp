@@ -84,20 +84,24 @@ function this.Test()
     unitwind:test("Explicit sampler options are forwarded to the sampler factory", function()
         local receivedBucketSize = nil
         local receivedTriangleStorageMode = nil
+        local receivedSamplerMode = nil
         local builder = builderModule.new({
             cell = Cell(),
             interval = 128,
             bucketSize = 256,
             triangleStorageMode = "soa",
-            samplerFactory = function(_, bucketSize, triangleStorageMode)
+            samplerMode = "mesh",
+            samplerFactory = function(_, bucketSize, triangleStorageMode, samplerMode)
                 receivedBucketSize = bucketSize
                 receivedTriangleStorageMode = triangleStorageMode
+                receivedSamplerMode = samplerMode
                 return SamplerFactory()
             end,
         })
         builder:Step({ mode = "samples", maxSamples = 1 })
         unitwind:expect(receivedBucketSize).toBe(256)
         unitwind:expect(receivedTriangleStorageMode).toBe("soa")
+        unitwind:expect(receivedSamplerMode).toBe("mesh")
     end)
 
     local testsPassed, testsFailed = unitwind.testsPassed, unitwind.testsFailed

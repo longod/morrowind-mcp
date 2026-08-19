@@ -23,7 +23,8 @@ This section tracks work identified during implementation review. A listed item 
 | TF-02 | Add route-quality metrics after TD-03 defines their corpus and thresholds. | Normal angular error, slope disagreement, climb false-pass/false-block, components, reachability, path length, and direction changes are not reported. | The debug comparison returns each approved metric for the fixed scene and route pairs. |
 | TF-03 | Add an opt-in diagnostic route operation after TD-01. | `FindPath` and segment validation have no public runtime caller or per-route observability. | A debug-only operation reports provider, reroutes, ray count, elapsed time, and hit classifications without moving the player. |
 | TF-04 | Measure and remove fallback player dimensions. | Ray validation uses hard-coded bounds only when `tes3.mobilePlayer` is unavailable. | Runtime probe confirms normal values; fallback values have a documented source or are replaced by a conservative no-query result. |
-| TF-05 | Re-measure benchmark timings after the work-time accounting correction. | Existing build times included inter-frame delay and cannot be compared to the corrected metric. | `tests/terrain_benchmark.ps1` produces updated 64/128/256 results with work duration and maximum slice recorded. |
+| TF-06 | Confirm the checkerboard quad diagonal rule outside the Pelagiad scene. | The rule is verified exhaustively on one cell and, at construction, only against the leading triangles of each land patch. A landscape that conforms in the verified triangles but deviates elsewhere is not detected. | Representative cells from other regions report a full `terrain:ProbeLandGridAlignment` match, or the construction verification budget is raised to cover the observed deviation. |
+| TF-07 | Decide whether incremental height-source construction is still needed. | Construction runs in one frame step. Heightfield sampling reduced it to 4-7 milliseconds, but that remains above the per-frame budget. | Either the measured step fits the budget across representative cells, or construction is split across frames with the same completion contract. |
 
 ## Remote Exterior Travel
 
@@ -36,6 +37,8 @@ Pathgrids may provide preferred corridors, authored links, and teleport-door top
 ## Storage Optimization
 
 Replace Lua flat arrays with LuaJIT FFI arrays after profiling. The storage interface is intended to isolate allocation, indexing, and release details. Packed heights, flags, and edge masks may make broader caching feasible, but inactive-cell caching remains outside the initial implementation.
+
+The land height grid read during heightfield construction is a second candidate for the same treatment. It is a dense 65 by 65 array of elevations with no per-sample tables, so a packed representation would remove its remaining allocation without changing the sampler contract.
 
 ## Static Collision
 

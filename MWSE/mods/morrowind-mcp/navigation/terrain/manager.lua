@@ -23,10 +23,11 @@ local this = {}
 ---@field height MCP.TerrainHeightMetrics? Height metrics populated after all resolutions finish.
 
 ---@class MCP.TerrainQualityCase
----@field key string Stable result key unique across resolution and bucket-size combinations.
+---@field key string Stable result key unique across resolution, bucket-size, and height-source combinations.
 ---@field resolution integer Sampling interval in world units.
 ---@field bucketSize integer Spatial bucket width passed to the sampler.
 ---@field triangleStorageMode "aos"|"soa" Completed triangle representation compared by benchmark cases.
+---@field samplerMode "heightfield"|"mesh"? Terrain source implementation compared by benchmark cases.
 
 ---@alias MCP.TerrainQualityResultMap table<string, MCP.TerrainQualityResolutionResult>
 
@@ -225,10 +226,18 @@ function this:Step()
         self.grids[cellId] = job.builder.grid
         self.jobs[cellId] = nil
         table.remove(self.queue, 1)
+        local samplerMetrics = job.builder.samplerMetrics
         self.logger:debug(
-            "Terrain grid ready: cell=%s samples=%d elapsedMilliseconds=%.3f maxStepMilliseconds=%.3f memoryDeltaKilobytes=%.3f",
-            cellId, job.builder.processedSamples, job.builder.elapsedMilliseconds or 0,
+            "Terrain grid ready: cell=%s mode=%s samples=%d elapsedMilliseconds=%.3f maxStepMilliseconds=%.3f memoryDeltaKilobytes=%.3f",
+            cellId, samplerMetrics and samplerMetrics.mode or "unknown", job.builder.processedSamples,
+            job.builder.elapsedMilliseconds or 0,
             job.builder.maxStepMilliseconds or 0, job.builder.memoryDeltaKilobytes or 0)
+        -- A rejection means grid alignment or the checkerboard quad rule failed, so the cell needs investigation
+        -- through terrain:ProbeLandGridAlignment even though sampling silently fell back to triangle mesh data.
+        if samplerMetrics and samplerMetrics.heightfield_fallback_reason then
+            self.logger:warn("Terrain heightfield sampling rejected: cell=%s reason=%s",
+                cellId, samplerMetrics.heightfield_fallback_reason)
+        end
         if self.onChanged then
             self.onChanged("terrain", cellId)
         end
@@ -253,12 +262,15 @@ function this:StartQualityComparison(cell, cases)
     local comparisonCases = cases
     if not comparisonCases then
         comparisonCases = {
-            { key = "64-64-aos", resolution = 64, bucketSize = 64, triangleStorageMode = "aos" },
-            { key = "64-64-soa", resolution = 64, bucketSize = 64, triangleStorageMode = "soa" },
-            { key = "128-128-aos", resolution = 128, bucketSize = 128, triangleStorageMode = "aos" },
-            { key = "128-128-soa", resolution = 128, bucketSize = 128, triangleStorageMode = "soa" },
-            { key = "256-128-aos", resolution = 256, bucketSize = 128, triangleStorageMode = "aos" },
-            { key = "256-128-soa", resolution = 256, bucketSize = 128, triangleStorageMode = "soa" },
+            { key = "64-64-aos", resolution = 64, bucketSize = 64, triangleStorageMode = "aos", samplerMode = "mesh" },
+            { key = "64-64-soa", resolution = 64, bucketSize = 64, triangleStorageMode = "soa", samplerMode = "mesh" },
+            { key = "128-128-aos", resolution = 128, bucketSize = 128, triangleStorageMode = "aos", samplerMode = "mesh" },
+            { key = "128-128-soa", resolution = 128, bucketSize = 128, triangleStorageMode = "soa", samplerMode = "mesh" },
+            { key = "256-128-aos", resolution = 256, bucketSize = 128, triangleStorageMode = "aos", samplerMode = "mesh" },
+            { key = "256-128-soa", resolution = 256, bucketSize = 128, triangleStorageMode = "soa", samplerMode = "mesh" },
+            { key = "64-heightfield", resolution = 64, bucketSize = 64, triangleStorageMode = "soa", samplerMode = "heightfield" },
+            { key = "128-heightfield", resolution = 128, bucketSize = 128, triangleStorageMode = "soa", samplerMode = "heightfield" },
+            { key = "256-heightfield", resolution = 256, bucketSize = 128, triangleStorageMode = "soa", samplerMode = "heightfield" },
         }
     elseif type(comparisonCases[1]) == "number" then
         local numericCases = {}
@@ -331,6 +343,7 @@ function this:StepQualityComparison()
             interval = comparisonCase.resolution,
             bucketSize = comparisonCase.bucketSize,
             triangleStorageMode = comparisonCase.triangleStorageMode,
+            samplerMode = comparisonCase.samplerMode,
             maxSlopeDegrees = self.parameters.maxSlopeDegrees,
             maxClimb = self.parameters.maxClimb,
         })

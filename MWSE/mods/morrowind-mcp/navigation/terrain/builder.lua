@@ -19,9 +19,10 @@ local exteriorCellSize = cellutil.exteriorCellSize
 ---@field interval number? Distance in world units between samples.
 ---@field bucketSize number? Spatial bucket width used by the sampler; omitted uses the production default.
 ---@field triangleStorageMode "aos"|"soa"? Completed triangle representation; omitted uses the production SoA default.
+---@field samplerMode "heightfield"|"mesh"? Terrain source implementation; omitted uses the production heightfield default.
 ---@field maxSlopeDegrees number? Steepest accepted walking slope.
 ---@field maxClimb number? Maximum accepted vertical step.
----@field samplerFactory (fun(cell: tes3cell, bucketSize: number?, triangleStorageMode: "aos"|"soa"?): MCP.TerrainSampler?, string?)? Injectable terrain source factory.
+---@field samplerFactory (fun(cell: tes3cell, bucketSize: number?, triangleStorageMode: "aos"|"soa"?, samplerMode: "heightfield"|"mesh"?): MCP.TerrainSampler?, string?)? Injectable terrain source factory.
 ---@field clock (fun(): number)? Injectable monotonic clock used by tests.
 
 ---@class MCP.TerrainGridBuilder
@@ -30,10 +31,11 @@ local exteriorCellSize = cellutil.exteriorCellSize
 ---@field interval number
 ---@field bucketSize number?
 ---@field triangleStorageMode "aos"|"soa"?
+---@field samplerMode "heightfield"|"mesh"?
 ---@field grid MCP.TerrainGrid?
 ---@field sampler MCP.TerrainSampler?
 ---@field samplerMetrics MCP.TerrainSamplerMetrics? Construction diagnostics retained after sampler release.
----@field samplerFactory fun(cell: tes3cell, bucketSize: number?, triangleStorageMode: "aos"|"soa"?): MCP.TerrainSampler?, string?
+---@field samplerFactory fun(cell: tes3cell, bucketSize: number?, triangleStorageMode: "aos"|"soa"?, samplerMode: "heightfield"|"mesh"?): MCP.TerrainSampler?, string?
 ---@field clock fun(): number
 ---@field nextSample integer
 ---@field processedSamples integer
@@ -59,6 +61,7 @@ function this.new(params)
         interval = interval,
         bucketSize = params.bucketSize,
         triangleStorageMode = params.triangleStorageMode,
+        samplerMode = params.samplerMode,
         samplerFactory = params.samplerFactory or sourceModule.CreateCellSampler,
         clock = params.clock or os.clock,
         nextSample = 1,
@@ -102,7 +105,7 @@ function this:Step(options)
     local stepStartedAt = self.clock()
     if self.state == "queued" then
         local bucketSize = self.bucketSize or math.min(self.interval, 128)
-        local sampler, errorMessage = self.samplerFactory(self.cell, bucketSize, self.triangleStorageMode)
+        local sampler, errorMessage = self.samplerFactory(self.cell, bucketSize, self.triangleStorageMode, self.samplerMode)
         if not sampler then
             self.state = "failed"
             self.error = errorMessage or "Terrain sampler creation failed."

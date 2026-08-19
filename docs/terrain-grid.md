@@ -25,13 +25,39 @@ Before implementing grid generation, the outdoor server test must establish that
 3. The experimental collision group can be inspected without crashing the runtime.
 4. Root-filtered `tes3.rayTest` calls can distinguish landscape, static-object, and pick-object scene graphs.
 
-If terrain geometry or height cannot be read safely, implementation stops until an alternative source is selected. Ray picking is scene-graph triangle testing, not a swept player collision shape, so any disagreement with movement collision must be recorded. MWSE exposes each triangle's three 0-based indices through `niTriangle.vertices`. Direct mesh sampling is preferred, with downward rays restricted to the cell landscape root retained as a fallback.
+If terrain geometry or height cannot be read safely, implementation stops until an alternative source is selected. Ray picking is scene-graph triangle testing, not a swept player collision shape, so any disagreement with movement collision must be recorded. MWSE exposes each triangle's three 0-based indices through `niTriangle.vertices`. Direct height-grid sampling is preferred, with triangle mesh sampling and then downward rays restricted to the cell landscape root retained as fallbacks.
+
+## Height Sampling
+
+A sampler is selected once per cell at construction and returns elevation and the squared upward component of the surface unit normal for a world-space point. Three implementations exist, tried in order:
+
+1. `heightfield`: reads the land record's regular height grid directly. This is the default.
+2. `mesh`: precomputes triangle plane coefficients and a spatial bucket index. Used when heightfield preconditions fail, and selectable explicitly for measurement.
+3. `ray`: downward `tes3.rayTest` against the cell landscape root. Used only when triangle indices are unavailable.
+
+### Heightfield Preconditions
+
+Heightfield sampling assumes the land record's fixed 65 by 65 grid at 128 game units. Construction rejects the cell and falls back to mesh sampling when any of the following holds:
+
+- A transformed vertex does not land on a grid point within tolerance.
+- Two patches disagree on the elevation of a shared grid point.
+- The grid is not fully covered.
+- A verified quad does not follow the checkerboard diagonal split.
+- Triangle indices are unavailable.
+
+Each rejection carries a reason. The manager logs it as a warning with the cell identity so a rejected cell can be investigated. `mw-debug-action` action `terrain:ProbeLandGridAlignment` then reports alignment, coverage, duplicate agreement, diagonal orientation, and the leading violating quad coordinates for that cell.
+
+### Quad Diagonal Rule
+
+Each grid quad is split by one diagonal. The orientation follows the parity of `quadColumn + quadRow`: even parity splits from the lower-left corner to the upper-right corner, odd parity splits the other way. The rule is not assumed. Construction verifies it against the leading triangles of every land patch, and the probe verifies every triangle in the cell.
+
+Because the containing triangle is known, the sampler evaluates that triangle's plane. The resulting normal is the exact face normal rather than a finite-difference approximation, so heightfield and mesh sampling classify walkability identically.
 
 ## Module Layout
 
 Terrain navigation lives under `MWSE/mods/morrowind-mcp/navigation/terrain/`:
 
-- `source.lua`: MWSE terrain and collision access.
+- `source.lua`: MWSE terrain and collision access, including every height sampling implementation.
 - `storage.lua`: replaceable flat-array storage.
 - `grid.lua`: coordinates, traversal rules, and A*.
 - `builder.lua`: resumable generation jobs.
@@ -66,7 +92,7 @@ Quality measurements include:
 
 The reference surface is a finer set of downward ray samples against the active land root. Measurements include points between coarse grid samples, not only grid vertices.
 
-The debug quality comparison builds 64-, 128-, and 256-unit grids sequentially for the player's active cell. It uses the 64-unit grid as the temporary reference surface, records build and height-error metrics, then releases every comparison grid. By default, `tests/terrain_benchmark.ps1` starts the server, continues the saved game from the main menu, runs the measurement, and stops the server. Pass `-UseRunningServer` after moving a running game to the intended outdoor location to preserve its current state; it writes the structured result and logs under `tests/logs/terrain_benchmark/`.
+The debug quality comparison builds the player's active cell at 64, 128, and 256 units for each measured height source, using the finest grid as the temporary reference surface. It records build and height-error metrics, then releases every comparison grid. Height sources are compared at the same intervals so a source change can be separated from a resolution change. By default, `tests/terrain_benchmark.ps1` starts the server, continues the saved game from the main menu, runs the measurement, and stops the server. Pass `-UseRunningServer` after moving a running game to the intended outdoor location to preserve its current state; it writes the structured result and logs under `tests/logs/terrain_benchmark/`.
 
 ## Incremental Generation
 
@@ -112,22 +138,35 @@ Terrain-navigation parameters are private implementation details in `navigation/
 ## Testing
 
 - Server tests are the feasibility gate for MWSE scene graph, collision group, ray classification, and runtime lifecycle.
-- UnitWind covers storage, grid traversal, A*, quality aggregation, builder budgets, cancellation, and manager event ownership.
-- Runtime measurements are logged with cell identity, resolution, samples, elapsed time, maximum step time, and memory delta.
+- UnitWind covers storage, grid traversal, A*, quality aggregation, builder budgets, cancellation, manager event ownership, height sampling, and the quad diagonal rule.
+- Runtime measurements are logged with cell identity, height source, resolution, samples, elapsed time, maximum step time, and memory delta.
+- A rejected heightfield source is logged as a warning with its reason so a fallback is never silent.
 
 ## Measured Parameters
 
-The Pelagiad outdoor server scene produced nine ready active-cell grids at the provisional 128-unit interval. Each grid contained 4,225 samples. Generation used the hybrid budget and observed a maximum measured step of 1-2 milliseconds.
+The Pelagiad outdoor server scene produced nine ready active-cell grids at the provisional 128-unit interval. Each grid contained 4,225 samples. Generation used the hybrid budget, and heightfield sampling accumulated 7-13 milliseconds of work per grid with a maximum measured step of 4-7 milliseconds.
 
-The player-cell comparison used the 64-unit grid as its temporary reference:
+The player cell exposed 256 land shapes, 8,192 land triangles, and 6,400 transformed vertices resolving to 4,225 distinct grid points across 4,096 quads. Every quad followed the checkerboard diagonal rule, and every grid point reproduced its mesh face normal exactly.
 
-| Interval | Samples | Height MAE | Height RMSE | 95th percentile | Maximum error | Build time |
-|---:|---:|---:|---:|---:|---:|---:|
-| 64 | 16,641 | 0 | 0 | 0 | 0 | 45 ms |
-| 128 | 4,225 | 0.4140 | 1.2250 | 2 | 20 | 39 ms |
-| 256 | 1,089 | 3.9017 | 5.8939 | 12 | 50 | 42 ms |
+The player-cell comparison used the 64-unit grid as its temporary reference. Height error is identical for both measured height sources at every interval:
 
-These values are the builder's accumulated Step work duration from [result_20260809_010734.json](../tests/logs/terrain_benchmark/result_20260809_010734.json); they exclude inter-frame wait. They support 128 game units as the provisional default: its height error remained small while using roughly one quarter of the 64-unit samples. Route-quality and obstacle-classification measurements remain necessary before treating the default as final.
+| Interval | Samples | Height MAE | Height RMSE | 95th percentile | Maximum error |
+|---:|---:|---:|---:|---:|---:|
+| 64 | 16,641 | 0 | 0 | 0 | 0 |
+| 128 | 4,225 | 0.4140 | 1.2250 | 2 | 20 |
+| 256 | 1,089 | 3.9017 | 5.8939 | 12 | 50 |
+
+Construction cost differs substantially between the two sources:
+
+| Interval | Mesh construction | Heightfield construction | Mesh total work | Heightfield total work |
+|---:|---:|---:|---:|---:|
+| 64 | 19 ms | 5 ms | 27 ms | 20 ms |
+| 128 | 16 ms | 5 ms | 21 ms | 11 ms |
+| 256 | 17 ms | 4 ms | 21 ms | 5 ms |
+
+Mesh values use the structure-of-arrays layout, which measured faster than array-of-structures at every interval. That layout choice now affects only the fallback source.
+
+These values are the builder's accumulated Step work duration from [result_20260819_224150.json](../tests/logs/terrain_benchmark/result_20260819_224150.json); they exclude inter-frame wait. They support 128 game units as the provisional default: its height error remained small while using roughly one quarter of the 64-unit samples. Route-quality and obstacle-classification measurements remain necessary before treating the default as final.
 
 ## Decision Log
 
@@ -138,3 +177,5 @@ These values are the builder's accumulated Step work duration from [result_20260
 - Normative behavior and future proposals are maintained in separate documents.
 - The Pelagiad outdoor server scene exposed 256 land shapes and 8,192 land triangles in the player cell. Its experimental collision group exposed zero `collidees` and 31 referenced `NiNode` records under `colliders`; code must not infer static or dynamic semantics from the array names alone.
 - `niTriangle.vertices` contains three 0-based indices. Grid generation uses these indices and retains root-filtered downward rays as a fallback.
+- Land height-grid sampling is the default height source. It reproduces mesh sampling exactly on the measured scene while removing triangle coefficient and spatial bucket construction.
+- The quad diagonal rule is verified at construction rather than assumed, and any rejection falls back to triangle mesh sampling with a logged reason.

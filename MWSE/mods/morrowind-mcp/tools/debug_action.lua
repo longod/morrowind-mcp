@@ -28,6 +28,7 @@ function this.new(params)
                         "memory:SaveDebugDocuments",
                         "memory:ObserveActiveCells",
                         "terrain:ProbeRuntimeAccess",
+                        "terrain:ProbeLandGridAlignment",
                         "terrain:GetGridStatus",
                         "terrain:StartQualityComparison",
                         "terrain:GetQualityStatus",
@@ -64,6 +65,20 @@ function this:Execute(arguments, context)
         local result = terrainSource.ProbeRuntimeAccess()
         return jsonrpc.CallToolResult(
             jsonrpc.TextContent("Terrain runtime access probe completed."),
+            jsonrpc.object(result),
+            false
+        )
+    elseif action == "terrain:ProbeLandGridAlignment" then
+        local cell = tes3.player and tes3.player.cell or nil
+        local result = terrainSource.ProbeLandGridAlignment(cell)
+        -- Histograms and violation lists must survive serialization as JSON arrays even when empty.
+        result.slope_angle_bin_degrees = jsonrpc.array(result.slope_angle_bin_degrees)
+        result.slope_angle_histogram = jsonrpc.array(result.slope_angle_histogram)
+        result.slope_mismatch_histogram = jsonrpc.array(result.slope_mismatch_histogram)
+        result.quad_rule_mismatch_columns = jsonrpc.array(result.quad_rule_mismatch_columns)
+        result.quad_rule_mismatch_rows = jsonrpc.array(result.quad_rule_mismatch_rows)
+        return jsonrpc.CallToolResult(
+            jsonrpc.TextContent("Terrain land grid alignment probe completed."),
             jsonrpc.object(result),
             false
         )
