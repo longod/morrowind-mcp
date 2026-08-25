@@ -20,6 +20,7 @@ function this.new(params)
         description =
         "Fetch current player's inventory. or instead read the resource: morrowind://memory/player/inventory.json",
         inputSchema = jsonrpc.InputSchema(
+            -- TODO filter category, fetch non player NPCs?
         ),
         outputSchema = jsonrpc.OutputSchema(
             {

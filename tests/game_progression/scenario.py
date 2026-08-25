@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mwmcp_test_support.assertions import ContainsAssertionValue, EvaluateAssertions, ResolveJsonPointer
+
 
 class ScenarioValidationError(ValueError):
     """Raised when a progression scenario cannot be replayed safely."""
@@ -192,48 +194,6 @@ def ValidateAssertions(assertions: Any, path: str) -> None:
             raise ScenarioValidationError(f"{path}[{index}].operator is unsupported.")
         if operator != "exists" and "value" not in assertion:
             raise ScenarioValidationError(f"{path}[{index}].value is required for {operator}.")
-
-
-def EvaluateAssertions(document: Any, assertions: list[dict[str, Any]]) -> list[str]:
-    """Return assertion failures without making dynamic runtime values part of the contract."""
-    failures: list[str] = []
-    for assertion in assertions:
-        found, actual = ResolveJsonPointer(document, assertion["pointer"])
-        operator = assertion["operator"]
-        if operator == "exists":
-            if not found:
-                failures.append(f"{assertion['pointer']} does not exist")
-        elif operator == "equals":
-            if not found or actual != assertion["value"]:
-                failures.append(f"{assertion['pointer']} did not equal the recorded value")
-        elif not found or not ContainsAssertionValue(actual, assertion["value"]):
-            failures.append(f"{assertion['pointer']} did not contain the recorded value")
-    return failures
-
-
-def ContainsAssertionValue(document: Any, expected: Any) -> bool:
-    """Find a contains value in a scalar or any nested JSON container."""
-    if isinstance(document, dict):
-        return expected in document or any(ContainsAssertionValue(value, expected) for value in document.values())
-    if isinstance(document, list):
-        return expected in document or any(ContainsAssertionValue(value, expected) for value in document)
-    if isinstance(document, str):
-        return expected in document
-    return False
-
-
-def ResolveJsonPointer(document: Any, pointer: str) -> tuple[bool, Any]:
-    """Resolve RFC 6901 object and array paths without an external dependency."""
-    current = document
-    for token in pointer.lstrip("/").split("/"):
-        token = token.replace("~1", "/").replace("~0", "~")
-        if isinstance(current, dict) and token in current:
-            current = current[token]
-        elif isinstance(current, list) and token.isdecimal() and int(token) < len(current):
-            current = current[int(token)]
-        else:
-            return False, None
-    return True, current
 
 
 def ValidateTerminationPolicy(policy: Any) -> None:

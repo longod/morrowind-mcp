@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("unit_test", "server_test", "sse_test", "completion_test", "terrain_benchmark")]
+    [ValidateSet("unit_test", "server_test", "server_integration", "sse_test", "completion_test", "terrain_benchmark")]
     [string]$TestType,
     [ValidatePattern("^\d{8}_\d{6}$")]
     [string]$RunTimestamp,
@@ -23,6 +23,7 @@ $directory = Join-Path $ArtifactsRoot $TestType
 $primaryMap = @{
     unit_test = @("unitwind", "log")
     server_test = @("inspector", "log")
+    server_integration = @("inspector", "log")
     sse_test = @("sse", "log")
     completion_test = @("completion", "log")
     terrain_benchmark = @("result", "json")
@@ -30,7 +31,9 @@ $primaryMap = @{
 $primaryName, $primaryExtension = $primaryMap[$TestType]
 
 function Relative([string]$Path) {
-    return [IO.Path]::GetRelativePath($workspaceRoot, $Path).Replace("\", "/")
+    $baseUri = [System.Uri]::new(($workspaceRoot.TrimEnd("\") + "\"))
+    $targetUri = [System.Uri]::new($Path)
+    return [System.Uri]::UnescapeDataString($baseUri.MakeRelativeUri($targetUri).ToString()).Replace("\", "/")
 }
 
 function Rule([string]$Id, [string]$Source, [string]$Pattern, [string]$Kind = "default", [string]$Role = "assertion", [bool]$IncludeDetails = $true) {
@@ -160,6 +163,15 @@ $defaults = switch ($TestType) {
             Rule "server-known-uv-handle-closing" "primary" "^\[KNOWN\] Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable\.$" "default" "known-issue"
         )
     }
+    "server_integration" {
+        @(
+            Rule "server-integration-passed" "primary" "^\[PASSED\]\s"
+            Rule "server-integration-failed" "primary" "^\[FAILED\]\s"
+            Rule "server-integration-skipped" "primary" "^\[SKIPPED\]\s"
+            Rule "server-integration-inspector-nonzero" "primary" "^\[EXIT\]\s+(?!0\s*$)-?\d+\s*$" "default" "execution-evidence"
+            Rule "server-integration-known-uv-handle-closing" "primary" "^\[KNOWN\] Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable\.$" "default" "known-issue"
+        )
+    }
     "sse_test" {
         @(
             Rule "sse-pass" "primary" "\[PASSED\]\s+Received SSE notification:\s+notifications/message"
@@ -259,6 +271,45 @@ $knownIssues = @()
         }
         else {
             $reasons += "Zero Inspector exits alone do not prove server test assertions passed."
+        }
+    }
+    "server_integration" {
+        $inspect = Inspector $paths.primary
+        $counts.passed = $byId["server-integration-passed"].match_count
+        $counts.failed = $byId["server-integration-failed"].match_count
+        $counts.skipped = $byId["server-integration-skipped"].match_count
+        $knownUvHandleClosing = $byId["server-integration-known-uv-handle-closing"]
+        if ($knownUvHandleClosing.match_count) {
+            $knownIssues += [ordered]@{
+                id = "inspector-uv-handle-closing"
+                message = "Inspector UV_HANDLE_CLOSING assertion; response JSON remains usable."
+                occurrence_count = $knownUvHandleClosing.match_count
+                evidence_source = $knownUvHandleClosing.source
+                line_numbers = @($knownUvHandleClosing.line_numbers)
+            }
+            $reasons += "Known Inspector UV_HANDLE_CLOSING assertion evidence is present."
+        }
+
+        if (-not $primaryExists) {
+            $reasons += "Primary Inspector artifact is missing."
+        }
+        elseif (-not $inspect.complete) {
+            $reasons += "Inspector artifact has missing or malformed [RUN]/[EXIT] blocks."
+        }
+        elseif ($counts.failed) {
+            $status = "failed"
+            $reasons += "Saved evidence contains [FAILED] case markers."
+        }
+        elseif ($counts.skipped -and -not $counts.passed) {
+            $status = "skipped"
+            $reasons += "Saved evidence records only skipped cases."
+        }
+        elseif ($counts.passed) {
+            $status = "passed"
+            $reasons += "Saved evidence contains [PASSED] case markers."
+        }
+        else {
+            $reasons += "Integration artifact lacks a terminal [PASSED] case marker."
         }
     }
     "sse_test" {
@@ -387,7 +438,7 @@ $evidence = @($sources | ForEach-Object {
     $previewsByLine = [ordered]@{}
     foreach ($ruleMatch in $found) {
         foreach ($lineMatch in $ruleMatch.line_matches) {
-            $previewsByLine[$lineMatch.line] = $lineMatch
+            $previewsByLine[[string]$lineMatch.line] = $lineMatch
         }
     }
     $previews = @($previewsByLine.Values | Select-Object -First 10)

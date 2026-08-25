@@ -7,7 +7,8 @@
     "mo2ExeFile": "C:/Modding/MO2/ModOrganizer.exe",
     "mo2Application": "Morrowind",
     "mo2Profile": "Portable",
-    "morrowindInstallDir": "C:/Morrowind",
+    "morrowindProfileDir": "C:/Morrowind/",
+    "morrowindInstallDir": "C:/Morrowind/",
     "datafilesOverwriteDir": "C:/Morrowind/Data Files/"
   }
 }

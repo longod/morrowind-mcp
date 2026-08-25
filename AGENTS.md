@@ -31,6 +31,7 @@ host/port を含む設定は [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1) �
 | `MWMCP_MO2_EXE_FILE` | `paths.mo2ExeFile` | ModOrganizer2 executable file path |
 | `MWMCP_MO2_APPLICATION` | `paths.mo2Application` | ModOrganizer2 application name to launch |
 | `MWMCP_MO2_PROFILE` | `paths.mo2Profile` | ModOrganizer2 profile name |
+| `MWMCP_MORROWIND_PROFILE_DIR` | `paths.morrowindProfileDir` | Morrowind profile directory; integration saves resolve from its `saves` child |
 | `MWMCP_MORROWIND_INSTALL_DIR` | `paths.morrowindInstallDir` | Morrowind install directory path |
 | `MWMCP_DATAFILES_OVERWRITE_DIR` | `paths.datafilesOverwriteDir` | Data Files overwrite directory path; Lua runtime mod data writes resolve to `<datafilesOverwriteDir>/MWSE/mods/morrowind-mcp`; MWSE config resolves to `<datafilesOverwriteDir>/MWSE/config` |
 
@@ -79,12 +80,14 @@ Windows上での開発のため、以下の運用ルールを必須とする。
 - Bash/Unix 系コマンドを使用しない（例: `bash`, `sh`, `rg`, `grep`, `sed`, `awk`, `cat`, `ls`, `find`, `xargs`）
 - スクリプト実行は PowerShell のみを使用する（`.ps1` と PowerShell cmdlet）
 - `tests/game_progression/` の Python runner とその単体テストに限り、uv 管理の Python 3.14 を使用してよい。起動・停止・設定解決は既存の PowerShell スクリプトを優先して再利用する。
+- `tests/server_integration/`、`tests/mwmcp_test_support/`、およびその単体テストでは、保存ゲーム統合テストのため Python 3.14 を使用してよい。起動・停止・設定解決は既存の PowerShell スクリプトを再利用する。
 - 検索は VS Code の検索ツールを優先する（`grep_search`, `file_search`, `semantic_search`）
 - ターミナルで検索が必要な場合は PowerShell cmdlet を使う（例: `Get-ChildItem`, `Select-String`）
 - 代替手段が無い場合は、実行前にユーザー確認を取る
 - [tests/server_test.ps1](tests/server_test.ps1): Morrowindを起動してMCP サーバーの実行・停止・通信をテストする
 	- 既定では接続確認後に Morrowind のフォアグラウンド化を試行する。バックグラウンドではキーボードのキー入力やマウスのボタン入力が送られないため、入力を使う検証ではフォアグラウンド化が必要。
 	- 入力送信を使わない検証では `-NoForeground` を指定して従来挙動で実行してよい。
+- [tests/server_integration_test.ps1](tests/server_integration_test.ps1): 保存ゲームまたはメインメニューで Inspector integration suite を起動、実行、停止する
 - [tests/unit_test.ps1](tests/unit_test.ps1): Lua モジュールの単体テストを実行する
 - [tests/start_server_mo2.ps1](tests/start_server_mo2.ps1): Mod Organizer 2 経由で Morrowind を起動してサーバーを実行する
 - [tests/stop_server.ps1](tests/stop_server.ps1): Morrowindを終了して、実行中のサーバーを停止する

@@ -4,10 +4,36 @@ local this = {}
 ---@field mode "run"|"run-and-exit"|"skip"
 ---@field targets string[]
 
+---@class MCP.TestContextServerIntegration
+---@field runId string
+---@field saveName string?
+
 ---@class MCP.TestContext
 ---@field suppressAutoContinue boolean
 ---@field acceptDisclaimer boolean
 ---@field unitTest MCP.TestContextUnitTest
+---@field serverIntegration MCP.TestContextServerIntegration?
+
+---Validates a save stem that is safe to pass to tes3.loadGame.
+---@param saveName string
+---@return boolean
+---@return string? errorMessage
+local function ValidateSaveName(saveName)
+    if saveName == "" then
+        return false, "server_integration.save_name must not be empty."
+    end
+    local normalizedSaveName = string.lower(saveName)
+    if normalizedSaveName == "quicksave" or normalizedSaveName == "quiksave" then
+        return false, "server_integration.save_name must not be quicksave."
+    end
+    if string.find(saveName, "[\\/:]") or string.find(saveName, "..", 1, true) then
+        return false, "server_integration.save_name must be a save stem."
+    end
+    if string.endswith(normalizedSaveName, ".ess") then
+        return false, "server_integration.save_name must not include .ess."
+    end
+    return true, nil
+end
 
 ---@param contents string
 ---@return MCP.TestContext? context
@@ -44,6 +70,30 @@ function this.Parse(contents)
         end
     end
 
+    local serverIntegration = nil
+    if decoded.server_integration ~= nil then
+        if type(decoded.server_integration) ~= "table" then
+            return nil, "server_integration must be an object."
+        end
+        if type(decoded.server_integration.run_id) ~= "string" or decoded.server_integration.run_id == "" then
+            return nil, "server_integration.run_id must be a non-empty string."
+        end
+        local saveName = decoded.server_integration.save_name
+        if saveName ~= nil and type(saveName) ~= "string" then
+            return nil, "server_integration.save_name must be a string or null."
+        end
+        if saveName ~= nil then
+            local valid, validationError = ValidateSaveName(saveName)
+            if not valid then
+                return nil, validationError
+            end
+        end
+        serverIntegration = {
+            runId = decoded.server_integration.run_id,
+            saveName = saveName,
+        }
+    end
+
     return {
         suppressAutoContinue = decoded.suppress_auto_continue,
         acceptDisclaimer = decoded.accept_disclaimer,
@@ -51,6 +101,7 @@ function this.Parse(contents)
             mode = mode,
             targets = decoded.unit_test.targets,
         },
+        serverIntegration = serverIntegration,
     }, nil
 end
 

@@ -71,6 +71,7 @@ local function StartServer()
 end
 
 local function StartRuntime()
+    require("morrowind-mcp.util.server_integration").Register()
     RegisterSkipMainMenu()
     StartServer()
 end

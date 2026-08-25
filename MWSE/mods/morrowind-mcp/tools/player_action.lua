@@ -40,7 +40,9 @@ function this.new(params)
         description =
             "Perform direct player input such as movement keys, activation, jumping, sneaking, combat preparation, " ..
             "or other short manual actions. Use this for interaction, immediate input, or fine movement adjustment. " ..
-            "For intentional travel toward a known world destination, player-navigate may be more suitable.",
+            "For intentional travel toward a known world destination, mw-player-navigate may be more suitable." ..
+            "For managing inventory items such as equip/unequip items, barter items with a merchant, transfer items between container and drop item, mw-inventory-action may be more suitable."
+            ,
         inputSchema = jsonrpc.InputSchema(
             {
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
@@ -221,7 +223,7 @@ local function MenuInventoryAvailable()
     end
     -- vanilla inventory menu shown after taking a scroll in character generation. since inventory menu is created.
     local menu = tes3ui.findMenu(tes3ui.registerID("MenuInventory"))
-    if not menu then
+    if not menu or not menu:isValid() or menu.disabled then
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
@@ -239,7 +241,7 @@ local function MenuMagicAvailable()
     end
     -- vanilla inventory menu shown after taking a scroll in character generation. since inventory menu is created.
     local menu = tes3ui.findMenu(tes3ui.registerID("MenuMagic"))
-    if not menu then
+    if not menu or not menu:isValid() or menu.disabled then
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,

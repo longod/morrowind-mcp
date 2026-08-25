@@ -17,7 +17,7 @@ function Remove-MwmcpTestContext {
 function Invoke-MwmcpTestRunSummary {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("unit_test", "server_test", "sse_test", "completion_test", "terrain_benchmark")]
+        [ValidateSet("unit_test", "server_test", "server_integration", "sse_test", "completion_test", "terrain_benchmark")]
         [string]$TestType,
         [Parameter(Mandatory = $true)]
         [string]$RunTimestamp
@@ -47,7 +47,10 @@ function Set-MwmcpTestContext {
         [string]$UnitTestMode,
         [string[]]$UnitTestTargets = @(),
         [bool]$SuppressAutoContinue = $true,
-        [bool]$AcceptDisclaimer = $false
+        [bool]$AcceptDisclaimer = $false,
+        [string]$ServerIntegrationRunId,
+        [string]$ServerIntegrationSaveName,
+        [switch]$ServerIntegrationMainMenu
     )
 
     if (Test-Path -LiteralPath $script:TestContextPath) {
@@ -72,6 +75,15 @@ function Set-MwmcpTestContext {
         unit_test = [ordered]@{
             mode = $UnitTestMode
             targets = @($UnitTestTargets)
+        }
+    }
+    if ($ServerIntegrationRunId) {
+        if ($ServerIntegrationMainMenu -and $ServerIntegrationSaveName) {
+            throw "ServerIntegrationMainMenu cannot be combined with ServerIntegrationSaveName."
+        }
+        $context.server_integration = [ordered]@{
+            run_id = $ServerIntegrationRunId
+            save_name = if ($ServerIntegrationMainMenu) { $null } else { $ServerIntegrationSaveName }
         }
     }
     $json = $context | ConvertTo-Json -Depth 4

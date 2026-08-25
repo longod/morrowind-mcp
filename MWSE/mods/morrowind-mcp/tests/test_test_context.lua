@@ -18,6 +18,43 @@ function this.Test()
         end
     end)
 
+    unitwind:test("Parses an integration context with a save stem", function()
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"skip","targets":[]},"server_integration":{"run_id":"run-1","save_name":"Seyda Neen Integration"}}]])
+        unitwind:expect(errorMessage).toBe(nil)
+        unitwind:expect(context ~= nil).toBe(true)
+        if context ~= nil then
+            unitwind:expect(context.serverIntegration.runId).toBe("run-1")
+            unitwind:expect(context.serverIntegration.saveName).toBe("Seyda Neen Integration")
+        end
+    end)
+
+    unitwind:test("Parses an integration context without a save", function()
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"skip","targets":[]},"server_integration":{"run_id":"run-1","save_name":null}}]])
+        unitwind:expect(errorMessage).toBe(nil)
+        unitwind:expect(context ~= nil).toBe(true)
+        if context ~= nil then
+            unitwind:expect(context.serverIntegration.saveName).toBe(nil)
+        end
+    end)
+
+    unitwind:test("Rejects an unsafe integration save name", function()
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"skip","targets":[]},"server_integration":{"run_id":"run-1","save_name":"quicksave"}}]])
+        unitwind:expect(context).toBe(nil)
+        unitwind:expect(errorMessage).toBe("server_integration.save_name must not be quicksave.")
+    end)
+
+    unitwind:test("Rejects the Morrowind quiksave stem", function()
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"skip","targets":[]},"server_integration":{"run_id":"run-1","save_name":"quiksave"}}]])
+        unitwind:expect(context).toBe(nil)
+        unitwind:expect(errorMessage).toBe("server_integration.save_name must not be quicksave.")
+    end)
+
+    unitwind:test("Rejects an integration save path", function()
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"skip","targets":[]},"server_integration":{"run_id":"run-1","save_name":"..\\quicksave"}}]])
+        unitwind:expect(context).toBe(nil)
+        unitwind:expect(errorMessage).toBe("server_integration.save_name must be a save stem.")
+    end)
+
     unitwind:test("Rejects malformed JSON", function()
         local context, errorMessage = testContext.Parse("{")
         unitwind:expect(context).toBe(nil)

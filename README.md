@@ -168,6 +168,17 @@ Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Ins
 
 This automatically resolves the server configuration and opens the Inspector at the configured connection URL.
 
+#### Server Integration Suites
+
+Run a main-menu or saved-game Inspector suite with [tests/server_integration_test.ps1](tests/server_integration_test.ps1):
+
+```powershell
+.\tests\server_integration_test.ps1 --list-suites
+.\tests\server_integration_test.ps1 --suite main-menu
+```
+
+Set `MWMCP_PYTHON_EXE` when Python 3.14 is not installed at the default uv-managed location.
+
 #### MCP Discovery
 
 Run [tests/mcp_discover.ps1](tests/mcp_discover.ps1) to create an independent Streamable HTTP session and write the current `initialize`, `tools/list`, `resources/list`, and `prompts/list` results:

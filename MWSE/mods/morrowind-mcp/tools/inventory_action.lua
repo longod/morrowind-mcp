@@ -37,6 +37,7 @@ function this.new(params)
                     "The single inventory operation to attempt through the displayed inventory menus.",
                     nil
                 ),
+                -- TODO It would be better to include operations that specify an item ID, since `inventory-fetch` does not resolve menu paths. Alternatively, if it can be resolved within the `fetch` method, do so.
                 source_menu_path = jsonrpc.StringSchema(
                     "Source Menu Path",
                     "Path of an inventory tile returned by mw-menu-fetch. Required except for transfer_all and offer.",
@@ -52,14 +53,65 @@ function this.new(params)
 end
 
 function this:GetCapabilityConditions()
-    return "Development debug mode and the required inventory menus must be displayed. Each attempt performs at most one source click and one destination click without recovery or retry."
+    return "Required inventory menus must be displayed. Each attempt performs at most one source click and one destination click without recovery or retry."
 end
 
---- Publishes this deliberately narrow probe only while the development debug surface is enabled.
 ---@return boolean
-function this:IsPublished()
-    return config.development.debug
+---@return MCP.ToolAvailability?
+local function MenuInventoryAvailable()
+    local menu = tes3ui.findMenu(tes3ui.registerID("MenuInventory"))
+    if not menu or not menu:isValid() or menu.disabled or not menu.visible then
+        return false,
+            availability.Unavailable(
+                availability.reason.menu_unavailable,
+                "This is available only when the inventory menu open and is not currently bartering.")
+    end
+    -- disallow in barter
+    menu = tes3ui.findMenu(tes3ui.registerID("MenuBarter"))
+    if menu and menu:isValid() and not menu.disabled and menu.visible then
+        return false,
+            availability.Unavailable(
+                availability.reason.menu_unavailable,
+                "This is available only when the inventory menu open and is not currently bartering.")
+    end
+    return true
 end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function MenuBarterAvailable()
+    local menu = tes3ui.findMenu(tes3ui.registerID("MenuBarter"))
+    if not menu or not menu:isValid() or menu.disabled or not menu.visible then
+        return false,
+            availability.Unavailable(
+                availability.reason.menu_unavailable,
+                "This is available only when the barter menu open.")
+    end
+    return true
+end
+
+---@return boolean
+---@return MCP.ToolAvailability?
+local function MenuContentsAvailable()
+    local menu = tes3ui.findMenu(tes3ui.registerID("MenuContents"))
+    if not menu or not menu:isValid() or menu.disabled or not menu.visible then
+        return false,
+            availability.Unavailable(
+                availability.reason.menu_unavailable,
+                "This is available only when the container menu open.")
+    end
+    return true
+end
+
+---@type table<string, (fun(): boolean, MCP.ToolAvailability?)?>
+local testActionHandler = {
+    ["equip"] = MenuInventoryAvailable,
+    ["unequip"] = MenuInventoryAvailable,
+    ["transfer"] = MenuContentsAvailable,
+    ["transfer_all"] = MenuContentsAvailable,
+    ["offer"] = MenuBarterAvailable,
+    ["drop"] = MenuInventoryAvailable,
+}
 
 --- Requires the live player inventory menu so a probe cannot target a container or barter tile.
 ---@param arguments MCP.AnyMap
@@ -71,6 +123,14 @@ function this:CanExecute(arguments, context)
     if not ok then
         return false, reason
     end
+    local action = arguments["action"]
+    local handler = testActionHandler[action]
+    if handler then
+        return handler()
+    else
+        self.logger:warn("No availability handler for action %s", action)
+    end
+
     return true
 end
 

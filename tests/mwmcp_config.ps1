@@ -93,8 +93,10 @@ function Get-MwmcpConfig {
     $mo2ExeFile = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "paths.mo2ExeFile" -EnvName "MWMCP_MO2_EXE_FILE" -DefaultPath "paths.mo2ExeFile"
     $mo2Application = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "paths.mo2Application" -EnvName "MWMCP_MO2_APPLICATION" -DefaultPath "paths.mo2Application"
     $mo2Profile = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "paths.mo2Profile" -EnvName "MWMCP_MO2_MWSE_PROFILE" -DefaultPath "paths.mo2Profile"
+    $morrowindProfileDir = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "paths.morrowindProfileDir" -EnvName "MWMCP_MORROWIND_PROFILE_DIR" -DefaultPath "paths.morrowindProfileDir"
     $morrowindInstallDir = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "paths.morrowindInstallDir" -EnvName "MWMCP_MORROWIND_INSTALL_DIR" -DefaultPath "paths.morrowindInstallDir"
     $datafilesOverwriteDir = Resolve-ConfigValue -LocalConfig $localConfig -DefaultsConfig $defaultsConfig -LocalPath "paths.datafilesOverwriteDir" -EnvName "MWMCP_DATAFILES_OVERWRITE_DIR" -DefaultPath "paths.datafilesOverwriteDir"
+    $saveDir = [System.IO.Path]::Combine([string]$morrowindProfileDir, "saves")
     $modDataDir = [System.IO.Path]::Combine([string]$datafilesOverwriteDir, "MWSE", "mods", "morrowind-mcp")
     $mwseConfigDir = [System.IO.Path]::Combine([string]$datafilesOverwriteDir, "MWSE", "config")
 
@@ -128,6 +130,8 @@ function Get-MwmcpConfig {
             mo2ExeFile = $mo2ExeFile
             mo2Application = $mo2Application
             mo2Profile = $mo2Profile
+            morrowindProfileDir = $morrowindProfileDir
+            saveDir = $saveDir
             morrowindInstallDir = $morrowindInstallDir
             datafilesOverwriteDir = $datafilesOverwriteDir
             modDataDir = $modDataDir

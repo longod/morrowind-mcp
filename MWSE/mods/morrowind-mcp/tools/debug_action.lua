@@ -1,6 +1,5 @@
 local base = require("morrowind-mcp.core.itool")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local settings = require("morrowind-mcp.settings")
 local config = require("morrowind-mcp.config")
 local terrainSource = require("morrowind-mcp.navigation.terrain.source")
 

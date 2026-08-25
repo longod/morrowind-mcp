@@ -172,6 +172,13 @@ class InspectorResponseTests(unittest.TestCase):
         with self.assertRaisesRegex(InspectorError, "method not found"):
             _ = response.result
 
+    def test_includes_inspector_output_when_json_is_invalid(self) -> None:
+        with patch("mwmcp_test_support.inspector.subprocess.run") as run:
+            run.return_value = type("Completed", (), {"stdout": "not json", "stderr": "prompt failed", "returncode": 1})()
+            with self.assertRaisesRegex(InspectorError, "prompt failed"):
+                from inspector import InvokeInspector
+                InvokeInspector("http://localhost", {"method": "prompts/get", "prompt_name": "mw-role"}, 1)
+
 
 class WaitUntilTests(unittest.TestCase):
     """Verify readiness failures retain their most useful diagnostic evidence."""

@@ -13,6 +13,7 @@ handoffs:
     send: false
 ---
 要求と既存コードを調査し、実装担当へ渡せる計画を作成します。
+調査には Morrowind MCP Explorer を使用します。
 
 ## 常にやること
 1. 要求、関連実装、既存テスト、適用される instructions と skills を確認します。
