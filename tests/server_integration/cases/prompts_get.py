@@ -13,7 +13,9 @@ def PromptCase(case_id: str, prompt_name: str) -> CaseDefinition:
 
 
 CASES = {
+    "prompt-get-instruct": PromptCase("prompt-get-instruct", "mw-instruct"),
     "prompt-get-loar": PromptCase("prompt-get-loar", "mw-loar"),
+    "prompt-get-navigate": PromptCase("prompt-get-navigate", "mw-navigate"),
     "prompt-get-role": PromptCase("prompt-get-role", "mw-role"),
     "prompt-get-todo": PromptCase("prompt-get-todo", "mw-todo"),
     "prompt-get-translate": PromptCase("prompt-get-translate", "mw-translate"),

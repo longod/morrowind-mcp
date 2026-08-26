@@ -45,10 +45,6 @@ function this.new(params)
 end
 
 function this:CanExecute(arguments, context)
-    -- if tes3.onMainMenu() then
-    --     return false
-    -- end
-    -- exclude tutorial?
     return true
 end
 

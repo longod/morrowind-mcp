@@ -24,6 +24,7 @@ SUITE = Suite(
         Run("memory-player-visited-cells-read"),
         Run("memory-player-journal-read"),
         Run("memory-player-quests-read"),
+        Run("prompt-get-navigate"),
         Run("prompt-get-role"),
         Run("prompt-get-todo"),
         Run("prompt-get-translate"),

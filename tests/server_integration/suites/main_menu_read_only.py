@@ -16,6 +16,7 @@ SUITE = Suite(
         Run("menu-fetch"),
         Run("menu-actions-fetch"),
         Run("memory-root-read"),
+        Run("prompt-get-instruct"),
         Run("prompt-get-loar"),
     ),
 )

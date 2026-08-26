@@ -30,7 +30,11 @@ local maxNotificationQueueSize = 128
 local serverPingIntervalSeconds = 60
 local serverPingTimeoutSeconds = 30
 local sessionIdleTimeoutSeconds = 300
-local protocolVersion = "2025-11-25"
+local defaultProtocolVersion = "2025-11-25"
+local supportedProtocolVersions = {
+    ["2025-11-25"] = true,
+}
+
 
 ---@param response string?
 ---@return string
@@ -400,7 +404,7 @@ end
 function this:IsSupportedProtocolVersion(request)
     -- Missing protocol version is tolerated for compatibility, but invalid explicit versions are rejected.
     local version = request.headers[http.mcp_header.mcp_protocol_version]
-    return not version or version == protocolVersion
+    return not version or supportedProtocolVersions[version] == true
 end
 
 ---@param request Http.Request
@@ -833,13 +837,34 @@ end
 function this:OnInitialize(params)
     -- TODO reset state
 
+    local clientProtocolVersion = params.protocolVersion
+    if not supportedProtocolVersions[clientProtocolVersion] then
+        -- TODO test
+        self.logger:warn("Client protocol version mismatch: %s", clientProtocolVersion)
+        ---@type MCP.MethodResult
+        local result = {
+            http_response = http.response_code.bad_request, -- what correct code?
+            error = jsonrpc.error_code.invalid_params,
+        }
+        result.error.message = "Unsupported protocol version"
+        local supported = jsonrpc.array(table.size(supportedProtocolVersions))
+        for key, _ in pairs(supportedProtocolVersions) do
+            table.insert(supported, key)
+        end
+        result.error.data = {
+            ["supported"] = supported,
+            ["requested"] = "1.0.0" -- whats this?
+        }
+        return result
+    end
+
     local settings = require("morrowind-mcp.settings")
     -- Streamable HTTP sessions begin at initialize and are returned as an HTTP header.
     local session = self:CreateSession()
 
     ---@type MCP.InitializeResult
     local result = jsonrpc.InitializeResult()
-    result.protocolVersion = protocolVersion
+    result.protocolVersion = defaultProtocolVersion
     -- TODO generator, can be flatten arguments
     result.capabilities = {
         ["completions"] = jsonrpc.object(),
