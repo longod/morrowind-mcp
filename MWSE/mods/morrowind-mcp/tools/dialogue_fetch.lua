@@ -1,8 +1,7 @@
 local base = require("morrowind-mcp.core.itool")
 local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
-local obj = require("morrowind-mcp.tes3.object")
-local iter = require("morrowind-mcp.tes3.iterator")
+local ui_action = require("morrowind-mcp.util.ui_action")
 
 ---@class MCP.Tools.DialogueFetch: MCP.ITool
 ---@field logger mwseLogger
@@ -46,6 +45,44 @@ function this:CanExecute(arguments, context)
 end
 
 function this:Execute(arguments, context)
+
+    -- local actor = tes3ui.getServiceActor()
+    -- if not actor then
+    --     local errorContent = jsonrpc.TextContent("No actor found. Please enter the dialogue menu.")
+    --     return jsonrpc.CallToolResult(errorContent, nil, true)
+    -- end
+
+    -- tes3ui.findMenu(tes3ui.registerID("MenuDialog")):findChild(tes3ui.registerID("MenuDialog_topic_list"))
+
+    -- menu handling or event accumulation
+
+    -- MenuDialog_a_topic
+    -- MenuDialog_persuasion
+    -- MenuDialog_service_barter
+    -- local topic = tes3ui.findMenu(tes3ui.registerID("MenuDialog")):findChild(tes3ui.registerID("MenuDialog_persuasion"))
+    -- print(ui_action.BuildElementPath(topic))
+    -- local message = tes3ui.findMenu(tes3ui.registerID("MenuDialog")):findChild(tes3ui.registerID("MenuDialog_hyper"))
+    -- print(ui_action.BuildElementPath(message))
+    -- local bye = tes3ui.findMenu(tes3ui.registerID("MenuDialog")):findChild(tes3ui.registerID("MenuDialog_button_bye"))
+    -- print(ui_action.BuildElementPath(bye))
+
+    -- "layout/MenuDialog/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/null/null/MenuDialog_topics_pane/PartScrollPane_outer_frame/PartScrollPane_pane/MenuDialog_persuasion"
+    -- "layout/MenuDialog/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/null/MenuDialog_scroll_pane/PartScrollPane_outer_frame/PartScrollPane_pane/MenuDialog_hyper"
+    -- "layout/MenuDialog/PartDragMenu_thick_border/PartDragMenu_center_frame/PartDragMenu_drag_frame/null/null/PartDragMenu_main/null/null/MenuDialog_button_bye"
+
+
+    -- MenuDialog_header
+
+    -- MenuDialog_hyper
+
+    -- MenuDialog_notify
+    -- MenuDialog_answer_block
+
+
+    -- MenuDialog_disposition
+
+    -- MenuDialog_button_bye
+
     return jsonrpc.CallToolResult(
         jsonrpc.TextContent("not yet implemented."),
         nil,

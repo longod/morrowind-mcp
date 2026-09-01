@@ -831,7 +831,7 @@ function this:DumpRequest(request)
     end
 end
 
---- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#initialization
+--- https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle
 ---@param params MCP.InitializeRequestParams
 ---@return MCP.MethodResult
 function this:OnInitialize(params)
@@ -853,7 +853,7 @@ function this:OnInitialize(params)
         end
         result.error.data = {
             ["supported"] = supported,
-            ["requested"] = "1.0.0" -- whats this?
+            ["requested"] = clientProtocolVersion,
         }
         return result
     end

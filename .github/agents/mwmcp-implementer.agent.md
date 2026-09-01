@@ -2,8 +2,8 @@
 description: "計画に従って Morrowind MCP の機能とテストを実装し、Test Runnerで検証します。"
 name: "Morrowind MCP Implementer"
 tools: [vscode/memory, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/askQuestions, vscode/toolSearch, execute, read, agent, edit, search, vscodeGeneral/toolSearch]
-model: ["GPT-5.6 Terra (copilot)", "GPT-5.6 Luna (copilot)", "GPT-5.3-Codex (copilot)", "GPT-5.6 Sol (copilot)"]
-agents: ["Morrowind MCP Test Runner", "Morrowind MCP Explorer"]
+model: ["GPT-5.6 Terra (copilot)", "GPT-5.6 Luna (copilot)", "Claude Opus 5 (copilot)", "Claude Opus 4.7 (copilot)"]
+agents: ["Morrowind MCP Test Runner", "Morrowind MCP Explorer", "Morrowind MCP Reviewer", "Morrowind MCP Implementer"]
 user-invocable: true
 argument-hint: "実装計画または作業内容を指定してください"
 handoffs:
@@ -13,6 +13,7 @@ handoffs:
     send: false
 ---
 計画に従って機能とテストを実装し、Test Runnerへ検証を委譲します。
+Reviewerをサブエージェントとして使用する場合は、自身のモデルとは異なるモデルを指定します（例：GPT-*.* <-> Claude Opus *.* ）。
 
 ## 常にやること
 1. 計画、最新の指示、既存実装、テスト、適用規約を確認します。

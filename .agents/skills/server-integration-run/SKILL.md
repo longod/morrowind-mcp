@@ -16,6 +16,8 @@ Use this skill for `tests/server_integration` suites. Each suite is one Python f
 .\tests\server_integration_test.ps1 -Suite main-menu
 ```
 
+The runner activates Morrowind in the foreground by default. Use `--no-foreground` only for suites that do not require game input.
+
 Saved-game suites require `paths.morrowindProfileDir` or `MWMCP_MORROWIND_PROFILE_DIR`; saves are read from its `saves` child directory. `quicksave` is excluded.
 
 `main-menu-read-only` covers discovery and menu-safe cases. Put prompts and tools that require an active loaded game, including `mw-role`, in a saved-game suite such as `initial-read-only`.

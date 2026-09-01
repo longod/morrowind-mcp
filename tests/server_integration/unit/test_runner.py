@@ -134,6 +134,14 @@ class IntegrationRunnerTests(unittest.TestCase):
             self.assertEqual(integration_run.Main(), 2)
         self.assertTrue(any("[ERROR] invalid suite" in str(call) for call in print.call_args_list))
 
+    def test_parser_enables_foreground_activation_by_default(self) -> None:
+        with patch.object(sys, "argv", ["run.py"]):
+            self.assertFalse(integration_run.CreateArgumentParser().parse_args().no_foreground)
+
+    def test_parser_accepts_no_foreground(self) -> None:
+        with patch.object(sys, "argv", ["run.py", "--no-foreground"]):
+            self.assertTrue(integration_run.CreateArgumentParser().parse_args().no_foreground)
+
 
 if __name__ == "__main__":
     unittest.main()

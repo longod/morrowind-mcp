@@ -14,7 +14,7 @@ sys.path.insert(0, str(TESTS_DIR))
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from mwmcp_test_support.inspector import InspectorError, InvokeInspector
-from mwmcp_test_support.lifecycle import GetConfiguration, LifecycleError, RemoveTestContext, SetTestContext, StartServer, StopServer, WaitForServer
+from mwmcp_test_support.lifecycle import ActivateMorrowindWindow, GetConfiguration, LifecycleError, RemoveTestContext, SetTestContext, StartServer, StopServer, WaitForServer
 from mwmcp_test_support.assertions import EvaluateAssertions
 from case_api import CaseDefinitionError
 from runner import CaseExecutionError, CopyMwseLog, ExecuteSuite, GenerateSummary, IntegrationError, ListSaveNames, ReadinessFailed, ReadinessTimeout, WaitForReady, WriteJson
@@ -33,6 +33,7 @@ def CreateArgumentParser() -> argparse.ArgumentParser:
     parser.add_argument("--list-suites", action="store_true")
     parser.add_argument("--list-saves", action="store_true")
     parser.add_argument("--no-stop", action="store_true")
+    parser.add_argument("--no-foreground", action="store_true")
     parser.add_argument("--readiness-timeout", type=int, default=120)
     parser.add_argument("--case-timeout", type=int, default=30)
     return parser
@@ -107,6 +108,11 @@ def Main() -> int:
         started = True
         connection = configuration["Connection"]
         WaitForServer(connection["host"], int(connection["port"]), arguments.readiness_timeout)
+        if not arguments.no_foreground:
+            if not ActivateMorrowindWindow(repo_root):
+                Log("[WARN] Failed to activate Morrowind window in foreground.")
+        else:
+            Log("[INFO] Skipping foreground activation (--no-foreground).")
         result["ready"] = WaitForReady(status_path, run_id, arguments.readiness_timeout)
         result["cases"] = ExecuteSuite(connection["url"], suite, cases, arguments.case_timeout,
                                        InvokeInspector, _EvaluateAssertions, Log)

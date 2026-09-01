@@ -76,6 +76,21 @@ def WaitForServer(host: str, port: int, timeout_seconds: int) -> None:
     raise LifecycleError(f"Server did not become reachable at {host}:{port}.")
 
 
+def ActivateMorrowindWindow(repo_root: Path) -> bool:
+    """Best-effort foreground activation for input-driven integration cases."""
+    command = (
+        "$deadline = (Get-Date).AddSeconds(10); "
+        "do { "
+        "$process = Get-Process -Name Morrowind -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; "
+        "if ($process) { "
+        "try { if ((New-Object -ComObject WScript.Shell).AppActivate($process.Id)) { exit 0 } } catch {} "
+        "}; Start-Sleep -Milliseconds 500 "
+        "} while ((Get-Date) -lt $deadline); exit 1"
+    )
+    return _InvokePowerShell(repo_root, command).returncode == 0
+
+
 def StopServer(repo_root: Path) -> None:
     """Use the repository-supported Morrowind shutdown path."""
     subprocess.run(["powershell.exe", "-NoProfile", "-File", str(repo_root / "tests" / "stop_server.ps1")],

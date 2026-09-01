@@ -17,6 +17,7 @@ $powerShellToGnu = @{
     "-ListSuites" = "--list-suites"
     "-ListSaves" = "--list-saves"
     "-NoStop" = "--no-stop"
+    "-NoForeground" = "--no-foreground"
     "-ReadinessTimeout" = "--readiness-timeout"
     "-CaseTimeout" = "--case-timeout"
 }

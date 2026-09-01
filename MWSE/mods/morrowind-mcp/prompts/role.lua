@@ -38,15 +38,22 @@ function this:CanExecute(arguments, context)
     if tes3.onMainMenu() then
         return false
     end
-    -- on loaded
-    -- done tutorial character making
+    if not tes3.isCharGenFinished() then
+        return false
+    end
     return true
 end
 
 function this:Execute(arguments, context)
-    if tes3.onMainMenu() then
-        return nil -- error
+    if not tes3.mobilePlayer then
+        return nil
     end
+
+    local birthsign = tes3.mobilePlayer.birthsign
+    local npc = tes3.mobilePlayer.object
+    local race = npc.race
+    local class = npc.class
+
     return jsonrpc.GetPromptResult(
         {
             jsonrpc.PromptMessage(
