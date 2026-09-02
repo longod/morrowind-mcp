@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from case_api import CaseDefinition, CaseDefinitionError, CaseInvocation, Suite
+from case_api import CaseDefinition, CaseDefinitionError, CaseInvocation, Scenario, Suite
 
 
 def _LoadModule(path: Path, prefix: str):
@@ -49,5 +49,7 @@ def LoadSuites(root: Path, cases: dict[str, CaseDefinition]) -> dict[str, Suite]
                 if invocation.case_id not in cases:
                     raise CaseDefinitionError(f"Suite {suite.id} references unknown case {invocation.case_id}.")
                 cases[invocation.case_id].BuildOperation(invocation.parameters)
+            elif not isinstance(invocation, Scenario) and invocation.__class__.__name__ != "Wait":
+                raise CaseDefinitionError(f"Suite {suite.id} has an invalid invocation.")
         suites[suite.id] = suite
     return suites

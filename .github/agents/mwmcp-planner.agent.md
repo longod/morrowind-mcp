@@ -2,7 +2,7 @@
 description: "Morrowind MCP の実装要求を調査し、実装可能な計画を作成します。実装は行いません。"
 name: "Morrowind MCP Planner"
 tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/testFailure, read, agent, search, web]
-model: ["GPT-5.6 Sol (copilot)", "GPT-5.6 Terra (copilot)", "Claude Fable 5 (copilot)", "Claude Opus 5 (copilot)"]
+model: ["GPT-5.6 Sol (copilot)", "GPT-5.6 Terra (copilot)", "Claude Fable 5.1 (copilot)", "Claude Opus 5 (copilot)"]
 agents: ["Morrowind MCP Explorer"]
 user-invocable: true
 argument-hint: "実装したい要件を指定してください"

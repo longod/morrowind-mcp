@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 
 class CaseDefinitionError(ValueError):
@@ -51,12 +51,20 @@ class Wait:
 
 
 @dataclass(frozen=True)
+class Scenario:
+    """A stateful integration operation that can derive later calls from live responses."""
+
+    id: str
+    execute: Callable[..., dict[str, Any] | None]
+
+
+@dataclass(frozen=True)
 class Suite:
     """One version-controlled main-menu or saved-game integration sequence."""
 
     id: str
     save_name: str | None
-    cases: tuple[CaseInvocation | Wait, ...]
+    cases: tuple[CaseInvocation | Scenario | Wait, ...]
 
 
 def Param(name: str) -> str:

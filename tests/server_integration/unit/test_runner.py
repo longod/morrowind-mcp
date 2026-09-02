@@ -14,7 +14,7 @@ TESTS = ROOT.parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(TESTS))
 
-from case_api import CaseDefinition, CaseDefinitionError, Run, Suite, Wait
+from case_api import CaseDefinition, CaseDefinitionError, Run, Scenario, Suite, Wait
 from mwmcp_test_support.inspector import InspectorResponse
 from mwmcp_test_support.lifecycle import SetTestContext
 from runner import CaseExecutionError, ExecuteSuite, GenerateSummary, IntegrationError, ListSaveNames, ReadinessFailed, ReadinessTimeout, WaitForReady
@@ -96,6 +96,18 @@ class IntegrationRunnerTests(unittest.TestCase):
         self.assertEqual([record["status"] for record in context.exception.records], ["failed", "skipped", "skipped"])
         self.assertIn("[FAILED] read", "\n".join(log))
         self.assertIn("[SKIPPED] read", "\n".join(log))
+
+    def test_execute_suite_runs_stateful_scenario(self) -> None:
+        calls: list[str] = []
+        def Execute(endpoint, timeout, invoke, evaluate, log):
+            calls.append(endpoint)
+            log("scenario invoked")
+            return {"selected": "spell"}
+        suite = Suite("test", None, (Scenario("select-spell", Execute),))
+        records = ExecuteSuite("http://test", suite, {}, 1, lambda *args: None, lambda document, assertions: [], lambda message: None)
+        self.assertEqual(calls, ["http://test"])
+        self.assertEqual(records[0]["details"], {"selected": "spell"})
+        self.assertEqual(records[0]["status"], "passed")
 
     def test_loader_rejects_unknown_case(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

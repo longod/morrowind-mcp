@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from case_api import CaseDefinition, CaseInvocation, Suite, Wait
+from case_api import CaseDefinition, CaseInvocation, Scenario, Suite, Wait
 
 
 class IntegrationError(RuntimeError):
@@ -94,6 +94,28 @@ def ExecuteSuite(endpoint: str, suite: Suite, cases: dict[str, CaseDefinition], 
             time.sleep(invocation.seconds)
             log(f"[PASSED] wait: {invocation.seconds:.1f} seconds")
             records.append({"kind": "wait", "seconds": invocation.seconds, "status": "passed"})
+            continue
+        if isinstance(invocation, Scenario):
+            log(f"[SCENARIO] {invocation.id}")
+            record = {"kind": "scenario", "id": invocation.id}
+            try:
+                details = invocation.execute(endpoint, timeout_seconds, invoke, evaluate, log)
+                if details is not None:
+                    record["details"] = details
+            except (IntegrationError, RuntimeError) as error:
+                record["status"] = "failed"
+                record["error"] = str(error)
+                records.append(record)
+                log(f"[FAILED] {invocation.id}: {error}")
+                for remaining in suite.cases[index + 1:]:
+                    skipped_id = f"wait: {remaining.seconds:.1f} seconds" if isinstance(remaining, Wait) else remaining.id
+                    records.append({"kind": "scenario" if isinstance(remaining, Scenario) else "case", "id": skipped_id,
+                                    "status": "skipped"})
+                    log(f"[SKIPPED] {skipped_id}")
+                raise CaseExecutionError(str(error), records) from error
+            record["status"] = "passed"
+            records.append(record)
+            log(f"[PASSED] {invocation.id}")
             continue
         if not isinstance(invocation, CaseInvocation):
             raise IntegrationError(f"Suite {suite.id} has an invalid invocation.")
