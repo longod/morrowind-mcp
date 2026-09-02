@@ -5,8 +5,12 @@ param(
     [switch]$InventoryTransferAllProbe,
     [switch]$MerchantBarterProbe,
     [switch]$InventoryDropProbe,
+    [switch]$InventoryStackProbe,
     [string]$InventoryDropItemId
 )
+
+# Each probe switch replaces the default in-game flow, so default-only cases share one gate.
+$ExclusiveProbe = $InventoryTransferProbe -or $InventoryTransferAllProbe -or $MerchantBarterProbe -or $InventoryDropProbe -or $InventoryStackProbe
 
 $MaxTry = 10
 $IntervalSeconds = 3
@@ -811,18 +815,19 @@ try {
             Assert-ToolSuccess $result
         } -Capture {
             param($result, $context)
-            # Equipped count-one items are valid drop sources for the diagnostic tool.
+            # Equipped items are valid drop sources for the diagnostic tool, and a plain click drops the whole stack.
             $source = @($result.structuredContent.actions | Where-Object {
                 $_.inventory_tile -and $_.inventory_tile.inventory_pane -eq "player" -and
-                $_.inventory_tile.item.id -eq $InventoryDropItemId -and $_.inventory_tile.count -eq 1 -and
+                $_.inventory_tile.item.id -eq $InventoryDropItemId -and $_.inventory_tile.count -ge 1 -and
                 $_.inventory_tile.is_bound_item -ne $true -and
                 $_.inventory_tile.is_bartered -ne $true
             } | Select-Object -First 1)[0]
             if ($null -eq $source) {
-                Write-Host "[INFO] The requested disposable count-one player item was not available; drop attempt will be skipped." -ForegroundColor DarkYellow
+                Write-Host "[INFO] The requested disposable player item was not available; drop attempt will be skipped." -ForegroundColor DarkYellow
                 return
             }
             $context.InventoryDropProbe = @{ action = "drop"; source_menu_path = $source.path }
+            $context.InventoryDropItemCount = $source.inventory_tile.count
         }),
         (New-ToolCallTestCase -Name "drop inventory before" -ToolName "mw-inventory-fetch" -When {
             param($context) $InventoryDropProbe -and $null -ne $context.InventoryDropProbe
@@ -836,7 +841,7 @@ try {
             param($result, $context)
             $context.InventoryDropBeforeReferenceCount = Get-ReferenceItemCount -References $result.structuredContent -ItemId $InventoryDropItemId
         }),
-        (New-ServerTestCase -Name "single inventory scene drop attempt" -Arguments {
+        (New-ServerTestCase -Name "inventory scene drop attempt" -Arguments {
             param($context)
             New-ToolCallArguments -ToolName "mw-inventory-action" -ToolArguments $context.InventoryDropProbe
         } -When {
@@ -863,8 +868,8 @@ try {
             param($result, $context)
             Assert-ToolSuccess $result
             $afterCount = Get-InventoryItemCount -Inventory @($result.structuredContent.inventory) -ItemId $InventoryDropItemId
-            if ($afterCount -ne ($context.InventoryDropBeforeCount - 1)) {
-                throw "Player inventory did not decrease by one after the scene drop: before=$($context.InventoryDropBeforeCount), after=$afterCount."
+            if ($afterCount -ne ($context.InventoryDropBeforeCount - $context.InventoryDropItemCount)) {
+                throw "Player inventory did not decrease by the dropped stack: before=$($context.InventoryDropBeforeCount), dropped=$($context.InventoryDropItemCount), after=$afterCount."
             }
         }),
         (New-ToolCallTestCase -Name "drop nearby references after" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "minimal" } -When {
@@ -952,17 +957,17 @@ try {
             Assert-ToolSuccess $result
             $contentsTile = @($result.structuredContent.actions | Where-Object {
                 $_.inventory_tile -and $_.inventory_tile.inventory_pane -eq "contents" -and
-                $_.inventory_tile.count -eq 1 -and $_.inventory_tile.is_bound_item -ne $true -and
+                $_.inventory_tile.count -ge 1 -and $_.inventory_tile.is_bound_item -ne $true -and
                 $_.inventory_tile.is_bartered -ne $true
             } | Select-Object -First 1)[0]
             if ($null -eq $contentsTile) {
-                Write-Host "[INFO] No transferable count-one MenuContents tile was available; transfer attempt will be skipped." -ForegroundColor DarkYellow
+                Write-Host "[INFO] No transferable MenuContents tile was available; transfer attempt will be skipped." -ForegroundColor DarkYellow
             }
         } -Capture {
             param($result, $context)
             $contentsTile = @($result.structuredContent.actions | Where-Object {
                 $_.inventory_tile -and $_.inventory_tile.inventory_pane -eq "contents" -and
-                $_.inventory_tile.count -eq 1 -and $_.inventory_tile.is_bound_item -ne $true -and
+                $_.inventory_tile.count -ge 1 -and $_.inventory_tile.is_bound_item -ne $true -and
                 $_.inventory_tile.is_bartered -ne $true
             } | Select-Object -First 1)[0]
             if ($null -eq $contentsTile) {
@@ -973,6 +978,8 @@ try {
                 source_menu_path = $contentsTile.path
             }
             $context.InventoryTransferItemId = $contentsTile.inventory_tile.item.id
+            # A plain tile click moves the whole stack, so the expected delta is the tile count.
+            $context.InventoryTransferItemCount = $contentsTile.inventory_tile.count
         }),
         (New-ToolCallTestCase -Name "container transfer inventory before" -ToolName "mw-inventory-fetch" -When {
             param($context) $InventoryTransferProbe -and $null -ne $context.InventoryTransferProbe
@@ -1016,8 +1023,8 @@ try {
             if ($afterSecond -ne $context.InventoryTransferAfterFirst) {
                 throw "Player inventory did not stabilize after transfer: first=$($context.InventoryTransferAfterFirst), second=$afterSecond."
             }
-            if ($afterSecond -ne ($context.InventoryTransferBeforeCount + 1)) {
-                throw "Player inventory did not increase by one: before=$($context.InventoryTransferBeforeCount), after=$afterSecond."
+            if ($afterSecond -ne ($context.InventoryTransferBeforeCount + $context.InventoryTransferItemCount)) {
+                throw "Player inventory did not increase by the transferred stack: before=$($context.InventoryTransferBeforeCount), moved=$($context.InventoryTransferItemCount), after=$afterSecond."
             }
         }),
         (New-ToolCallTestCase -Name "container transfer menu after second" -ToolName "mw-menu-fetch" -ToolArguments @{ output_mode = "actions" } -When {
@@ -1029,6 +1036,77 @@ try {
                 throw "Cursor remained populated on the second post-transfer observation."
             }
         }),
+        (New-ToolCallTestCase -Name "stack menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When {
+            param($context) $InventoryStackProbe -and $context.ToolNames -contains "mw-player-action"
+        } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "stack player inventory fetch" -ToolName "mw-menu-fetch" -ToolArguments @{ menu_name = "MenuInventory"; output_mode = "actions" } -When {
+            param($context) $InventoryStackProbe
+        } -Validate { param($result) Assert-ToolSuccess $result } -Capture {
+            param($result, $context)
+            $stacked = @($result.structuredContent.actions | Where-Object {
+                $_.inventory_tile -and $_.inventory_tile.inventory_pane -eq "player" -and
+                $_.inventory_tile.count -gt 1 -and $_.inventory_tile.is_bound_item -ne $true -and
+                $_.inventory_tile.is_bartered -ne $true -and $_.inventory_tile.is_equipped -ne $true
+            })
+            if ($stacked.Count -eq 0) {
+                Write-Host "[INFO] No stacked player inventory tile was available; the stack probe will be skipped." -ForegroundColor DarkYellow
+                return
+            }
+            # Gold is the reference stack for this probe; any other stack is a usable substitute.
+            $gold = @($stacked | Where-Object { $_.inventory_tile.item.id -match '(?i)^gold' } | Select-Object -First 1)
+            if ($gold.Count -eq 1) { $selected = $gold[0] } else { $selected = @($stacked | Sort-Object { $_.inventory_tile.count } -Descending | Select-Object -First 1)[0] }
+            $context.InventoryStackProbe = @{
+                action = "select"
+                source_menu_path = $selected.path
+            }
+            $context.InventoryStackItemId = $selected.inventory_tile.item.id
+            Write-Host "[INFO] Stack probe source: id=$($selected.inventory_tile.item.id) count=$($selected.inventory_tile.count) path=$($selected.path)" -ForegroundColor Cyan
+        }),
+        (New-ToolCallTestCase -Name "stack inventory before" -ToolName "mw-inventory-fetch" -When {
+            param($context) $InventoryStackProbe -and $null -ne $context.InventoryStackProbe
+        } -Validate { param($result) Assert-ToolSuccess $result } -Capture {
+            param($result, $context)
+            $context.InventoryStackBeforeCount = Get-InventoryItemCount -Inventory @($result.structuredContent.inventory) -ItemId $context.InventoryStackItemId
+        }),
+        (New-ServerTestCase -Name "stack select same-call observation" -Arguments {
+            param($context)
+            New-ToolCallArguments -ToolName "mw-inventory-action" -ToolArguments $context.InventoryStackProbe
+        } -When {
+            param($context) $InventoryStackProbe -and $context.ToolNames -contains "mw-inventory-action" -and $null -ne $context.InventoryStackProbe
+        } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            $structured = $result.structuredContent
+            if ($structured.action -ne "select") { throw "Select probe did not report the select action." }
+            if ($null -eq $structured.quantity_menu_after) { throw "Select probe did not report a same-call quantity menu observation." }
+            $cursor = $structured.cursor_after
+            $cursorText = if ($null -eq $cursor) { "none" } else { "$($cursor.item.id) x$($cursor.count)" }
+            Write-Host "[INFO] Same-call: source_count=$($structured.source_count) quantity_before=$($structured.quantity_menu_before.present) quantity_after=$($structured.quantity_menu_after.present) cursor_after=$cursorText" -ForegroundColor Cyan
+            foreach ($action in @($structured.quantity_menu_after.actions)) {
+                Write-Host "[INFO] Same-call quantity control: name=$($action.name) type=$($action.type) actions=$(@($action.actions) -join ',') path=$($action.path)" -ForegroundColor Cyan
+            }
+        }),
+        (New-ToolCallTestCase -Name "stack menu after select" -ToolName "mw-menu-fetch" -ToolArguments @{ output_mode = "actions" } -When {
+            param($context) $InventoryStackProbe -and $null -ne $context.InventoryStackProbe
+        } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            $quantityActions = @($result.structuredContent.actions | Where-Object { $_.menu_name -eq "MenuQuantity" })
+            $cursor = $result.structuredContent.cursor_tile
+            $cursorText = if ($null -eq $cursor) { "none" } else { "$($cursor.item.id) x$($cursor.count)" }
+            Write-Host "[INFO] Next frame: MenuQuantity actions=$($quantityActions.Count) cursor=$cursorText" -ForegroundColor Cyan
+            foreach ($action in $quantityActions) {
+                Write-Host "[INFO] Next frame quantity control: name=$($action.name) type=$($action.type) actions=$(@($action.actions) -join ',') path=$($action.path)" -ForegroundColor Cyan
+            }
+        }),
+        (New-ToolCallTestCase -Name "stack inventory after" -ToolName "mw-inventory-fetch" -When {
+            param($context) $InventoryStackProbe -and $null -ne $context.InventoryStackProbe
+        } -Validate {
+            param($result, $context)
+            Assert-ToolSuccess $result
+            $after = Get-InventoryItemCount -Inventory @($result.structuredContent.inventory) -ItemId $context.InventoryStackItemId
+            Write-Host "[INFO] Player $($context.InventoryStackItemId): before=$($context.InventoryStackBeforeCount) after=$after" -ForegroundColor Cyan
+        }),
         (New-ServerTestCase -Name "player navigate reachable location" -Arguments {
             param($context)
             New-ToolCallArguments -ToolName "mw-player-navigate" -ToolArguments @{
@@ -1038,14 +1116,14 @@ try {
                 position_z = -256
                 cell_id = $context.PlayerNavigationCellId
             }
-        } -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-player-navigate" -and -not [string]::IsNullOrWhiteSpace($context.PlayerNavigationCellId) } -Validate {
+        } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-navigate" -and -not [string]::IsNullOrWhiteSpace($context.PlayerNavigationCellId) } -Validate {
             param($result)
             Assert-ToolSuccess $result
             if ($result.structuredContent.route_node_count -lt 2) { throw "Navigation route did not contain multiple pathgrid nodes." }
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
             if ($text -ne "Player navigation started.") { throw "Navigation did not report a successful start." }
         }),
-        (New-ToolCallTestCase -Name "player look cancels active navigation" -ToolName "mw-player-look" -ToolArguments @{ mode = "angles"; yaw = 90; pitch = 0 } -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-player-look" } -Validate {
+        (New-ToolCallTestCase -Name "player look cancels active navigation" -ToolName "mw-player-look" -ToolArguments @{ mode = "angles"; yaw = 90; pitch = 0 } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-look" } -Validate {
             param($result)
             Assert-ToolSuccess $result
             if ($result.structuredContent.navigation_cancelled -ne $true) { throw "Player look did not cancel active navigation." }
@@ -1053,9 +1131,9 @@ try {
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
             if ($text -ne "Player view updated.") { throw "Player look did not report success." }
         }),
-        (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
-        (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
-        (New-ToolCallTestCase -Name "menu fetch in game" -ToolName "mw-menu-fetch" -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } } -Capture {
+        (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
+        (New-ToolCallTestCase -Name "menu fetch in game" -ToolName "mw-menu-fetch" -When { param($context) -not $ExclusiveProbe } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } } -Capture {
             param($result, $context)
             $equippedTile = @($result.structuredContent.actions | Where-Object {
                 $_.inventory_tile -and $_.inventory_tile.inventory_pane -eq "player" -and $_.inventory_tile.is_equipped -eq $true
@@ -1067,14 +1145,14 @@ try {
         (New-ServerTestCase -Name "single inventory unequip probe" -Arguments {
             param($context)
             New-ToolCallArguments -ToolName "mw-inventory-action" -ToolArguments $context.InventoryProbe
-        } -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-inventory-action" -and $null -ne $context.InventoryProbe } -Validate {
+        } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-inventory-action" -and $null -ne $context.InventoryProbe } -Validate {
             param($result)
             Assert-ToolSuccess $result
             if ($null -eq $result.structuredContent.source -or $null -eq $result.structuredContent.destination) { throw "Inventory probe omitted source or destination evidence." }
             # An absent cursor_after_destination represents a successful placement with no cursor tile to serialize.
             if ($null -eq $result.structuredContent.PSObject.Properties["cursor_after_source"]) { throw "Inventory probe omitted the post-source cursor observation." }
         }),
-        (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference list did not default to minimal detail." }; if (@($result.structuredContent.activators | Where-Object { $_.type -eq "leveledCreature" }).Count -ne 0) { throw "Reference fetch included a leveled creature activator." } } -Capture { param($result, $context) $activators = @($result.structuredContent.activators | Select-Object -First 1)[0]; if ($activators -and -not [string]::IsNullOrWhiteSpace($activators.id)) { $context.PlayerLookTargetId = $activators.id }; $context.NearbyReferenceCounts = @{ activators = @($result.structuredContent.activators).Count; actors = @($result.structuredContent.actors).Count; statics = @($result.structuredContent.statics).Count } }),
         (New-ToolCallTestCase -Name "reference fetch active cell scope" -ToolName "mw-reference-fetch" -ToolArguments @{ scope = "active" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result, $context) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch active scope did not retain minimal detail." }; foreach ($category in @("activators", "actors", "statics")) { if (@($result.structuredContent.$category).Count -lt $context.NearbyReferenceCounts[$category]) { throw "Reference fetch active scope omitted nearby $category." } } }),
         (New-ToolCallTestCase -Name "reference fetch all cells minimal detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "minimal" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch did not honor minimal detail." } } -Capture { param($result, $context) $context.ReferenceDetailSizes.minimal = Measure-JsonPayloadSize -Payload $result.structuredContent }),
@@ -1087,13 +1165,13 @@ try {
         (New-ServerTestCase -Name "player look target active reference" -Arguments {
             param($context)
             New-ToolCallArguments -ToolName "mw-player-look" -ToolArguments @{ mode = "target"; target_id = $context.PlayerLookTargetId }
-        } -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe -and $context.ToolNames -contains "mw-player-look" -and -not [string]::IsNullOrWhiteSpace($context.PlayerLookTargetId) } -Validate {
+        } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-look" -and -not [string]::IsNullOrWhiteSpace($context.PlayerLookTargetId) } -Validate {
             param($result)
             Assert-ToolSuccess $result
             if ($result.structuredContent.navigation_cancelled -ne $false) { throw "Player look unexpectedly cancelled navigation." }
             if ([string]::IsNullOrWhiteSpace($result.structuredContent.target_point_kind)) { throw "Player look target mode did not report a target point kind." }
         }),
-        (New-ToolCallTestCase -Name "target fetch" -ToolName "mw-target-fetch" -When { param($context) -not $InventoryTransferProbe -and -not $InventoryTransferAllProbe -and -not $MerchantBarterProbe -and -not $InventoryDropProbe } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "standard") { throw "Target fetch did not default to standard detail." } }),
+        (New-ToolCallTestCase -Name "target fetch" -ToolName "mw-target-fetch" -When { param($context) -not $ExclusiveProbe } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "standard") { throw "Target fetch did not default to standard detail." } }),
         (New-ToolCallTestCase -Name "world fetch" -ToolName "mw-world-fetch" -When { param($context) $context.ToolNames -contains "mw-world-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         # (New-ToolCallTestCase -Name "activate action" -ToolName "mw-player-action" -ToolArguments @{ action = "activate"; how = "tap" } -When { param($context) $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
         (New-ToolCallTestCase -Name "screenshot save" -ToolName "mw-screenshot-save" -ToolArguments @{ file_name = $RunTimestamp } -When {

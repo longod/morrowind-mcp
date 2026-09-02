@@ -7,6 +7,7 @@ local uiAction = require("morrowind-mcp.util.ui_action")
 local inputAction = require("morrowind-mcp.util.input_action")
 
 local sceneInputMinimumSize = 64
+local quantityMenuName = "MenuQuantity"
 
 ---@class MCP.Tools.InventoryAction: MCP.ITool
 ---@field logger mwseLogger
@@ -26,6 +27,7 @@ function this.new(params)
             {
                 action = jsonrpc.UntitledSingleSelectEnumSchema(
                     {
+                        "select",
                         "equip",
                         "unequip",
                         "transfer",
@@ -103,8 +105,25 @@ local function MenuContentsAvailable()
     return true
 end
 
+--- Selection is observational, so it accepts any pane that can own a live inventory tile.
+---@return boolean
+---@return MCP.ToolAvailability?
+local function AnyInventoryPaneAvailable()
+    for _, menuName in ipairs({ "MenuInventory", "MenuContents", "MenuBarter" }) do
+        local menu = tes3ui.findMenu(tes3ui.registerID(menuName))
+        if menu and menu:isValid() and not menu.disabled and menu.visible then
+            return true
+        end
+    end
+    return false,
+        availability.Unavailable(
+            availability.reason.menu_unavailable,
+            "This is available only when an inventory, container, or barter pane is displayed.")
+end
+
 ---@type table<string, (fun(): boolean, MCP.ToolAvailability?)?>
 local testActionHandler = {
+    ["select"] = AnyInventoryPaneAvailable,
     ["equip"] = MenuInventoryAvailable,
     ["unequip"] = MenuInventoryAvailable,
     ["transfer"] = MenuContentsAvailable,
@@ -276,8 +295,9 @@ end
 --- The engine consumes direct mouse state after this request returns, so callers must verify later snapshots.
 ---@param root tes3uiElement
 ---@param source tes3uiElement
+---@param sourceTile tes3inventoryTile
 ---@return MCP.CallToolResult
-local function ExecuteDrop(root, source)
+local function ExecuteDrop(root, source, sourceTile)
     local cursorBefore = ui.GetCursorTile(root)
     if cursorBefore then
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Drop requires an empty cursor."), nil, true)
@@ -304,6 +324,7 @@ local function ExecuteDrop(root, source)
     return jsonrpc.CallToolResult(jsonrpc.TextContent("Inventory scene drop tap initiated; verify later cursor, inventory, and nearby reference snapshots."), jsonrpc.object({
         action = "drop",
         source = sourceDescription,
+        source_count = sourceTile.count,
         cursor_before = cursorBefore,
         scene_point = scenePoint,
         scene_band = sceneBand,
@@ -311,7 +332,51 @@ local function ExecuteDrop(root, source)
         target_ui = jsonrpc.object(movement.target_ui),
         cursor_input_before = jsonrpc.object(movement.cursor_before),
         mouse_delta = jsonrpc.object(movement.mouse_delta),
-        expected_postcondition = "cursor_empty_player_inventory_decreased_and_world_reference_created",
+        expected_postcondition = "cursor_empty_player_inventory_decreased_by_source_count_and_world_reference_created",
+        requires_follow_up = true,
+    }), false)
+end
+
+--- Reports the live vanilla quantity menu together with the paths needed to drive it from a later call.
+---@param root tes3uiElement
+---@return MCP.AnyMap
+local function DescribeQuantityMenu(root)
+    local menu = tes3ui.findMenu(tes3ui.registerID(quantityMenuName))
+    if not menu or not menu:isValid() then
+        return jsonrpc.object({ present = false })
+    end
+    local menuPath = ui.FindPath(root, menu)
+    return jsonrpc.object({
+        present = true,
+        visible = menu.visible,
+        disabled = menu.disabled,
+        path = menuPath,
+        actions = ui.CollectActionable(menu, menuPath or ""),
+    })
+end
+
+--- Clicks one source tile and observes the outcome inside the same call.
+--- A later tool call runs in a different frame, so it cannot tell same-frame quantity-menu
+--- creation apart from creation on a following frame.
+---@param root tes3uiElement
+---@param source tes3uiElement
+---@param sourceTile tes3inventoryTile
+---@return MCP.CallToolResult
+local function ExecuteSelect(root, source, sourceTile)
+    local sourceDescription = DescribeElement(source)
+    local sourceCount = sourceTile.count
+    local quantityMenuBefore = DescribeQuantityMenu(root)
+
+    source:triggerEvent(tes3.uiEvent.mouseClick)
+
+    return jsonrpc.CallToolResult(jsonrpc.TextContent("Inventory tile selection completed; the recorded observations describe the frame of the click."), jsonrpc.object({
+        action = "select",
+        source = sourceDescription,
+        source_count = sourceCount,
+        quantity_menu_before = quantityMenuBefore,
+        cursor_after = ui.GetCursorTile(root),
+        quantity_menu_after = DescribeQuantityMenu(root),
+        expected_postcondition = "cursor_holds_the_whole_source_stack",
         requires_follow_up = true,
     }), false)
 end
@@ -346,14 +411,14 @@ function this:Execute(arguments, context)
     if ui.GetCursorTile(root) then
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Inventory action requires an empty cursor."), nil, true)
     end
-    if sourceTile.count ~= 1 then
-        return jsonrpc.CallToolResult(jsonrpc.TextContent("Stacked inventory tiles are not supported; source count must be exactly 1."), nil, true)
-    end
     if sourceTile.isBoundItem then
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Bound inventory items are not supported."), nil, true)
     end
     if sourceTile.isBartered then
         return jsonrpc.CallToolResult(jsonrpc.TextContent("Bartered inventory items are not supported."), nil, true)
+    end
+    if action == "select" then
+        return ExecuteSelect(root, source, sourceTile)
     end
     if action == "equip" and sourceTile.isEquipped then
         if sourceMenu.name ~= "MenuInventory" then
@@ -375,7 +440,7 @@ function this:Execute(arguments, context)
         if sourceMenu.name ~= "MenuInventory" then
             return jsonrpc.CallToolResult(jsonrpc.TextContent("Drop currently requires a player inventory tile."), nil, true)
         end
-        return ExecuteDrop(root, source)
+        return ExecuteDrop(root, source, sourceTile)
     end
 
     local sourceDescription = DescribeElement(source)
@@ -391,6 +456,7 @@ function this:Execute(arguments, context)
         return jsonrpc.CallToolResult(jsonrpc.TextContent("A unique destination was not available after the source click."), jsonrpc.object({
             action = action,
             source = sourceDescription,
+            source_count = sourceTile.count,
             cursor_before_source = cursorBeforeSource,
             cursor_after_source = cursorAfterSource,
             destination_count = #destinations,
@@ -404,11 +470,12 @@ function this:Execute(arguments, context)
     return jsonrpc.CallToolResult(jsonrpc.TextContent("Inventory click-to-place attempt completed; verify the later inventory and menu snapshots."), jsonrpc.object({
         action = action,
         source = sourceDescription,
+        source_count = sourceTile.count,
         cursor_before_source = cursorBeforeSource,
         cursor_after_source = cursorAfterSource,
         destination = destinationDescription,
         cursor_after_destination = ui.GetCursorTile(root),
-        expected_postcondition = action == "transfer" and "player_inventory_count_increased" or nil,
+        expected_postcondition = action == "transfer" and "player_inventory_count_increased_by_source_count" or nil,
         requires_follow_up = true,
     }), false)
 end

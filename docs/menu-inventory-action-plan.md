@@ -114,6 +114,62 @@ Acceptance criteria:
 - The timing of `MenuQuantity` appearance and completion is recorded.
 - No direct item transfer, removal, or count mutation API is used.
 
+## Stacked Item Selection and Modifier Reproduction
+
+Vanilla maps three distinct results onto a single inventory tile: a plain click takes the whole stack,
+`shift`+click opens `MenuQuantity`, and `ctrl`+click takes a single item. This section records what a
+same-call probe (`mw-inventory-action` `action = "select"`, gated by `-InventoryStackProbe`) actually
+measured, because only one of those three branches turned out to be reachable from Lua.
+
+### Verified
+
+- A plain `triggerEvent(tes3.uiEvent.mouseClick)` on a stacked tile moves the **whole stack** to the
+  cursor in the same call. Measured with `Gold_001` count 447: `cursor_after = Gold_001 x447`,
+  `quantity_menu_after.present = false`, and the player inventory count stayed at 447 before and after,
+  because the stack is only held by the cursor until it is placed.
+- Every inventory action (`select`, `equip`, `unequip`, `transfer`, `transfer_all`, `offer`, `drop`)
+  accepts a stacked tile. The former count-one guard was removed and `source_count` is reported so the
+  caller can assert the whole-stack delta.
+- A physically held `shift` sets both `TES3::InputController` state and `MenuInputController+0x84`
+  (`shift_key_down`), sampled at 139 frames of 139. A physically held `ctrl` sets the input controller
+  state at 145 frames of 145 but leaves `+0x84` at zero and `+0x9C` (`modifier_key_flags`) mask at zero.
+
+### Falsified
+
+Each of the following was measured live and produced no behavioral change; the click still took the
+whole stack and `MenuQuantity` never appeared.
+
+1. Writing `DIK_LCONTROL` / `DIK_LSHIFT` into `InputController::keyboardState` (offset `0x18F4`) through
+   both the bound Lua array and raw `mwse.memory.writeByte`. The write reached engine memory
+   (`array_write_reached_memory = true`, `memory_value = 128`) and `isControlDown()` returned `true` at
+   click time, yet `cursor_after` was still `Gold_001 x447`.
+2. Writing `MenuInputController+0x84` (`shiftKeyDown`). The write landed and read back, with no effect.
+3. Driving `MenuInputController+0x9C` (`modifierKeyFlags`). A real `ctrl` press never changes it, so it
+   is not the field the menu reads.
+4. Dispatching `mouseDown` / `mouseRelease` / `mouseClick` in every combination
+   (`click`, `down_click`, `down`, `down_release`, `down_release_click`).
+5. Observing `keybindTested` during the dispatch. Zero keybind tests fired in every run
+   (`keybind_tests: []`), so the engine never consults its keybinding layer on a triggered event.
+
+**Conclusion:** the modifier branch is not reachable from `triggerEvent`. Vanilla decides the modifier
+result inside its own input pipeline (`MenuInputController::dispatchEvents` plus the drag machinery),
+which `triggerEvent` bypasses by invoking the element callback directly. No amount of state spoofing
+helps because the code that reads that state never runs. All experimental modifier, key-state, and
+modifier-sampling surfaces were therefore removed; only the plain whole-stack click is retained.
+
+### Unverified
+
+- Reproducing the modifier branch through the real input pipeline: move the DirectInput cursor onto the
+  tile's screen rect, hold the modifier scan code on every frame, then issue a real DirectInput press and
+  release. This cannot complete in one call and needs a multi-frame, timer-driven design.
+- Whether `enterFrame` key-state writes survive the same frame's UI input processing. `enterFrame` runs
+  after `readKeyState()`, so it is likely but was never measured against a click.
+- `pointerMoveEventSource` as a hover-verification hook before a real click.
+- `MenuQuantity` internal structure and controls; it never appeared during any probe.
+- In-game deltas for stacked `transfer`, `transfer_all`, `drop`, `equip`, and `unequip`; those probes need
+  a container or merchant save and were always skipped.
+- Stacked-tile click behavior in `MenuContents` and `MenuBarter`.
+
 ## Phase 2D: 3D Scene Drop Probe
 
 1. Start from a safe, open-area save with a disposable, count-one player item identified by ID.
