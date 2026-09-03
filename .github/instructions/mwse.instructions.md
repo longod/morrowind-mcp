@@ -64,6 +64,7 @@ applyTo: MWSE/mods/morrowind-mcp/**/*.lua
 ### MCP feature definitions
 
 - `prompts/list`, `resources/list`, `tools/list` で公開される `name`, `title`, `description` は `jsonrpc` の generator 関数経由の最終値を正とする
+- `FEATURES.md` は Lua の機能定義から `export-features` スキルで一括生成する。明示的な指示がない限り、個別機能の変更に伴って手動更新してはならない。
 - Tool は `jsonrpc.Tool(...)` で定義し、公開名は generator が `settings.name_prefix` を付与する。定義ファイル側で `mw-` を直書きしない
 - Tool の `title` と `description` も generator が `settings.title_prefix`, `settings.description_prefix` を付与する。定義ファイル側で `[Morrowind] ` を直書きしない
 - `tools/call` は公開後の prefixed name を受け取るため、テストやドキュメントでは `mw-` 付きの名前を使う
