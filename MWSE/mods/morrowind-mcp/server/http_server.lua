@@ -952,7 +952,8 @@ function this:OnResourcesRead(params)
     local result = self.resource:OnResourcesRead(params)
     if result and result.http_response == http.response_code.ok then
         if config.notification.resourcesRead and tes3.isInitialized() then
-            local notify = string.format("Read %s", params.uri)
+            local resourcePath = pathutil.FromUri(params.uri, settings.uriScheme) or params.uri
+            local notify = string.format("Read %s", resourcePath)
             mcpui.showNotifyMenu(notify)
         end
     end
@@ -1107,16 +1108,17 @@ function this:OnToolsCall(params, request)
     if not canExecute then
         -- Runtime availability is not an authorization failure. Keep the HTTP transport successful so
         -- clients do not attempt OAuth discovery, and surface the condition through the MCP tool result.
-        local guidance = availability and availability.guidance or "The current game state does not permit this tool."
-        local message = string.format("%s Call mw-capabilities-fetch to inspect general tool conditions.", guidance)
+        local guidance = availability and availability.guidance or
+            "Unavailable because: The current game state does not permit this tool.\n" ..
+            "Available when: The tool's runtime conditions are satisfied."
         local structuredContent = availability and jsonrpc.object({
             reason = availability.reason,
-            guidance = availability.guidance,
+            guidance = guidance,
         }) or nil
         ---@type MCP.MethodResult
         return {
             http_response = http.response_code.ok,
-            result = jsonrpc.CallToolResult(jsonrpc.TextContent(message), structuredContent, true),
+            result = jsonrpc.CallToolResult(jsonrpc.TextContent(guidance), structuredContent, true),
         }
     end
 

@@ -32,6 +32,7 @@ function this.new(params)
         outputSchema = jsonrpc.OutputSchema(
             {
                 player = jsonrpc.JsonObjectSchema(),
+                menu_mode = jsonrpc.BooleanSchema("Menu Mode", "Whether the active game is in menu mode."),
             }
         ),
         annotations = jsonrpc.ToolAnnotations(nil, true, false)
@@ -67,6 +68,7 @@ function this:Execute(arguments, context)
 
     local structuredContent = jsonrpc.object({
         player = serializer:tes3mobilePlayer(mobilePlayer),
+        menu_mode = tes3.menuMode(),
     })
     return jsonrpc.CallToolResult(nil, structuredContent)
 end

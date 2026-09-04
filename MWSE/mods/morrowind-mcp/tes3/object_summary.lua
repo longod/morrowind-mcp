@@ -20,6 +20,15 @@ this.level = {
     full = "full",
 }
 
+-- MWSE object type names do not always match the corresponding serializer name.
+---@type table<string, string>
+local objectHandlerName = {
+    ammunition = "tes3weapon",
+    gmst = "tes3gameSetting",
+    miscItem = "tes3misc",
+    repairItem = "tes3repairTool",
+}
+
 -- Keep this manifest aligned with object.lua so a missing extension point is visible in tests.
 this.supportedMethods = {
     "tes3bountyData",
@@ -357,7 +366,8 @@ function this:AnyObject(value)
     if not objectType then
         error("Unknown TES3 object type: " .. tostring(value.objectType))
     end
-    local handler = self["tes3" .. objectType]
+    local handlerName = objectHandlerName[objectType] or ("tes3" .. objectType)
+    local handler = self[handlerName]
     if not handler then
         error("Missing summary serializer for TES3 object type: " .. objectType)
     end

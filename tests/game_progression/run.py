@@ -17,10 +17,18 @@ from lifecycle import GetConfiguration, LifecycleError, RemoveTestContext, SetTe
 from scenario import EvaluateAssertions, LoadScenario, ResolveTerminationPolicy, ScenarioValidationError
 
 
+DEFAULT_SCENARIO_PATH = Path(__file__).resolve().parent / "unit" / "fixtures" / "scenario.json"
+
+
 def ParseArguments() -> argparse.Namespace:
     """Parse replay options while keeping scenario policy adjustable."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenario", type=Path, required=True)
+    parser.add_argument(
+        "--scenario",
+        type=Path,
+        default=DEFAULT_SCENARIO_PATH,
+        help=f"Scenario to replay (default: {DEFAULT_SCENARIO_PATH})",
+    )
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--no-stop", action="store_true")
     parser.add_argument("--max-elapsed-seconds", type=int)

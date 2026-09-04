@@ -66,7 +66,20 @@ local function MenuInventoryAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the inventory menu open and is not currently bartering.")
+                {
+                    unavailableBecause = "MenuInventory is not visible, valid, and enabled in menu mode.",
+                    availableWhen = "MenuInventory is visible, valid, and enabled in menu mode, and MenuBarter is not usable.",
+                    relatedTools = {
+                        {
+                            name = "mw-inventory-fetch",
+                            relationship = "reports the current player inventory state.",
+                        },
+                        {
+                            name = "mw-menu-fetch",
+                            relationship = "reports the current inventory UI state and menu paths.",
+                        },
+                    },
+                })
     end
     -- disallow in barter
     menu = tes3ui.findMenu(tes3ui.registerID("MenuBarter"))
@@ -74,7 +87,20 @@ local function MenuInventoryAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the inventory menu open and is not currently bartering.")
+                {
+                    unavailableBecause = "A valid, visible, and enabled MenuBarter is active.",
+                    availableWhen = "MenuInventory is visible, valid, and enabled in menu mode, and MenuBarter is not usable.",
+                    relatedTools = {
+                        {
+                            name = "mw-inventory-fetch",
+                            relationship = "reports the current player inventory state.",
+                        },
+                        {
+                            name = "mw-menu-fetch",
+                            relationship = "reports the current inventory UI state and menu paths.",
+                        },
+                    },
+                })
     end
     return true
 end
@@ -87,7 +113,20 @@ local function MenuBarterAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the barter menu open.")
+                {
+                    unavailableBecause = "MenuBarter is not visible, valid, and enabled in menu mode.",
+                    availableWhen = "MenuBarter is visible, valid, and enabled in menu mode.",
+                    relatedTools = {
+                        {
+                            name = "mw-inventory-fetch",
+                            relationship = "reports the current player inventory state.",
+                        },
+                        {
+                            name = "mw-menu-fetch",
+                            relationship = "reports the current barter UI state and menu paths.",
+                        },
+                    },
+                })
     end
     return true
 end
@@ -100,7 +139,20 @@ local function MenuContentsAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the container menu open.")
+                {
+                    unavailableBecause = "MenuContents is not visible, valid, and enabled in menu mode.",
+                    availableWhen = "MenuContents is visible, valid, and enabled in menu mode.",
+                    relatedTools = {
+                        {
+                            name = "mw-inventory-fetch",
+                            relationship = "reports the current player inventory state.",
+                        },
+                        {
+                            name = "mw-menu-fetch",
+                            relationship = "reports the current container UI state and menu paths.",
+                        },
+                    },
+                })
     end
     return true
 end
@@ -118,7 +170,20 @@ local function AnyInventoryPaneAvailable()
     return false,
         availability.Unavailable(
             availability.reason.menu_unavailable,
-            "This is available only when an inventory, container, or barter pane is displayed.")
+            {
+                unavailableBecause = "No inventory, container, or barter pane is visible, valid, and enabled in menu mode.",
+                availableWhen = "An inventory, container, or barter pane is visible, valid, and enabled in menu mode.",
+                relatedTools = {
+                    {
+                        name = "mw-inventory-fetch",
+                        relationship = "reports the current player inventory state.",
+                    },
+                    {
+                        name = "mw-menu-fetch",
+                        relationship = "reports the current inventory UI state and menu paths.",
+                    },
+                },
+            })
 end
 
 ---@type table<string, (fun(): boolean, MCP.ToolAvailability?)?>
@@ -140,7 +205,16 @@ local testActionHandler = {
 function this:CanExecute(arguments, context)
     local ok, reason = availability.PausedInMenuMode()
     if not ok then
-        return false, reason
+        return false, availability.WithRelatedTools(reason, {
+            {
+                name = "mw-inventory-fetch",
+                relationship = "reports the current player inventory state.",
+            },
+            {
+                name = "mw-menu-fetch",
+                relationship = "reports the current inventory UI state and menu paths.",
+            },
+        })
     end
     local action = arguments["action"]
     local handler = testActionHandler[action]

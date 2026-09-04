@@ -381,6 +381,24 @@ function this.Test()
         unitwind:expect(message:match("Unknown TES3 object type")).NOT.toBe(nil)
     end)
 
+    unitwind:test("AnyObject dispatches MWSE object type aliases to their serializers", function()
+        local serializer = serializerModule.new({ detailLevel = "standard" })
+        local aliases = {
+            ammunition = "tes3weapon",
+            gmst = "tes3gameSetting",
+            miscItem = "tes3misc",
+            repairItem = "tes3repairTool",
+        }
+
+        for objectType, handlerName in pairs(aliases) do
+            unitwind:mock(serializerModule, handlerName, function()
+                return { handlerName = handlerName }
+            end)
+            local result = serializer:AnyObject({ objectType = tes3.objectType[objectType] })
+            unitwind:expect(result.handlerName).toBe(handlerName)
+        end
+    end)
+
     unitwind:test("Property read errors are not suppressed", function()
         local broken = setmetatable({
             id = "broken",

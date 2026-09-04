@@ -46,7 +46,9 @@ function this.Test()
         unitwind:expect(unavailable ~= nil).toBe(true)
         if unavailable then
             unitwind:expect(unavailable.reason).toBe("no_active_navigation")
-            unitwind:expect(unavailable.guidance).toBe("There is no active navigation to cancel.")
+            unitwind:expect(unavailable.guidance).toBe(
+                "Unavailable because: No player navigation route is active.\n" ..
+                "Available when: A player navigation route is active.")
         end
     end)
 

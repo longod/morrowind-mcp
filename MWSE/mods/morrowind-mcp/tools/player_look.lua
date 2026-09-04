@@ -8,6 +8,12 @@ local minimumYawDegrees = -180
 local maximumYawDegrees = 180
 local minimumPitchDegrees = -89
 local maximumPitchDegrees = 89
+local targetRelatedTools = {
+    {
+        name = "mw-reference-fetch",
+        relationship = "reports matching references in active cells.",
+    },
+}
 
 ---@class MCP.Tools.PlayerLook: MCP.ITool
 ---@field logger mwseLogger
@@ -76,10 +82,16 @@ end
 function this:CanExecute(arguments, context)
     local ok, reason = availability.IsInGame()
     if not ok then
+        if arguments["mode"] == "target" then
+            return false, availability.WithRelatedTools(reason, targetRelatedTools)
+        end
         return false, reason
     end
     ok, reason = availability.NotInMenuMode()
     if not ok then
+        if arguments["mode"] == "target" then
+            return false, availability.WithRelatedTools(reason, targetRelatedTools)
+        end
         return false, reason
     end
     return true

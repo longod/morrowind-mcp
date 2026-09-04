@@ -69,14 +69,36 @@ function this:CanExecute(arguments, context)
 
     ok, reason = availability.PausedInMenuMode()
     if not ok then
-        return false, reason
+        return false, availability.WithRelatedTools(reason, {
+            {
+                name = "mw-spell-fetch",
+                relationship = "reports the current player spellbook state.",
+            },
+            {
+                name = "mw-menu-fetch",
+                relationship = "reports the current MenuMagic UI state and menu paths.",
+            },
+        })
     end
 
     local menu = tes3ui.findMenu(tes3ui.registerID("MenuMagic"))
     if not menu or not menu:isValid() or menu.disabled or not menu.visible then
         return false, availability.Unavailable(
             availability.reason.menu_unavailable,
-            "This is available only when the magic menu is open."
+            {
+                unavailableBecause = "MenuMagic is not visible, valid, and enabled in menu mode.",
+                availableWhen = "MenuMagic is visible, valid, and enabled in menu mode.",
+                relatedTools = {
+                    {
+                        name = "mw-spell-fetch",
+                        relationship = "reports the current player spellbook state.",
+                    },
+                    {
+                        name = "mw-menu-fetch",
+                        relationship = "reports the current MenuMagic UI state and menu paths.",
+                    },
+                },
+            }
         )
     end
 

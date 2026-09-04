@@ -60,7 +60,12 @@ end
 function this:CanExecute(arguments, context)
     local ok, reason = availability.PausedInMenuMode()
     if not ok then
-        return false, reason
+        return false, availability.WithRelatedTools(reason, {
+            {
+                name = "mw-menu-fetch",
+                relationship = "reports the current UI state and menu paths.",
+            },
+        })
     end
 
     return true

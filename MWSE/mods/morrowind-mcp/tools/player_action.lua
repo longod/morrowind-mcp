@@ -2,7 +2,6 @@ local base = require("morrowind-mcp.core.itool")
 local availability = require("morrowind-mcp.util.tes3_availability")
 local jsonrpc = require("morrowind-mcp.server.jsonrpc")
 local input_action = require("morrowind-mcp.util.input_action")
-local distanceUtil = require("morrowind-mcp.util.distance")
 
 local minHoldSeconds = 2.0 / 60.0
 local maxHoldSeconds = 10
@@ -142,14 +141,23 @@ local function ActivateAvailable()
     -- it seems better to disallow in menu mode. some dialogs can be activated, but agent counfused because activate becomes always available.
     local target = tes3.getPlayerTarget()
     if not target then
-        local distanceUnit = tes3.getPlayerActivationDistance()
-        local distanceMeter = distanceUtil.ToMeters(distanceUnit)
         -- tes3.rayTest()
         return false, availability.Unavailable(
             availability.reason.target_not_found,
-            "Action activate is only available when the player is looking at a `supportsActivate` reference object within " ..
-            string.format("%.2f meters.", distanceMeter) ..
-            " And Use `mw-player-look` tool to look at and `mw-target-fetch` tool to find the current target reference object."
+            {
+                unavailableBecause = "No current activatable target is selected.",
+                availableWhen = "The player has a current activatable target.",
+                relatedTools = {
+                    {
+                        name = "mw-player-look",
+                        relationship = "controls the player's view direction.",
+                    },
+                    {
+                        name = "mw-target-fetch",
+                        relationship = "reports the current target state.",
+                    },
+                },
+            }
         )
     end
     return true
@@ -163,11 +171,13 @@ local function ActionAvailable()
         return false, reason
     end
 
-    -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
     return tes3.mobilePlayer.canAct,
         availability.Unavailable(
             availability.reason.movement_unavailable,
-            "This is available only when the player is able to action.")
+            {
+                unavailableBecause = "The player's current state does not permit direct player action input.",
+                availableWhen = "The player's current state permits direct player action input.",
+            })
 end
 
 ---@return boolean
@@ -178,11 +188,13 @@ local function JumpAvailable()
         return false, reason
     end
 
-    -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
     return tes3.mobilePlayer.canJump,
         availability.Unavailable(
             availability.reason.movement_unavailable,
-            "This is available only when the player is able to jump.")
+            {
+                unavailableBecause = "The player's current state does not permit jumping.",
+                availableWhen = "The player's current state permits jumping.",
+            })
 end
 
 ---@return boolean
@@ -193,11 +205,13 @@ local function MovementAvailable()
         return false, reason
     end
 
-    -- Messages should ideally be instructions. but the reasons for being unable to act are varied.
     return tes3.mobilePlayer.canMove,
         availability.Unavailable(
             availability.reason.movement_unavailable,
-            "This is available only when the player is able to move.")
+            {
+                unavailableBecause = "The player's current state does not permit movement.",
+                availableWhen = "The player's current state permits movement.",
+            })
 end
 
 ---@return boolean
@@ -227,7 +241,10 @@ local function MenuInventoryAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the inventory menu exists.")
+                {
+                    unavailableBecause = "MenuInventory is absent, invalid, or disabled.",
+                    availableWhen = "MenuInventory exists, is valid, and is enabled.",
+                })
     end
     return true
 end
@@ -245,7 +262,10 @@ local function MenuMagicAvailable()
         return false,
             availability.Unavailable(
                 availability.reason.menu_unavailable,
-                "This is available only when the magic menu exists.")
+                {
+                    unavailableBecause = "MenuMagic is absent, invalid, or disabled.",
+                    availableWhen = "MenuMagic exists, is valid, and is enabled.",
+                })
     end
     return true
 end
@@ -321,7 +341,10 @@ function this:CanExecute(arguments, context)
     if key == nil or tes3.getInputBinding(key) == nil then
         return false, availability.Unavailable(
             availability.reason.input_binding_unavailable,
-            "Configure a key binding for the requested player action."
+            {
+                unavailableBecause = "No configured key binding exists for the requested player action.",
+                availableWhen = "A configured key binding exists for the requested player action.",
+            }
         )
     end
 

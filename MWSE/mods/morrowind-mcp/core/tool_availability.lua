@@ -1,4 +1,18 @@
----@class MCP.ToolAvailability
+---@class MCP.ToolAvailabilityRelatedTool
+---@field name string
+---@field relationship string
+
+---@class MCP.ToolAvailabilityRelatedResource
+---@field uri MCP.ResourceUri
+---@field relationship string
+
+---@class MCP.ToolAvailabilityDetails
+---@field unavailableBecause string
+---@field availableWhen string
+---@field relatedTools MCP.ToolAvailabilityRelatedTool[]?
+---@field relatedResources MCP.ToolAvailabilityRelatedResource[]?
+
+---@class MCP.ToolAvailability: MCP.ToolAvailabilityDetails
 ---@field reason MCP.ToolAvailabilityReason
 ---@field guidance string
 
@@ -24,15 +38,52 @@ local reason = {
 
 this.reason = reason
 
+--- Render a consistent, declarative explanation for an unavailable tool.
+---@param details MCP.ToolAvailabilityDetails
+---@return string
+function this.FormatGuidance(details)
+    local guidance = "Unavailable because: " .. details.unavailableBecause ..
+        "\nAvailable when: " .. details.availableWhen
+    if details.relatedTools then
+        for _, relatedTool in ipairs(details.relatedTools) do
+            guidance = guidance .. "\nRelated tool: `" .. relatedTool.name .. "` " .. relatedTool.relationship
+        end
+    end
+    if details.relatedResources then
+        for _, relatedResource in ipairs(details.relatedResources) do
+            guidance = guidance .. "\nRelated resource: `" .. relatedResource.uri .. "` " .. relatedResource.relationship
+        end
+    end
+    return guidance
+end
+
 --- Create the structured explanation returned when a tool cannot run.
 ---@param reason MCP.ToolAvailabilityReason
----@param guidance string
+---@param details MCP.ToolAvailabilityDetails
 ---@return MCP.ToolAvailability
-function this.Unavailable(reason, guidance)
-    return {
+function this.Unavailable(reason, details)
+    local availability = {
         reason = reason,
-        guidance = guidance,
+        unavailableBecause = details.unavailableBecause,
+        availableWhen = details.availableWhen,
+        relatedTools = details.relatedTools,
+        relatedResources = details.relatedResources,
     }
+    availability.guidance = this.FormatGuidance(availability)
+    return availability
+end
+
+--- Add tool-specific related tools to an existing availability result.
+---@param availability MCP.ToolAvailability
+---@param relatedTools MCP.ToolAvailabilityRelatedTool[]
+---@return MCP.ToolAvailability
+function this.WithRelatedTools(availability, relatedTools)
+    return this.Unavailable(availability.reason, {
+        unavailableBecause = availability.unavailableBecause,
+        availableWhen = availability.availableWhen,
+        relatedTools = relatedTools,
+        relatedResources = availability.relatedResources,
+    })
 end
 
 return this

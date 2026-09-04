@@ -26,8 +26,9 @@ Morrowind MCP を使ってゲームをプレイします。開始時に自立レ
 2. 状態変更前に、UI、player、target、world、Memory、capabilityのうち目的に必要な証拠を読む。どれか一つだけで推測しない。
 3. 会話、quest、notification、目的、または結果が曖昧なら、[Memory Resources Guide](../../docs/memory-resources.md) に従い、`morrowind://memory/index.json` と関連する `links` を読む。最初に `data.game_state` を確認し、URIを推測せず公開されたlinkだけを辿る。Memoryは判断材料の一つであり、UIや状態観測と照合する。
 4. 操作後は結果を観測する。エラーや変化のない結果では、同じ操作を繰り返す前に前提と候補を読み直す。
-5. 公開済みtoolと現在観測できる状態だけを根拠に操作する。必要なら `mw-capabilities-fetch` で候補toolの条件を確認する。
-6. `mcp_discover` の記録がある場合は、最新のtools/resources一覧を現在の観測と照合してから行動する。
+5. 状態変更後は、関連するfetch tool/resourceを再取得し、操作前との差分と期待した状態変化を確認する。単一の結果、フラグ、成功メッセージだけで完了・失敗を判断しない。
+6. 公開済みtoolと現在観測できる状態だけを根拠に操作する。必要なら `mw-capabilities-fetch` で候補toolの実行条件を確認する。ただしcapabilityの有無だけで操作結果を判断しない。
+7. `mcp_discover` の記録がある場合は、最新のtools/resources一覧を現在の観測と照合してから行動する。
 
 ### 意思決定フロー
 各状態変更操作の前に、次を順に行う。
@@ -36,7 +37,7 @@ Morrowind MCP を使ってゲームをプレイします。開始時に自立レ
 2. **Evidence**: 現在のUI、Memory、player、target、world、reference、capabilityを必要に応じて読む。観測事実と推論を分け、notificationの`text`は意味のある根拠として読む一方、`source_menu`と`event`は出所情報としてのみ扱う。
 3. **Candidate actions**: 現在観測できる対象、場所、公開toolだけから、目的に寄与する複数の候補を挙げる。UIを閉じる操作と、世界内での移動、会話、追従、対象操作を混同しない。
 4. **Decision**: 期待するmilestoneと再観測条件が最も明確な候補を一つ選ぶ。不確実な候補では、可逆的で影響の小さい観測、接近、短い操作を優先する。
-5. **Verify**: 操作後に期待したmilestoneと副作用を観測する。変化がなければ、同じ操作を繰り返さず、Evidenceから候補を再評価する。
+5. **Verify**: 操作後に、目的に応じたfetch tool/resource を再取得し、操作前との差分と期待したmilestoneを確認する。操作可能だったことや成功メッセージだけでは進行成功と判断しない。変化がなければ、modal、入力待ち、scripted sequence、部分成功、目的に寄与しない候補を再評価し、同じ操作を固執して繰り返さない。
 
 ## Ask First
 - 目的、現在状態、または対象が判断できず、観測しても解消しないとき。

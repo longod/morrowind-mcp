@@ -13,7 +13,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scenario import EvaluateAssertions, ResolveTerminationPolicy, ScenarioValidationError, ValidateScenario
 from diagnostics import IsToolPublished, SuggestDiagnosticProbes
 from inspector import FormatToolArgument, InspectorError, InspectorResponse
-from run import RecordDiagnosticProbes, RecordMemoryDebugDump, RecordWaitResponse, WaitUntil, WaitUntilTimeout
+from run import (
+    DEFAULT_SCENARIO_PATH,
+    ParseArguments,
+    RecordDiagnosticProbes,
+    RecordMemoryDebugDump,
+    RecordWaitResponse,
+    WaitUntil,
+    WaitUntilTimeout,
+)
 
 
 SCENARIO_FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "scenario.json"
@@ -26,6 +34,12 @@ def NewScenario() -> dict:
 
 class ScenarioTests(unittest.TestCase):
     """Verify static validation without launching Morrowind."""
+
+    def test_uses_fixture_as_default_scenario(self) -> None:
+        with patch.object(sys, "argv", ["run.py"]):
+            arguments = ParseArguments()
+
+        self.assertEqual(arguments.scenario, DEFAULT_SCENARIO_PATH)
 
     def test_accepts_minimal_new_game_scenario(self) -> None:
         ValidateScenario(NewScenario())

@@ -111,8 +111,19 @@ def SelectFetchedMagic(endpoint: str, timeout: int, invoke, evaluate, log) -> di
     unavailable = CallTool(endpoint, timeout, invoke, log, "mw-spell-select", {
         "category": "spell", "id": "missing",
     }, allow_error=True)
-    if unavailable["result"].get("isError") is not True:
+    unavailable_result = unavailable["result"]
+    if unavailable_result.get("isError") is not True:
         raise RuntimeError("mw-spell-select was available before MenuMagic was opened.")
+    expected_guidance = (
+        "Unavailable because: The game is not in menu mode.\n"
+        "Available when: The game is in menu mode.\n"
+        "Related tool: `mw-spell-fetch` reports the current player spellbook state.\n"
+        "Related tool: `mw-menu-fetch` reports the current MenuMagic UI state and menu paths."
+    )
+    unavailable_text = unavailable_result.get("content", [{}])[0].get("text")
+    unavailable_guidance = unavailable_result.get("structuredContent", {}).get("guidance")
+    if unavailable_text != expected_guidance or unavailable_guidance != expected_guidance:
+        raise RuntimeError(f"mw-spell-select unavailable guidance has an unexpected format: {unavailable_result}")
 
     fetch = CallTool(endpoint, timeout, invoke, log, "mw-spell-fetch", {})
     content = fetch["result"]["structuredContent"]

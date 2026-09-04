@@ -80,8 +80,16 @@ function this:CanExecute(arguments, context)
         return false, reason
     end
     if not dialogueMenu.GetDialogueMenu() then
-        return false, availability.Unavailable(availability.reason.menu_unavailable,
-            "This is available only when the dialogue menu is open.")
+        return false, availability.Unavailable(availability.reason.menu_unavailable, {
+            unavailableBecause = "MenuDialog is not visible, valid, and enabled in menu mode.",
+            availableWhen = "MenuDialog is visible, valid, and enabled in menu mode.",
+            relatedTools = {
+                {
+                    name = "mw-dialogue-fetch",
+                    relationship = "reports the current dialogue action identity.",
+                },
+            },
+        })
     end
     return true
 end

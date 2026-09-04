@@ -63,25 +63,48 @@ function this:CanExecute(arguments, context)
         if not context or not context.CancelPlayerNavigation or not context.HasActivePlayerNavigation then
             return false, availability.Unavailable(
                 availability.reason.navigation_unavailable,
-                "Use a server that provides player navigation."
+                {
+                    unavailableBecause = "Player-navigation cancellation services are unavailable in the execution context.",
+                    availableWhen = "The execution context provides player-navigation cancellation and active-route services.",
+                }
             )
         end
         if not context.HasActivePlayerNavigation() then
             return false, availability.Unavailable(
                 availability.reason.no_active_navigation,
-                "There is no active navigation to cancel."
+                {
+                    unavailableBecause = "No player navigation route is active.",
+                    availableWhen = "A player navigation route is active.",
+                }
             )
         end
         return true
     end
     local ok, reason = availability.IsInGame()
     if not ok then
-        return false, reason
+        return false, availability.WithRelatedTools(reason, {
+            {
+                name = "mw-reference-fetch",
+                relationship = "reports destination references in active cells.",
+            },
+        })
+    end
+    ok, reason = availability.NotInMenuMode()
+    if not ok then
+        return false, availability.WithRelatedTools(reason, {
+            {
+                name = "mw-reference-fetch",
+                relationship = "reports destination references in active cells.",
+            },
+        })
     end
     if arguments["action"] == "navigate" and (not context or not context.NavigatePlayer) then
         return false, availability.Unavailable(
             availability.reason.navigation_unavailable,
-            "Use a server that provides player navigation."
+            {
+                unavailableBecause = "Player-navigation services are unavailable in the execution context.",
+                availableWhen = "The execution context provides the player-navigation service.",
+            }
         )
     end
     return true

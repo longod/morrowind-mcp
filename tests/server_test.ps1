@@ -363,6 +363,23 @@ function Assert-ToolError {
     }
 }
 
+function Assert-ToolGuidance {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Result,
+        [Parameter(Mandatory = $true)]
+        [string[]]$ExpectedLines
+    )
+
+    Assert-ToolError $Result
+    $expected = $ExpectedLines -join "`n"
+    $text = @($Result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
+    $actual = $text -replace "`r`n", "`n"
+    $structuredGuidance = $Result.structuredContent.guidance -replace "`r`n", "`n"
+    if ($actual -ne $expected) { throw "Tool guidance did not match the expected text. Actual: $text" }
+    if ($structuredGuidance -ne $expected) { throw "Tool structured guidance did not match the expected text." }
+}
+
 function Find-ActionableMenuPath {
     param(
         [Parameter(Mandatory = $true)][object]$Node,
@@ -702,6 +719,8 @@ try {
             if ($null -eq $menuFetch.inputSchema.properties.output_mode -or $null -eq $menuFetch.outputSchema.properties.actions -or $null -eq $menuFetch.outputSchema.properties.cursor_tile) { throw "Menu fetch actions schema is incomplete." }
             $inventoryAction = @($result.tools | Where-Object { $_.name -eq "mw-inventory-action" } | Select-Object -First 1)[0]
             if ($null -eq $inventoryAction.inputSchema.properties.source_menu_path) { throw "Inventory action source_menu_path schema is missing." }
+            $playerFetch = @($result.tools | Where-Object { $_.name -eq "mw-player-fetch" } | Select-Object -First 1)[0]
+            if ($null -eq $playerFetch.outputSchema.properties.menu_mode -or $playerFetch.outputSchema.properties.menu_mode.type -ne "boolean") { throw "Player fetch menu_mode output schema is missing or invalid." }
         } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) }),
         (New-ToolCallTestCase -Name "capabilities fetch" -ToolName "mw-capabilities-fetch" -Validate { param($result) Assert-ToolSuccess $result; $reference = @($result.structuredContent.tools | Where-Object { $_.name -eq "mw-reference-fetch" }); if ($reference.Count -ne 1 -or [string]::IsNullOrWhiteSpace($reference[0].conditions)) { throw "Reference fetch conditions are missing." } }),
         (New-ServerTestCase -Name "resources list" -Arguments @("--method", "resources/list") -Validate { param($result) if (@($result.resources | Where-Object { $_.uri -eq "morrowind://memory/index.json" -and $_.mimeType -eq "application/json" }).Count -ne 1) { throw "Memory root resource is missing." } } -Capture { param($result, $context) $context.ResourceUris = @($result.resources | ForEach-Object { $_.uri }) }),
@@ -722,6 +741,31 @@ try {
             if ($null -eq $result.structuredContent.actions) { throw "Actions-only response is missing actions." }
             if ($null -ne $result.structuredContent.menu -or $null -ne $result.structuredContent.help) { throw "Actions-only response unexpectedly includes tree output." }
             foreach ($action in @($result.structuredContent.actions)) { if ([string]::IsNullOrWhiteSpace($action.path) -or @($action.actions).Count -eq 0) { throw "Flat action is missing an executable path or action." } }
+        }),
+        (New-ToolCallTestCase -Name "inventory action unavailable guidance" -ToolName "mw-inventory-action" -ToolArguments @{ action = "select"; source_menu_path = "/missing" } -When { param($context) $context.ToolNames -contains "mw-inventory-action" } -AllowToolError $true -Validate {
+            param($result)
+            Assert-ToolGuidance $result @(
+                "Unavailable because: No inventory, container, or barter pane is visible, valid, and enabled in menu mode."
+                "Available when: An inventory, container, or barter pane is visible, valid, and enabled in menu mode."
+                "Related tool: ``mw-inventory-fetch`` reports the current player inventory state."
+                "Related tool: ``mw-menu-fetch`` reports the current inventory UI state and menu paths."
+            )
+        }),
+        (New-ToolCallTestCase -Name "player look unavailable guidance" -ToolName "mw-player-look" -ToolArguments @{ mode = "target"; target_id = "missing" } -When { param($context) $context.ToolNames -contains "mw-player-look" } -AllowToolError $true -Validate {
+            param($result)
+            Assert-ToolGuidance $result @(
+                "Unavailable because: The game is on the main menu."
+                "Available when: An active game session is loaded."
+                "Related tool: ``mw-reference-fetch`` reports matching references in active cells."
+            )
+        }),
+        (New-ToolCallTestCase -Name "player navigate unavailable guidance" -ToolName "mw-player-navigate" -ToolArguments @{ action = "navigate"; position_x = 0; position_y = 0; position_z = 0 } -When { param($context) $context.ToolNames -contains "mw-player-navigate" } -AllowToolError $true -Validate {
+            param($result)
+            Assert-ToolGuidance $result @(
+                "Unavailable because: The game is on the main menu."
+                "Available when: An active game session is loaded."
+                "Related tool: ``mw-reference-fetch`` reports destination references in active cells."
+            )
         }),
         (New-ToolCallTestCase -Name "reject non-actionable menu path" -ToolName "mw-menu-action" -ToolArguments @{
             menu_path = "/children/0"
@@ -747,7 +791,7 @@ try {
         }),
         (New-ServerTestCase -Name "tools list after continue" -Arguments @("--method", "tools/list") -Validate { param($result) if ($null -eq $result.tools) { throw "Missing tools." } } -Capture { param($result, $context) $context.ToolNames = @($result.tools | ForEach-Object { $_.name }) } -RetryUntil { param($result, $context) $context.ToolNames -contains "mw-player-fetch" } -RetryAttempts $MaxTry -RetryIntervalSeconds $IntervalSeconds),
         (New-ServerTestCase -Name "prompts list after continue" -Arguments @("--method", "prompts/list") -Validate { param($result) if ($null -eq $result.prompts) { throw "Missing prompts." } } -Capture { param($result, $context) $context.PromptNames = @($result.prompts | ForEach-Object { $_.name }) }),
-        (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($null -eq $result.structuredContent.player.position -or [string]::IsNullOrWhiteSpace($result.structuredContent.player.cell.id)) { throw "Player reference or mobile state is missing." } } -Capture { param($result, $context) $context.PlayerNavigationPosition = $result.structuredContent.player.position; $context.PlayerNavigationCellId = $result.structuredContent.player.cell.id }),
+        (New-ToolCallTestCase -Name "player fetch" -ToolName "mw-player-fetch" -When { param($context) $context.ToolNames -contains "mw-player-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.menu_mode -isnot [bool]) { throw "Player fetch menu_mode is missing or not boolean." }; if ($null -eq $result.structuredContent.player.position -or [string]::IsNullOrWhiteSpace($result.structuredContent.player.cell.id)) { throw "Player reference or mobile state is missing." } } -Capture { param($result, $context) $context.PlayerNavigationPosition = $result.structuredContent.player.position; $context.PlayerNavigationCellId = $result.structuredContent.player.cell.id }),
         (New-ToolCallTestCase -Name "container transfer activate" -ToolName "mw-player-action" -ToolArguments @{ action = "activate"; how = "tap" } -When {
             param($context)
             ($InventoryTransferProbe -or $InventoryTransferAllProbe -or $MerchantBarterProbe) -and $context.ToolNames -contains "mw-player-action"
@@ -1153,6 +1197,14 @@ try {
             if ($null -eq $result.structuredContent.PSObject.Properties["cursor_after_source"]) { throw "Inventory probe omitted the post-source cursor observation." }
         }),
         (New-ToolCallTestCase -Name "menu mode off" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "menu action unavailable guidance" -ToolName "mw-menu-action" -ToolArguments @{ menu_path = "/missing"; action = "mouseClick" } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-menu-action" } -AllowToolError $true -Validate {
+            param($result)
+            Assert-ToolGuidance $result @(
+                "Unavailable because: The game is not in menu mode."
+                "Available when: The game is in menu mode."
+                "Related tool: ``mw-menu-fetch`` reports the current UI state and menu paths."
+            )
+        }),
         (New-ToolCallTestCase -Name "reference fetch" -ToolName "mw-reference-fetch" -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." }; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference list did not default to minimal detail." }; if (@($result.structuredContent.activators | Where-Object { $_.type -eq "leveledCreature" }).Count -ne 0) { throw "Reference fetch included a leveled creature activator." } } -Capture { param($result, $context) $activators = @($result.structuredContent.activators | Select-Object -First 1)[0]; if ($activators -and -not [string]::IsNullOrWhiteSpace($activators.id)) { $context.PlayerLookTargetId = $activators.id }; $context.NearbyReferenceCounts = @{ activators = @($result.structuredContent.activators).Count; actors = @($result.structuredContent.actors).Count; statics = @($result.structuredContent.statics).Count } }),
         (New-ToolCallTestCase -Name "reference fetch active cell scope" -ToolName "mw-reference-fetch" -ToolArguments @{ scope = "active" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result, $context) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch active scope did not retain minimal detail." }; foreach ($category in @("activators", "actors", "statics")) { if (@($result.structuredContent.$category).Count -lt $context.NearbyReferenceCounts[$category]) { throw "Reference fetch active scope omitted nearby $category." } } }),
         (New-ToolCallTestCase -Name "reference fetch all cells minimal detail" -ToolName "mw-reference-fetch" -ToolArguments @{ detail_level = "minimal" } -When { param($context) $context.ToolNames -contains "mw-reference-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($result.structuredContent.serialization.detailLevel -ne "minimal") { throw "Reference fetch did not honor minimal detail." } } -Capture { param($result, $context) $context.ReferenceDetailSizes.minimal = Measure-JsonPayloadSize -Payload $result.structuredContent }),

@@ -28,6 +28,7 @@ The schema is `tests/game_progression/scenario.schema.json`; the runner performs
 - `observed` and `notes` retain state summaries and reasoning for agent-guided reproduction. They do not make volatile IDs or timestamps into strict assertions.
 - `assessment` records the agent's `situation`, observed `evidence`, remaining `candidate_actions`, and `decision`. This is diagnostic context, not a replay assertion.
 - `screenshots` records MCP screenshot resource URIs with a `purpose`. Take screenshots after meaningful state changes, before risky or ambiguous actions, and immediately before a `stalled` or `failed` terminal outcome. Use `mw-screenshot-save` with `capture_with_ui=true` for UI diagnosis; capture without UI only when the 3D world state is also relevant. Before a terminal outcome, the runner records at most two related read-only probes: menu action selects menu and player state; player action selects player and target state; player navigation selects player and world state. Probe responses or their errors are saved in `run.json` under `diagnostic_probes`. For `stalled` and `failed` replay outcomes, the runner also obtains a fresh `tools/list`; when it exposes `mw-debug-action`, it invokes `memory:SaveDebugDocuments` once before shutdown. The resulting status, response or error, and resolved `<Paths.modDataDir>/memory-dump` path are saved in `run.json` under `memory_debug_dump`. Its absence or failure is diagnostic evidence, not a change to the outcome.
+- When `--scenario` is omitted from `tests/game_progression/run.py`, the runner loads `tests/game_progression/unit/fixtures/scenario.json` as the default completion contract. An explicit `--scenario` path takes precedence.
 
 ## Termination Policy
 
@@ -56,6 +57,12 @@ Validate a recording without launching the game:
 
 ```powershell
 & "$HOME\.local\bin\python3.14.exe" .\tests\game_progression\run.py --scenario <scenario.json> --validate-only
+```
+
+When no scenario path is supplied, the same command validates the default completion contract:
+
+```powershell
+& "$HOME\.local\bin\python3.14.exe" .\tests\game_progression\run.py --validate-only
 ```
 
 Replay launches through the existing PowerShell entry point, resolves configuration through `mwmcp_config.ps1`, and stops Morrowind with `stop_server.ps1` unless `--no-stop` is specified. After shutdown, the runner copies the configured `MWSE.log` into the run directory. A scenario whose recorded `outcome` is `failed` can still return success when its terminal `expected_error` is observed. Run artifacts, including `run.json` and `MWSE.log` when available, are saved below `tests/logs/game_progression/`; missing or failed log copies are reported as warnings.
