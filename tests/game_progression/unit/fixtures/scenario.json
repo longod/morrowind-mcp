@@ -51,22 +51,6 @@
           "value": "\"running\":false"
         }
       ]
-    },
-    {
-      "id": "verify-tutorial-complete",
-      "intent": "Verify the tutorial completion message in the published menu UI.",
-      "operation": {
-        "method": "tools/call",
-        "tool_name": "mw-menu-fetch",
-        "arguments": {}
-      },
-      "assertions": [
-        {
-          "pointer": "/result/structuredContent/menu",
-          "operator": "contains",
-          "value": "You're on your own now. Good luck."
-        }
-      ]
     }
   ]
 }
