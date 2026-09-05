@@ -49,6 +49,8 @@ description: |
 ## Verification
 テストスクリプトが生成する `terrain_benchmark` summary を一次根拠として判定する。summary は `result_<timestamp>.json` の `ready` state、全 benchmark case の `samples` と `height`、Inspector の non-zero exit を判定する。
 
+共通のartifactとMWSE severityの規約は [test-run-summaries.md](../../../docs/test-run-summaries.md) を参照する。
+
 `failed` / `inconclusive` の場合だけ、summary evidence の保存済み result/Inspector/MWSE artifact を読んで切り分ける。ライブ `MWSE.log` は読まない。
 
 ## Failure Triage

@@ -94,6 +94,8 @@ The reference surface is a finer set of downward ray samples against the active 
 
 The debug quality comparison builds the player's active cell at 64, 128, and 256 units for each measured height source, using the finest grid as the temporary reference surface. It records build and height-error metrics, then releases every comparison grid. Height sources are compared at the same intervals so a source change can be separated from a resolution change. By default, `tests/terrain_benchmark.ps1` starts the server, continues the saved game from the main menu, runs the measurement, and stops the server. Pass `-UseRunningServer` after moving a running game to the intended outdoor location to preserve its current state; it writes the structured result and logs under `tests/logs/terrain_benchmark/`.
 
+The timestamped artifact and MWSE severity contract is defined in [Test Run Summaries](test-run-summaries.md).
+
 ## Incremental Generation
 
 A builder transitions through `queued`, `sampling`, and `ready`, or terminates as `cancelled` or `failed`. Sampling classifies each point immediately, so no separately observable `classifying` state exists.

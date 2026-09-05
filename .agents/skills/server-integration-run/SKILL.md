@@ -30,4 +30,4 @@ Saved-game suites require `paths.morrowindProfileDir` or `MWMCP_MORROWIND_PROFIL
 - `tests/logs/server_integration/summary_<timestamp>.json`
 - `<Paths.modDataDir>/tests/server-integration-status.json` remains after cleanup as the loaded-event readiness record.
 
-Judge summary `status` first. For failures inspect the result artifact, matching Inspector `[RUN]` / `[EXIT]` blocks, retained status, then MWSE log.
+Judge summary `status` first. For failures inspect the result artifact, matching Inspector `[RUN]` / `[EXIT]` blocks, retained status, then MWSE log. The common artifact and MWSE severity contract is documented in [test-run-summaries.md](../../../docs/test-run-summaries.md).

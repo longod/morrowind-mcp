@@ -466,11 +466,17 @@ function this:tes3clothing(value)
     return self:Finish("tes3clothing", output)
 end
 
----@param value tes3effect?
+---@param value tes3effect|integer?
 ---@return MCP.AnyMap?
 function this:EffectSummary(value)
     if not value then
         return nil
+    end
+    -- Ingredient effects expose only their magic-effect IDs, unlike alchemy effects.
+    if type(value) == "number" then
+        return jsonrpc.object({
+            id = enumname.effect(value) or value,
+        })
     end
     return jsonrpc.object({
         id = enumname.effect(value.id) or value.id,

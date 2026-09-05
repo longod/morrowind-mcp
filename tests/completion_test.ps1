@@ -159,7 +159,7 @@ finally {
     $mwseLogSourcePath = if ($config) { Join-Path $config.Paths.morrowindInstallDir "MWSE.log" }
     if ($mwseLogSourcePath -and (Test-Path -LiteralPath $mwseLogSourcePath)) { Copy-Item -LiteralPath $mwseLogSourcePath -Destination $MwseLogCopyPath -Force }
     Write-CompletionLog "[INFO] Completion test log: $CompletionLogPath" Cyan
-    Invoke-MwmcpTestRunSummary -TestType "completion_test" -RunTimestamp $RunTimestamp
+    $null = Invoke-MwmcpTestRunSummary -TestType "completion_test" -RunTimestamp $RunTimestamp
 }
 
 exit $ExitCode

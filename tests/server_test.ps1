@@ -1328,7 +1328,7 @@ finally {
 
     Write-Host "[INFO] Inspector logs: $(Convert-ToFileUri -Path $InspectorLogPath)" -ForegroundColor Cyan
 
-    Invoke-MwmcpTestRunSummary -TestType "server_test" -RunTimestamp $RunTimestamp
+    $null = Invoke-MwmcpTestRunSummary -TestType "server_test" -RunTimestamp $RunTimestamp
 
     Pop-Location
 }

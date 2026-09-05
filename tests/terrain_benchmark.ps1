@@ -377,5 +377,5 @@ finally {
         Write-Host "[INFO] MWSE log copy: $MwseLogCopyPath" -ForegroundColor Cyan
     }
     Write-Host "[INFO] Inspector log: $InspectorLogPath" -ForegroundColor Cyan
-    Invoke-MwmcpTestRunSummary -TestType "terrain_benchmark" -RunTimestamp $RunTimestamp
+    $null = Invoke-MwmcpTestRunSummary -TestType "terrain_benchmark" -RunTimestamp $RunTimestamp
 }

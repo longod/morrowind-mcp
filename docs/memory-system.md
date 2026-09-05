@@ -363,7 +363,7 @@ Useful existing tests:
 - `MWSE/mods/morrowind-mcp/tests/test_memory_document.lua`
 - `MWSE/mods/morrowind-mcp/tests/test_memory_module.lua`
 
-Run `./tests/unit_test.ps1` after Lua Memory changes. Run `./tests/server_test.ps1` when behavior affects MCP resource publication, resource reads, server integration, or debug output visible through server flows.
+Run `./tests/unit_test.ps1` after Lua Memory changes. Run `./tests/server_test.ps1` when behavior affects MCP resource publication, resource reads, server integration, or debug output visible through server flows. Read the generated artifacts according to [Test Run Summaries](test-run-summaries.md).
 
 ## Update Policy
 

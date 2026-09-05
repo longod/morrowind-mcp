@@ -7,7 +7,8 @@ param(
     [string]$RunTimestamp,
     [string[]]$RequirePattern = @(),
     [string[]]$ForbidPattern = @(),
-    [string]$ArtifactsRoot
+    [string]$ArtifactsRoot,
+    [string]$MwsePolicyPath = (Join-Path $PSScriptRoot "mwse_log_policy.json")
 )
 
 $ErrorActionPreference = "Stop"
@@ -118,6 +119,107 @@ function Inspector([string]$Path) {
         complete = ($runs -gt 0 -and $runs -eq $exits.Count)
         nonzero = $nonzero
     }
+}
+
+function Read-MwsePolicy([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "MWSE log policy was not found: $Path"
+    }
+
+    try {
+        $policy = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "MWSE log policy is not valid JSON: $($_.Exception.Message)"
+    }
+    if ($policy.default -notin "fail", "warn", "ignore") {
+        throw "MWSE log policy default must be fail, warn, or ignore."
+    }
+    foreach ($rule in @($policy.rules)) {
+        if (-not $rule.pattern -or $rule.severity -notin "fail", "warn", "ignore") {
+            throw "Every MWSE log policy rule requires pattern and severity."
+        }
+        try {
+            $null = [regex]::new($rule.pattern, "IgnoreCase")
+        }
+        catch {
+            throw "Invalid MWSE log policy regular expression '$($rule.pattern)': $($_.Exception.Message)"
+        }
+    }
+    return $policy
+}
+
+function Resolve-MwseSeverity([object]$Policy, [string]$TestType, [string]$Text) {
+    foreach ($rule in @($Policy.rules)) {
+        if ($rule.test_type -and $rule.test_type -ne $TestType) {
+            continue
+        }
+        if ($Text -match $rule.pattern) {
+            return [pscustomobject]@{ severity = $rule.severity; rule_pattern = $rule.pattern }
+        }
+    }
+    return [pscustomobject]@{ severity = $Policy.default; rule_pattern = $null }
+}
+
+function Test-MwseLogHeader([string]$Line) {
+    return $Line -match "^\[[^]]+ \| .* \| (TRACE|DEBUG|INFO|WARN|ERROR) \|"
+}
+
+function Get-MwseEvents([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return @()
+    }
+
+    $lines = @(Get-Content -LiteralPath $Path)
+    $events = @()
+    $coveredLines = @{}
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -notmatch "stack traceback:|Error in event callback:") {
+            continue
+        }
+        $start = $index
+        for ($candidate = $index - 1; $candidate -ge 0; $candidate--) {
+            if (Test-MwseLogHeader $lines[$candidate]) {
+                if ($lines[$candidate] -match "^\[morrowind-mcp .*\| (ERROR|WARN) \|") {
+                    $start = $candidate
+                }
+                break
+            }
+        }
+        $end = $index
+        while ($end + 1 -lt $lines.Count) {
+            $next = $lines[$end + 1]
+            if (Test-MwseLogHeader $next) {
+                if ($next -notmatch "^\[morrowind-mcp .*\| ERROR \|.*json error: 5") {
+                    break
+                }
+            }
+            $end++
+        }
+        for ($covered = $start; $covered -le $end; $covered++) {
+            $coveredLines[$covered] = $true
+        }
+        $events += [pscustomobject]@{
+            category = "traceback"
+            start_line = $start + 1
+            end_line = $end + 1
+            text = ($lines[$start..$end] -join "`n")
+        }
+        $index = $end
+    }
+
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($coveredLines[$index] -or $lines[$index] -notmatch "^\[morrowind-mcp .*\| .* \| (ERROR|WARN) \|") {
+            continue
+        }
+        $events += [pscustomobject]@{
+            category = "logged_message"
+            start_line = $index + 1
+            end_line = $index + 1
+            text = $lines[$index]
+        }
+    }
+    return @($events | Sort-Object start_line)
 }
 
 if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
@@ -412,6 +514,64 @@ if ($customFailures.Count) {
     }
 }
 
+$primaryStatus = $status
+$mwseArtifactExists = Test-Path -LiteralPath $paths.mwse -PathType Leaf
+$mwseAnalysis = [ordered]@{
+    artifact = [ordered]@{
+        path = Relative $paths.mwse
+        availability = if ($mwseArtifactExists) { "available" } else { "missing" }
+    }
+    counts = [ordered]@{ events = 0; fail = 0; warn = 0; ignore = 0 }
+    events = @()
+    policy_error = $null
+    analysis_error = $null
+}
+if ($mwseArtifactExists) {
+    try {
+        $mwsePolicy = Read-MwsePolicy $MwsePolicyPath
+    }
+    catch {
+        $mwseAnalysis.policy_error = $_.Exception.Message
+        $reasons += "MWSE log policy could not be applied: $($mwseAnalysis.policy_error)"
+        if ($status -ne "failed") {
+            $status = "inconclusive"
+        }
+    }
+
+    if (-not $mwseAnalysis.policy_error) {
+        try {
+        $mwseEvents = @(Get-MwseEvents $paths.mwse)
+        $mwseAnalysis.counts.events = $mwseEvents.Count
+        $mwseAnalysis.events = @($mwseEvents | ForEach-Object {
+            $decision = Resolve-MwseSeverity $mwsePolicy $TestType $_.text
+            $mwseAnalysis.counts.($decision.severity)++
+            [ordered]@{
+                category = $_.category
+                severity = $decision.severity
+                rule_pattern = $decision.rule_pattern
+                start_line = $_.start_line
+                end_line = $_.end_line
+                preview = $_.text.Substring(0, [Math]::Min(500, $_.text.Length))
+            }
+        })
+        if ($mwseAnalysis.counts.fail -gt 0 -and $status -in "passed", "skipped", "inconclusive") {
+            $status = "failed"
+            $reasons += "MWSE log contains $($mwseAnalysis.counts.fail) fail-severity event(s)."
+        }
+        }
+        catch {
+            $mwseAnalysis.analysis_error = $_.Exception.Message
+            $reasons += "MWSE log analysis failed: $($mwseAnalysis.analysis_error)"
+            if ($status -ne "failed") {
+                $status = "inconclusive"
+            }
+        }
+    }
+}
+else {
+    $reasons += "MWSE log artifact is missing; primary verdict is unchanged."
+}
+
 $sources = @("primary")
 foreach ($source in "inspector", "mwse", "result") {
     $hasMatches = @($ruleMatches | Where-Object {
@@ -455,12 +615,14 @@ $evidence = @($sources | ForEach-Object {
 
 $summary = [ordered]@{
     schema = "morrowind-mcp.test-run-summary"
-    version = "1.0"
+    version = "1.1"
     generated_at = (Get-Date).ToUniversalTime().ToString("o")
     test_type = $TestType
     run_timestamp = $RunTimestamp
     status = $status
+    primary_status = $primaryStatus
     counts = $counts
+    mwse_analysis = $mwseAnalysis
     reasons = @($reasons)
     known_issues = @($knownIssues)
     rules = @($ruleMatches | ForEach-Object {

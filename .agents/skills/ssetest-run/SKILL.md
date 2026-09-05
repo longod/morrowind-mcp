@@ -25,7 +25,7 @@ description: Morrowind MCP の SSE/Streamable HTTP 通知テストを tests/sse_
 ```
 
 ## Suite-specific follow-up
-- summary は `sse_<timestamp>.log` の `notifications/message` pass marker と `[FAILED]` / `[ERROR]` を判定する。
+- summary は `sse_<timestamp>.log` の `notifications/message` pass marker と `[FAILED]` / `[ERROR]` を判定する。共通のartifactとMWSE severityの規約は [test-run-summaries.md](../../../docs/test-run-summaries.md) を参照する。
 - `failed` / `inconclusive` の場合だけ summary evidence の保存済み SSE/MWSE artifact を読み、session、SSE stream、notification、DELETE 後の `404` を切り分ける。ライブ `MWSE.log` は読まない。
 
 ## Expected Coverage

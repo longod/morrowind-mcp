@@ -420,7 +420,7 @@ finally {
 
     Write-SseLog "[INFO] SSE test log: $(Convert-ToFileUri -Path $SseLogPath)" -ForegroundColor Cyan
 
-    Invoke-MwmcpTestRunSummary -TestType "sse_test" -RunTimestamp $RunTimestamp
+    $null = Invoke-MwmcpTestRunSummary -TestType "sse_test" -RunTimestamp $RunTimestamp
 
 }
 

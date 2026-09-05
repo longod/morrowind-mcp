@@ -7,6 +7,7 @@ function this.Test()
     local unitwind = require("unitwind").new({ enabled = true, highlight = false })
     local serializerModule = require("morrowind-mcp.tes3.object_summary")
     local object = require("morrowind-mcp.tes3.object")
+    local enumname = require("morrowind-mcp.tes3.enumname")
 
     unitwind:start("morrowind-mcp.tes3.object_summary")
     unitwind.afterEach = function()
@@ -148,6 +149,28 @@ function this.Test()
         unitwind:expect(type(result.effects[1])).toBe("table")
         unitwind:expect(result.effects[1].radius).toBe(10)
         unitwind:expect(result.effects[1].duration).toBe(1)
+    end)
+
+    unitwind:test("Standard ingredient effects accept magic-effect IDs", function()
+        local ingredient = {
+            id = "ingred_hackle-lo_leaf_01",
+            objectType = tes3.objectType.ingredient,
+            isValid = function() return true end,
+            name = "Hackle-Lo Leaf",
+            value = 1,
+            weight = 0.1,
+            effects = {
+                tes3.effect.restoreHealth,
+                tes3.effect.restoreFatigue,
+            },
+        }
+
+        local result = serializerModule.new({ detailLevel = "standard" }):tes3ingredient(ingredient)
+
+        unitwind:expect(type(result.effects)).toBe("table")
+        unitwind:expect(result.effects[1].id).toBe(enumname.effect(tes3.effect.restoreHealth) or tes3.effect.restoreHealth)
+        unitwind:expect(result.effects[1].duration).toBe(nil)
+        unitwind:expect(result.effects[2].id).toBe(enumname.effect(tes3.effect.restoreFatigue) or tes3.effect.restoreFatigue)
     end)
 
     unitwind:test("Standard item summaries retain common value and weight", function()

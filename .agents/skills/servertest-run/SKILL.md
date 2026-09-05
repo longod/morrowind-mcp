@@ -37,7 +37,9 @@ Inspector集約ログのJSONは既定でpretty-printされる。エージェン�
 自動 foreground 化は best effort であり、ロードされるセーブ内容や実際のウィンドウ状態に依存するため、`tests/server_test.ps1` は target/activate/MenuDialog への到達を必須にしない。会話 actor まで到達したかは、実行後の `MWSE.log` と `tests/validate_memory_dump.ps1` の `conversationActors` 集計で判断する。
 
 ## Suite-specific follow-up
+- 共通のartifact、summary、MWSE severityの規約は [test-run-summaries.md](../../../docs/test-run-summaries.md) を参照する。
 - summary の `skipped` case は失敗ではない。counts と case 名を報告し、想定外の skip の場合だけ evidence の Inspector/MWSE コピーで状態依存か回帰かを調べる。
+- `mwse_analysis.counts.fail` は失敗として扱い、`warn` と `ignore` は件数を報告するが失敗にはしない。
 - Memory schema、リンク、debug dump、actor interaction を変更した場合だけ、`./tests/validate_memory_dump.ps1` を追加実行する。通常の server test 合否とは別に報告する。
   - `tests/server_test.ps1` は `mw-debug-action action=memory:SaveDebugDocuments` を実行するが、`tests/validate_memory_dump.ps1` は自動実行しない。
   - 出力の `conversationActors` は、debug dump 成果物上で `target -> activate -> MenuDialog` まで到達した actor 数を表す。セーブ内容や foreground 状態に依存するため、通常の server test 合否とは分けて読む。

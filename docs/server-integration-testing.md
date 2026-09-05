@@ -12,6 +12,8 @@ Set `paths.morrowindProfileDir` in `mwmcp.local.json`, or set `MWMCP_MORROWIND_P
 
 Morrowind is activated in the foreground by default after the server is reachable. Use `--no-foreground` for read-only suites that do not send game input.
 
+Saved artifacts, `summary_<timestamp>.json`, and MWSE log severity handling follow [Test Run Summaries](test-run-summaries.md). This document covers only server integration suite behavior.
+
 Add one suite per file under `tests/server_integration/suites/`.
 
 ```python

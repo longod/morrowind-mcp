@@ -184,7 +184,7 @@ Acceptance criteria:
 
 ## Test Sequence
 
-Each live probe must run inside `tests/server_test.ps1` after `menu mode on` and before `menu mode off`. The server test owns server startup, foreground activation, shutdown, Inspector logging, and MWSE.log capture.
+Each live probe must run inside `tests/server_test.ps1` after `menu mode on` and before `menu mode off`. The server test owns server startup, foreground activation, shutdown, Inspector logging, and MWSE.log capture. The saved artifact and summary contract is defined in [Test Run Summaries](test-run-summaries.md).
 
 For every new action path, add a focused UnitWind test only for reusable helpers under `tes3/` or `util/`; do not add UnitWind tests for `tools/`. Then delegate both focused UnitWind and server-test execution to the Test Runner.
 

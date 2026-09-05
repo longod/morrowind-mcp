@@ -120,11 +120,29 @@ class IntegrationRunnerTests(unittest.TestCase):
                 LoadSuites(root, LoadCases(root))
 
     def test_generate_summary_uses_server_integration_type(self) -> None:
-        with patch("runner.subprocess.run") as run:
-            GenerateSummary(Path("C:/repo"), "20260825_123456")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            summary_path = root / "tests" / "logs" / "server_integration" / "summary_20260825_123456.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text("{}", encoding="utf-8")
+            completed = type("Completed", (), {"returncode": 0})()
+            with patch("runner.subprocess.run", return_value=completed) as run:
+                result = GenerateSummary(root, "20260825_123456")
         command = run.call_args.args[0]
         self.assertIn("server_integration", command)
         self.assertIn("20260825_123456", command)
+        self.assertTrue(run.call_args.kwargs["capture_output"])
+        self.assertTrue(result["available"])
+        self.assertTrue(result["should_read"])
+        self.assertEqual(result["path"], summary_path)
+
+    def test_generate_summary_reports_missing_artifact(self) -> None:
+        completed = type("Completed", (), {"returncode": 0})()
+        with tempfile.TemporaryDirectory() as directory, patch("runner.subprocess.run", return_value=completed):
+            result = GenerateSummary(Path(directory), "20260825_123456")
+        self.assertFalse(result["available"])
+        self.assertFalse(result["should_read"])
+        self.assertEqual(result["warning"], "Test summary was not created.")
 
     def test_main_menu_context_uses_explicit_switch(self) -> None:
         completed = type("Completed", (), {"returncode": 0, "stderr": ""})()

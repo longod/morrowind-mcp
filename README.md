@@ -158,6 +158,8 @@ Server-generated Lua output data can be inspected under `<paths.datafilesOverwri
 - [tests/stop_server.ps1](tests/stop_server.ps1): Stop the currently running Morrowind
 - [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1): Resolve configuration precedence (env > local > default) and provide paths for tests
 
+Saved test artifacts and `summary_<timestamp>.json` are described in [docs/test-run-summaries.md](docs/test-run-summaries.md).
+
 #### MCP Inspector
 
 Run [tests/start_inspector.ps1](tests/start_inspector.ps1) to launch the MCP Inspector UI:

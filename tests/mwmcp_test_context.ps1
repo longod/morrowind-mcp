@@ -21,22 +21,51 @@ function Invoke-MwmcpTestRunSummary {
         [string]$TestType,
         [Parameter(Mandatory = $true)]
         [string]$RunTimestamp
+        ,
+        [string]$ArtifactsRoot = (Join-Path $PSScriptRoot "logs")
     )
 
     $summaryScriptPath = Join-Path $PSScriptRoot "summarize_test_runs.ps1"
+        $summaryPath = Join-Path (Join-Path $ArtifactsRoot $TestType) "summary_$RunTimestamp.json"
     if (-not (Test-Path -LiteralPath $summaryScriptPath)) {
         Write-Host "[WARN] Test summary script was not found: $summaryScriptPath" -ForegroundColor Yellow
-        return
+            return [pscustomobject]@{
+                available = $false
+                path = $summaryPath
+                should_read = $false
+                warning = "Test summary script was not found."
+            }
     }
 
     try {
-        & $summaryScriptPath -TestType $TestType -RunTimestamp $RunTimestamp
-        if ([int]$LASTEXITCODE -ne 0) {
-            Write-Host "[WARN] Failed to generate $TestType summary: exit=$LASTEXITCODE" -ForegroundColor Yellow
+            & $summaryScriptPath -TestType $TestType -RunTimestamp $RunTimestamp -ArtifactsRoot $ArtifactsRoot | Out-Null
+            if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) {
+                $warning = "Test summary was not created."
+                Write-Host "[WARN] Failed to generate $TestType summary: $warning" -ForegroundColor Yellow
+                return [pscustomobject]@{
+                    available = $false
+                    path = $summaryPath
+                    should_read = $false
+                    warning = $warning
+                }
         }
+
+            Write-Host "[INFO] Test summary: $summaryPath; read this file for status and evidence." -ForegroundColor DarkCyan
+            return [pscustomobject]@{
+                available = $true
+                path = $summaryPath
+                should_read = $true
+                warning = $null
+            }
     }
     catch {
         Write-Host "[WARN] Failed to generate $TestType summary: $($_.Exception.Message)" -ForegroundColor Yellow
+            return [pscustomobject]@{
+                available = $false
+                path = $summaryPath
+                should_read = $false
+                warning = $_.Exception.Message
+            }
     }
 }
 

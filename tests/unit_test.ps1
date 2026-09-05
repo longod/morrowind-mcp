@@ -216,7 +216,7 @@ finally {
         Write-Host "[INFO] Saved MWSE.log copy: $(Convert-ToFileUri -Path $MwseCopyOutputPath)" -ForegroundColor DarkCyan
     }
 
-    Invoke-MwmcpTestRunSummary -TestType "unit_test" -RunTimestamp $RunTimestamp
+    $null = Invoke-MwmcpTestRunSummary -TestType "unit_test" -RunTimestamp $RunTimestamp
 
     Pop-Location
 }

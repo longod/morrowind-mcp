@@ -140,7 +140,11 @@ def Main() -> int:
             CopyMwseLog(configuration, mwse_path)
             result["mwse_log"] = {"state": "saved", "path": str(mwse_path)}
         WriteJson(result_path, result)
-        GenerateSummary(repo_root, timestamp)
+        summary = GenerateSummary(repo_root, timestamp)
+        if summary["available"]:
+            Log(f"[INFO] Test summary: {summary['path']}; read this file for status and evidence.")
+        else:
+            Log(f"[WARN] Failed to generate server integration summary: {summary['warning']}")
         RemoveTestContext(repo_root)
 
 

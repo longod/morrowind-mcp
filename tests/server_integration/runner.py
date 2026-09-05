@@ -166,13 +166,22 @@ def CopyMwseLog(configuration: dict[str, Any], destination: Path) -> None:
         shutil.copy2(source, destination)
 
 
-def GenerateSummary(repo_root: Path, timestamp: str) -> None:
-    """Generate the standard summary from retained timestamped integration artifacts."""
-    subprocess.run(
+def GenerateSummary(repo_root: Path, timestamp: str) -> dict[str, Any]:
+    """Generate a summary without forwarding its JSON output to the integration runner."""
+    summary_path = repo_root / "tests" / "logs" / "server_integration" / f"summary_{timestamp}.json"
+    completed = subprocess.run(
         ["powershell.exe", "-NoProfile", "-File", str(repo_root / "tests" / "summarize_test_runs.ps1"),
          "-TestType", "server_integration", "-RunTimestamp", timestamp],
         cwd=repo_root,
         check=False,
+        capture_output=True,
         encoding="utf-8",
         errors="replace",
     )
+    if completed.returncode != 0:
+        return {"available": False, "path": summary_path, "should_read": False,
+                "warning": f"Summary generator exited with code {completed.returncode}."}
+    if not summary_path.is_file():
+        return {"available": False, "path": summary_path, "should_read": False,
+                "warning": "Test summary was not created."}
+    return {"available": True, "path": summary_path, "should_read": True, "warning": None}
