@@ -13,6 +13,13 @@
 
 ---
 
+## サブエージェント呼び出し規則
+
+- 呼び出せる agent は、呼び出し元 frontmatter の `agents` にある agent だけです。`agents: []` または未指定なら、呼び出しません。handoff の `agent` だけで許可範囲を広げてはいけません。
+- ユーザーの目的と関係ないモデル呼び出しや、単なる下請けのための追加委譲はしません。
+- 自分自身や、委譲チェーンですでに呼び出した agent には委譲しません。
+- `model` を指定する場合は、呼び出し先 frontmatter の `model` にある値を完全一致で指定します。未列挙の model や別名は使いません。
+
 ## 設定ファイル
 
 host/port を含む設定は [tests/mwmcp_config.ps1](tests/mwmcp_config.ps1) を使用して `env > local > default` の順で解決する

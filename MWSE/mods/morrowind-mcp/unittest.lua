@@ -59,6 +59,35 @@ local function BuildTestTargets(targets)
     return targetSet
 end
 
+--- Write the runner-owned result after every selected test has completed.
+---@param runId string
+---@param testsPassed integer
+---@param testsFailed integer
+---@return boolean
+local function WriteCompletionResult(runId, testsPassed, testsFailed)
+    local settings = require("morrowind-mcp.settings")
+    local directory = settings.modDataDir .. "tests\\unit-results"
+    lfs.mkdir(settings.modDataDir .. "tests")
+    lfs.mkdir(directory)
+    local path = directory .. "\\" .. runId .. ".json"
+    local temporaryPath = path .. ".tmp"
+    local contents = require("dkjson").encode({
+        version = 1,
+        run_id = runId,
+        status = testsFailed > 0 and "failed" or "passed",
+        tests_passed = testsPassed,
+        tests_failed = testsFailed,
+    }, { indent = true })
+    local file = io.open(temporaryPath, "w")
+    if not file then
+        return false
+    end
+    file:write(contents)
+    file:close()
+    os.remove(path)
+    return os.rename(temporaryPath, path)
+end
+
 function this.Run()
     local testContext = require("morrowind-mcp.util.test_context").Load()
     if testContext == nil or testContext.unitTest.mode == "skip" then
@@ -116,6 +145,11 @@ function this.Run()
         logger:error("Unit test suite completed: tests_passed=%d tests_failed=%d", totalPassed, totalFailed)
     else
         logger:info("Unit test suite completed: tests_passed=%d tests_failed=%d", totalPassed, totalFailed)
+    end
+
+    if not WriteCompletionResult(testContext.unitTest.runId, totalPassed, totalFailed) then
+        logger:error("Failed to write unit test completion result: run_id=%s", testContext.unitTest.runId)
+        totalFailed = totalFailed + 1
     end
 
     if exitAfterTests then

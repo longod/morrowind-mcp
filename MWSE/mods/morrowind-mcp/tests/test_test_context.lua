@@ -7,7 +7,7 @@ function this.Test()
 
     unitwind:start("morrowind-mcp.util.test_context")
     unitwind:test("Parses a unit test context", function()
-        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"run-and-exit","targets":["test_distance.lua"]}}]])
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":true,"accept_disclaimer":true,"unit_test":{"mode":"run-and-exit","targets":["test_distance.lua"],"run_id":"unit-1"}}]])
         unitwind:expect(errorMessage).toBe(nil)
         unitwind:expect(context ~= nil).toBe(true)
         if context ~= nil then
@@ -15,6 +15,7 @@ function this.Test()
             unitwind:expect(context.acceptDisclaimer).toBe(true)
             unitwind:expect(context.unitTest.mode).toBe("run-and-exit")
             unitwind:expect(context.unitTest.targets[1]).toBe("test_distance.lua")
+            unitwind:expect(context.unitTest.runId).toBe("unit-1")
         end
     end)
 
@@ -93,10 +94,18 @@ function this.Test()
 
     unitwind:test("Parses each supported unit test mode", function()
         for _, mode in ipairs({ "run", "run-and-exit", "skip" }) do
-            local context, errorMessage = testContext.Parse(string.format([[{"version":1,"suppress_auto_continue":false,"accept_disclaimer":false,"unit_test":{"mode":"%s","targets":[]}}]], mode))
+            local runId = mode == "skip" and "" or [[,"run_id":"unit-1"]]
+            local context, errorMessage = testContext.Parse(string.format([[{"version":1,"suppress_auto_continue":false,"accept_disclaimer":false,"unit_test":{"mode":"%s","targets":[]%s}}]], mode, runId))
             unitwind:expect(errorMessage).toBe(nil)
             unitwind:expect(context ~= nil).toBe(true)
         end
+    end)
+
+    unitwind:test("Rejects a running unit test context without a run ID", function()
+        local context, errorMessage = testContext.Parse([[{"version":1,"suppress_auto_continue":false,"accept_disclaimer":false,"unit_test":{"mode":"run","targets":[]}}]])
+
+        unitwind:expect(context).toBe(nil)
+        unitwind:expect(errorMessage).toBe("unit_test.run_id must be a non-empty safe identifier when tests run.")
     end)
 
     unitwind:test("Rejects a non-boolean disclaimer flag", function()

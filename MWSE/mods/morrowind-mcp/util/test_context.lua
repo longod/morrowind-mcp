@@ -3,6 +3,7 @@ local this = {}
 ---@class MCP.TestContextUnitTest
 ---@field mode "run"|"run-and-exit"|"skip"
 ---@field targets string[]
+---@field runId string?
 
 ---@class MCP.TestContextServerIntegration
 ---@field runId string
@@ -69,6 +70,10 @@ function this.Parse(contents)
             return nil, "unit_test.targets must contain only strings."
         end
     end
+    local runId = decoded.unit_test.run_id
+    if mode ~= "skip" and (type(runId) ~= "string" or not string.match(runId, "^[A-Za-z0-9_-]+$")) then
+        return nil, "unit_test.run_id must be a non-empty safe identifier when tests run."
+    end
 
     local serverIntegration = nil
     if decoded.server_integration ~= nil then
@@ -100,6 +105,7 @@ function this.Parse(contents)
         unitTest = {
             mode = mode,
             targets = decoded.unit_test.targets,
+            runId = runId,
         },
         serverIntegration = serverIntegration,
     }, nil

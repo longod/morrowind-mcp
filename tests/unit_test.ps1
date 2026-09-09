@@ -3,11 +3,11 @@ param(
     [string[]]$TestTargets,
     [switch]$NoForeground,
     [switch]$VerifyRuntimeAfterTests,
+    [ValidateRange(1, 300)]
+    [int]$CompletionTimeoutSeconds = 60,
     [ValidateRange(1, 60)]
     [int]$RuntimeReadyTimeoutSeconds = 20
 )
-
-$MaxWaitSeconds = 10
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "mwmcp_test_context.ps1")
@@ -24,6 +24,8 @@ $MwseLogPath = $null
 $MwseLogStatus = ""
 $SavedMwseCopy = $false
 $RuntimeProbeStarted = $false
+$CompletionOutputPath = $null
+$CompletionResult = $null
 
 function Convert-ToFileUri {
     param(
@@ -61,8 +63,24 @@ try {
         Write-Host "[WARN] $StopScriptPath was not found. Forced stop will be skipped." -ForegroundColor Yellow
     }
 
+    if (-not (Test-Path -LiteralPath $OutputDir)) {
+        New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+    }
+
+    $ConfigScriptPath = ".\mwmcp_config.ps1"
+    if (-not (Test-Path -LiteralPath $ConfigScriptPath)) {
+        throw "Config helper was not found: $ConfigScriptPath"
+    }
+    . $ConfigScriptPath
+    $Config = Get-MwmcpConfig
+    $MwseLogPath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
+    $CompletionOutputPath = Join-Path $Config.Paths.modDataDir "tests\unit-results\$RunTimestamp.json"
+    if (Test-Path -LiteralPath $CompletionOutputPath) {
+        Remove-Item -LiteralPath $CompletionOutputPath -Force
+    }
+
     $UnitTestMode = if ($VerifyRuntimeAfterTests) { "run" } else { "run-and-exit" }
-    Set-MwmcpTestContext -UnitTestMode $UnitTestMode -UnitTestTargets $TargetLines -AcceptDisclaimer $VerifyRuntimeAfterTests
+    Set-MwmcpTestContext -UnitTestMode $UnitTestMode -UnitTestTargets $TargetLines -UnitTestRunId $RunTimestamp -AcceptDisclaimer $VerifyRuntimeAfterTests
     if ($TargetLines.Count -gt 0) {
         Write-Host "[INFO] Planned unit test targets: $($TargetLines -join ', ')" -ForegroundColor DarkCyan
     }
@@ -82,66 +100,31 @@ try {
     if ($StartExitCode -ne 0) {
         Write-Host "[WARN] $StartScriptPath exited non-zero: start=$StartExitCode" -ForegroundColor Yellow
     }
-    $ExitCode = $StartExitCode
 
-    # Wait briefly for process appearance because MO2 launch is asynchronous.
-    $processName = "Morrowind"
-    $morrowindStarted = $false
-    for ($i = 0; $i -lt 30; $i++) {
-        if (Get-Process -Name $processName -ErrorAction SilentlyContinue) {
-            $morrowindStarted = $true
-            break
-        }
-        Start-Sleep -Seconds 1
-    }
-
-    if ($morrowindStarted -and -not $VerifyRuntimeAfterTests) {
-        Write-Host "[INFO] Waiting up to $MaxWaitSeconds seconds for Morrowind process to exit..." -ForegroundColor DarkCyan
-        $stoppedInTime = $false
-        for ($i = 0; $i -lt $MaxWaitSeconds; $i++) {
-            if (-not (Get-Process -Name $processName -ErrorAction SilentlyContinue)) {
-                $stoppedInTime = $true
+    Write-Host "[INFO] Waiting up to $CompletionTimeoutSeconds seconds for unit test completion..." -ForegroundColor DarkCyan
+    $deadline = (Get-Date).AddSeconds($CompletionTimeoutSeconds)
+    do {
+        if (Test-Path -LiteralPath $CompletionOutputPath -PathType Leaf) {
+            try {
+                $candidate = Get-Content -LiteralPath $CompletionOutputPath -Raw | ConvertFrom-Json -ErrorAction Stop
+                if ($candidate.version -eq 1 -and $candidate.run_id -eq $RunTimestamp -and $candidate.status -in @("passed", "failed") -and
+                    $candidate.tests_passed -is [int64] -and $candidate.tests_failed -is [int64]) {
+                    $CompletionResult = $candidate
+                    break
+                }
+                $MwseLogStatus = "Unit test completion result is invalid: $CompletionOutputPath"
                 break
             }
-            Start-Sleep -Seconds 1
-        }
-
-        if (-not $stoppedInTime) {
-            if ($HasStopScript) {
-                # Prevent hanging forever when sentinel did not trigger exit.
-                Write-Host "[WARN] Morrowind is still running after timeout. Running $StopScriptPath" -ForegroundColor Yellow
-                & powershell.exe -NoProfile -File $StopScriptPath
-                for ($i = 0; $i -lt 10; $i++) {
-                    if (-not (Get-Process -Name $processName -ErrorAction SilentlyContinue)) {
-                        break
-                    }
-                    Start-Sleep -Seconds 1
-                }
+            catch {
+                $MwseLogStatus = "Failed to read unit test completion result: $($_.Exception.Message)"
+                break
             }
         }
-    }
-    else {
-        Write-Host "[WARN] Morrowind process was not detected. Cleanup continues." -ForegroundColor Yellow
-    }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
 
-    if (-not (Test-Path -LiteralPath $OutputDir)) {
-        New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-    }
-
-    $ConfigScriptPath = ".\mwmcp_config.ps1"
-    if (Test-Path -LiteralPath $ConfigScriptPath) {
-        . $ConfigScriptPath
-        try {
-            $Config = Get-MwmcpConfig
-            $MwseLogPath = Join-Path $Config.Paths.morrowindInstallDir "MWSE.log"
-        }
-        catch {
-            $MwseLogStatus = "Failed to resolve MWSE.log path: $($_.Exception.Message)"
-            Write-Host "[WARN] $MwseLogStatus" -ForegroundColor Yellow
-        }
-    }
-    else {
-        $MwseLogStatus = "Config helper was not found: $ConfigScriptPath"
+    if (-not $CompletionResult -and -not $MwseLogStatus) {
+        $MwseLogStatus = "Unit test completion result timed out after $CompletionTimeoutSeconds seconds: $CompletionOutputPath"
         Write-Host "[WARN] $MwseLogStatus" -ForegroundColor Yellow
     }
 
@@ -155,19 +138,20 @@ try {
             Write-Host "[WARN] Failed to save MWSE.log copy: $($_.Exception.Message)" -ForegroundColor Yellow
         }
 
-        $ExtractedLines = Select-String -LiteralPath $MwseLogPath -Pattern $ExtractPattern | ForEach-Object { $_.Line }
-        if ($ExtractedLines.Count -gt 0) {
-            Write-Host "[INFO] Extracted $($ExtractedLines.Count) matching line(s)." -ForegroundColor DarkCyan
-            $ExtractedLines | ForEach-Object { Write-Host $_ }
-            $FoundFailed = ($ExtractedLines | Where-Object { $_ -match "FAILED" }).Count -gt 0
-        }
-        else {
-            Write-Host "[WARN] No matching unit test lines were found in MWSE.log." -ForegroundColor Yellow
-        }
     }
     elseif ($MwseLogPath) {
         $MwseLogStatus = "MWSE.log was not found: $MwseLogPath"
         Write-Host "[WARN] $MwseLogStatus" -ForegroundColor Yellow
+    }
+
+    if ($CompletionResult) {
+        $resultWord = if ($CompletionResult.status -eq "passed") { "PASSED" } else { "FAILED" }
+        $ExtractedLines = @(
+            "[UnitWind] Completion: run_id=$($CompletionResult.run_id) tests_passed=$($CompletionResult.tests_passed) tests_failed=$($CompletionResult.tests_failed)",
+            "[UnitWind] MORROWIND-MCP.UNIT_TEST $resultWord"
+        )
+        $FoundFailed = $CompletionResult.status -eq "failed"
+        $ExtractedLines | ForEach-Object { Write-Host $_ }
     }
 
     $ExtractFileLines = @(
@@ -191,7 +175,7 @@ try {
     Set-Content -LiteralPath $ExtractOutputPath -Value $ExtractFileLines -Encoding UTF8
 
     if ($FoundFailed -and $ExitCode -eq 0) {
-        Write-Host "[WARN] FAILED result detected in MWSE.log. Returning non-zero exit code." -ForegroundColor Yellow
+        Write-Host "[WARN] FAILED result detected in completion JSON. Returning non-zero exit code." -ForegroundColor Yellow
         $ExitCode = 1
     }
 }

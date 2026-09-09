@@ -75,6 +75,7 @@ function Set-MwmcpTestContext {
         [ValidateSet("run", "run-and-exit", "skip")]
         [string]$UnitTestMode,
         [string[]]$UnitTestTargets = @(),
+        [string]$UnitTestRunId,
         [bool]$SuppressAutoContinue = $true,
         [bool]$AcceptDisclaimer = $false,
         [string]$ServerIntegrationRunId,
@@ -104,6 +105,7 @@ function Set-MwmcpTestContext {
         unit_test = [ordered]@{
             mode = $UnitTestMode
             targets = @($UnitTestTargets)
+            run_id = $UnitTestRunId
         }
     }
     if ($ServerIntegrationRunId) {
