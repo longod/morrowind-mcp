@@ -39,8 +39,9 @@ function this.Test()
     end
 
     --- Build a valid teleport-door reference with copied-position test data.
-    local function Door(position, destinationCell, markerPosition)
+    local function Door(position, destinationCell, markerPosition, id)
         local door = {
+            id = id or "Door",
             position = position,
             destination = { cell = destinationCell, marker = { position = markerPosition } },
         }
@@ -288,7 +289,11 @@ function this.Test()
         local edge = graph.edges[edgeId]
         unitwind:expect(edge.kind).toBe(pathfinding.edgeKind.travel)
         unitwind:expect(edge.horizontalDistance).toBe(0)
+        unitwind:expect(edge.referenceId).toBe("Door")
+        unitwind:expect(edge.referenceKind).toBe("door")
         unitwind:expect(edge.doorPosition.x).toBe(100)
+        unitwind:expect(graph.travelDestinationsByCellId[CellKey(source)][1].referenceId).toBe("Door")
+        unitwind:expect(graph.travelDestinationsByCellId[CellKey(source)][1].kind).toBe("door")
         unitwind:expect(graph.edgeIdByNeighborId[destinationNodeId][sourceNodeId] == nil).toBe(true)
         unitwind:expect(graph:FindPath({ cell = source, position = { x = 0, y = 0, z = 0 } }, { cell = destination, position = { x = 10100, y = 0, z = 0 } }).cost).toBe(200)
     end)
@@ -321,8 +326,96 @@ function this.Test()
         local destinationNodeId = graph.nodeIdsByCellId[CellKey(destination)][1]
         local edgeId = graph.edgeIdByNeighborId[sourceNodeId][destinationNodeId]
         unitwind:expect(graph:Heuristic(graph.nodes[sourceNodeId], graph.nodes[destinationNodeId])).toBe(0)
+        unitwind:expect(graph:Heuristic(graph.nodes[sourceNodeId], graph.nodes[destinationNodeId], { walkOnly = true }) > 0).toBe(true)
+        unitwind:expect(graph:FindPath({ cell = source, position = { x = 0, y = 0, z = 0 } }, { cell = destination, position = { x = 10000, y = 0, z = 0 } }, { walkOnly = true })).toBe(nil)
         graph:SetEdgeBlocked(edgeId, true)
         unitwind:expect(graph:FindPath({ cell = source, position = { x = 0, y = 0, z = 0 } }, { cell = destination, position = { x = 10000, y = 0, z = 0 } })).toBe(nil)
+    end)
+
+    unitwind:test("FindReachableTravelNodes lists walk-reachable doors by distance", function()
+        local sourceStart, nearDoor, farDoor, unreachableDoor = Node(0, 0, 0), Node(100, 0, 0), Node(300, 0, 0), Node(500, 0, 0)
+        sourceStart.connectedNodes = { nearDoor, farDoor }
+        local source = Cell("source", 0, 0, { sourceStart, nearDoor, farDoor, unreachableDoor })
+        local nearDestination = Cell("near", 1, 0, { Node(10000, 0, 0) })
+        local farDestination = Cell("far", 2, 0, { Node(20000, 0, 0) })
+        local blockedDestination = Cell("blocked", 3, 0, { Node(30000, 0, 0) })
+        source.references = {
+            Door({ x = 100, y = 0, z = 0 }, nearDestination, { x = 10000, y = 0, z = 0 }, "near-door"),
+            Door({ x = 300, y = 0, z = 0 }, farDestination, { x = 20000, y = 0, z = 0 }, "far-door"),
+            Door({ x = 500, y = 0, z = 0 }, blockedDestination, { x = 30000, y = 0, z = 0 }, "blocked-door"),
+        }
+        local graph = pathfinding.new()
+        graph:UpdateCell(source)
+        graph:UpdateCell(nearDestination)
+        graph:UpdateCell(farDestination)
+        graph:UpdateCell(blockedDestination)
+        local sourceNodeId = graph.nodeIdsByCellId[CellKey(source)][1]
+        local nearDoorNodeId = graph.nodeIdsByCellId[CellKey(source)][2]
+        local nearDoorEdgeId = graph.edgeIdByNeighborId[sourceNodeId][nearDoorNodeId]
+        graph:SetEdgeSurface(nearDoorEdgeId, pathfinding.edgeSurface.water)
+
+        local nodes = graph:FindReachableTravelNodes({ cell = source, position = { x = 0, y = 0, z = 0 } })
+
+        unitwind:expect(table.size(nodes)).toBe(2)
+        unitwind:expect(nodes[1].referenceId).toBe("near-door")
+        unitwind:expect(nodes[1].kind).toBe("door")
+        unitwind:expect(nodes[1].destinations[1].cellId).toBe("near")
+        unitwind:expect(nodes[1].walkDistance).toBe(100)
+        unitwind:expect(nodes[2].referenceId).toBe("far-door")
+    end)
+
+    unitwind:test("FindReachableTravelNodes includes a door in a stitched exterior cell", function()
+        local sourceNode = Node(8000, 0, 0)
+        local neighborStart, neighborDoor = Node(8200, 0, 0), Node(8500, 0, 0)
+        neighborStart.connectedNodes = { neighborDoor }
+        local source = Cell("source-exterior", 0, 0, { sourceNode }, false)
+        local neighbor = Cell("neighbor-exterior", 1, 0, { neighborStart, neighborDoor }, false)
+        local destination = Cell("neighbor-door-destination", 0, 0, { Node(0, 0, 0) })
+        neighbor.references = {
+            Door({ x = 8500, y = 0, z = 0 }, destination, { x = 0, y = 0, z = 0 }, "neighbor-door"),
+        }
+        local graph = pathfinding.new()
+        graph:UpdateCell(source)
+        graph:UpdateCell(neighbor)
+        graph:UpdateCell(destination)
+
+        local nodes = graph:FindReachableTravelNodes({ cell = source, position = { x = 8000, y = 0, z = 0 } })
+
+        unitwind:expect(table.size(nodes)).toBe(1)
+        unitwind:expect(nodes[1].referenceId).toBe("neighbor-door")
+        unitwind:expect(nodes[1].sourceCellId).toBe(CellKey(neighbor))
+        unitwind:expect(nodes[1].walkDistance).toBe(500)
+        unitwind:expect(nodes[1].routeNodeCount).toBe(3)
+        unitwind:expect(nodes[1].destinations[1].targetRelation).toBe(nil)
+    end)
+
+    unitwind:test("FindReachableTravelNodes classifies target relation", function()
+        local sourceStart, knownDoor, noRouteDoor, unknownDoor = Node(0, 0, 0), Node(100, 0, 0), Node(200, 0, 0), Node(300, 0, 0)
+        sourceStart.connectedNodes = { knownDoor, noRouteDoor, unknownDoor }
+        local source = Cell("source", 0, 0, { sourceStart, knownDoor, noRouteDoor, unknownDoor })
+        local knownMarker, target = Node(10000, 0, 0), Node(10100, 0, 0)
+        knownMarker.connectedNodes = { target }
+        local knownDestination = Cell("known", 1, 0, { knownMarker, target })
+        local noRouteDestination = Cell("no-route", 2, 0, { Node(20000, 0, 0) })
+        local unknownDestination = Cell("unknown", 3, 0, { Node(30000, 0, 0) })
+        source.references = {
+            Door({ x = 100, y = 0, z = 0 }, knownDestination, { x = 10000, y = 0, z = 0 }, "known-door"),
+            Door({ x = 200, y = 0, z = 0 }, noRouteDestination, { x = 20000, y = 0, z = 0 }, "no-route-door"),
+            Door({ x = 300, y = 0, z = 0 }, unknownDestination, { x = 30000, y = 0, z = 0 }, "unknown-door"),
+        }
+        local graph = pathfinding.new()
+        graph:UpdateCell(source)
+        graph:UpdateCell(knownDestination)
+        graph:UpdateCell(noRouteDestination)
+
+        local nodes = graph:FindReachableTravelNodes(
+            { cell = source, position = { x = 0, y = 0, z = 0 } },
+            { cell = knownDestination, position = { x = 10100, y = 0, z = 0 } }
+        )
+
+        unitwind:expect(nodes[1].destinations[1].targetRelation).toBe("known_route")
+        unitwind:expect(nodes[2].destinations[1].targetRelation).toBe("no_known_route")
+        unitwind:expect(nodes[3].destinations[1].targetRelation).toBe("unknown")
     end)
 
     unitwind:test("OnLoaded refreshes the player cell without a pending poll", function()

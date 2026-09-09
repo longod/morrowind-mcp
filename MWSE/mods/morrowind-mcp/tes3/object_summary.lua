@@ -29,6 +29,13 @@ local objectHandlerName = {
     repairItem = "tes3repairTool",
 }
 
+local doorActionFlagNames = {
+    "doorOpening",
+    "doorClosing",
+    "doorJammedOpening",
+    "doorJammedClosing",
+}
+
 -- Keep this manifest aligned with object.lua so a missing extension point is visible in tests.
 this.supportedMethods = {
     "tes3bountyData",
@@ -280,7 +287,6 @@ function this:LockSummary(value)
         return nil
     end
     return jsonrpc.object({
-        locked = value.locked,
         level = value.level,
         key = self:ObjectSummary(value.key),
         trap = self:ObjectSummary(value.trap),
@@ -327,6 +333,7 @@ function this:Reference(reference)
         isDead = reference.isDead,
         isEmpty = reference.isEmpty == true or nil,
         isLeveledSpawn = reference.isLeveledSpawn == true or nil,
+        lockState = reference.lockNode and (reference.lockNode.locked and "locked" or "unlocked") or nil,
         stackSize = reference.stackSize,
     })
     if self.origin and reference.position then
@@ -335,6 +342,17 @@ function this:Reference(reference)
             units = distanceUnits,
             meters = distanceutil.ToMeters(distanceUnits),
         })
+    end
+    if baseObject and baseObject.objectType == tes3.objectType.door and type(reference.testActionFlag) == "function" then
+        local actionFlags = table.new(4, 0)
+        for _, name in ipairs(doorActionFlagNames) do
+            if reference:testActionFlag(tes3.actionFlag[name]) then
+                table.insert(actionFlags, name)
+            end
+        end
+        if table.size(actionFlags) > 0 then
+            output.actionFlags = jsonrpc.array(actionFlags)
+        end
     end
     if self:IsStandard() then
         output.facing = reference.facing
@@ -346,8 +364,7 @@ function this:Reference(reference)
         output.lockNode = self:LockSummary(reference.lockNode)
         output.object = self:AnyObject(baseObject)
     else
-        output.hasDestination = reference.destination ~= nil or nil
-        output.locked = reference.lockNode and reference.lockNode.locked or nil
+        output.destinationCellId = reference.destination and reference.destination.cell and reference.destination.cell.id or nil
     end
     self.stack[reference] = nil
     return self:Finish("tes3reference", output)

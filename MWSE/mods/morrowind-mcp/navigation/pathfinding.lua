@@ -26,6 +26,8 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@field blocked boolean
 ---@field sourceCellId MCP.CellIdentityKey?
 ---@field destinationCellId MCP.CellIdentityKey?
+---@field referenceId string?
+---@field referenceKind "door"?
 ---@field doorPosition MCP.PathfindingPosition?
 ---@field markerPosition MCP.PathfindingPosition?
 ---@field directed boolean?
@@ -33,8 +35,25 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@class MCP.PathfindingTravelDestination
 ---@field sourceCellId MCP.CellIdentityKey
 ---@field destinationCellId MCP.CellIdentityKey
+---@field destinationCellName string
+---@field referenceId string
+---@field kind "door"
 ---@field doorPosition MCP.PathfindingPosition
 ---@field markerPosition MCP.PathfindingPosition
+
+---@class MCP.PathfindingTravelNodeDestination
+---@field cellId string
+---@field markerPosition MCP.PathfindingPosition
+---@field targetRelation "known_route"|"no_known_route"|"unknown"?
+
+---@class MCP.PathfindingTravelNode
+---@field referenceId string
+---@field kind "door"
+---@field sourceCellId MCP.CellIdentityKey
+---@field position MCP.PathfindingPosition
+---@field destinations MCP.PathfindingTravelNodeDestination[]
+---@field walkDistance number
+---@field routeNodeCount integer
 
 ---@class MCP.PathfindingCell
 ---@field id MCP.CellIdentityKey
@@ -73,6 +92,7 @@ local cellutil = require("morrowind-mcp.tes3.cell")
 ---@field waterWalking boolean?
 ---@field waterWalkingWeight number?
 ---@field useHeuristic boolean?
+---@field walkOnly boolean?
 
 ---@class MCP.PathfindingOpenEntry
 ---@field nodeId integer
@@ -301,6 +321,8 @@ function this:ConnectDirected(fromId, toId, kind, horizontalDistance, verticalDi
     if metadata then
         edge.sourceCellId = metadata.sourceCellId
         edge.destinationCellId = metadata.destinationCellId
+        edge.referenceId = metadata.referenceId
+        edge.referenceKind = metadata.kind
         edge.doorPosition = metadata.doorPosition
         edge.markerPosition = metadata.markerPosition
     end
@@ -392,6 +414,9 @@ function this:CollectTravelDestinations(cell)
                     table.insert(destinations, {
                         sourceCellId = cellId,
                         destinationCellId = destinationCellId,
+                        destinationCellName = destination.cell.id,
+                        referenceId = reference.id,
+                        kind = "door",
                         doorPosition = CopyPosition(reference.position),
                         markerPosition = CopyPosition(destination.marker.position),
                     })
@@ -826,6 +851,20 @@ function this:EdgeCost(edge, options)
     return (edge.horizontalDistance * (options.horizontalWeight or 1) + edge.verticalDistance * (options.verticalWeight or 1)) * surfaceWeight
 end
 
+--- Sum geometric edge lengths for a walk-only route independently of search weights.
+---@param path MCP.PathfindingResult
+---@return number
+function this:PathDistance(path)
+    local distance = 0
+    for _, edgeId in ipairs(path.edgeIds) do
+        local edge = self.edges[edgeId]
+        if edge then
+            distance = distance + math.sqrt(edge.horizontalDistance * edge.horizontalDistance + edge.verticalDistance * edge.verticalDistance)
+        end
+    end
+    return distance
+end
+
 --- Return a distance-only heuristic when all edges preserve world-space distance.
 ---@param node MCP.PathfindingNode
 ---@param destination MCP.PathfindingNode
@@ -836,7 +875,7 @@ function this:Heuristic(node, destination, options)
     if options.useHeuristic == false then
         return 0
     end
-    if self.travelEdgeCount > 0 then
+    if not options.walkOnly and self.travelEdgeCount > 0 then
         -- Teleports are free transitions, so only walk-in and walk-out distance is charged.
         -- Geometric A* can overestimate across them; use Dijkstra until a cell-graph lower bound exists.
         return 0
@@ -891,18 +930,12 @@ function this:PopOpenEntry(open)
     return result
 end
 
---- Find a route over the stored graph with A*, returning nil when no route is known.
----@param start MCP.PathfindingLocator
----@param destination MCP.PathfindingLocator
+--- Find a route between two resolved graph nodes with A*, returning nil when no route is known.
+---@param startNode MCP.PathfindingNode
+---@param destinationNode MCP.PathfindingNode
 ---@param options MCP.PathfindingOptions?
 ---@return MCP.PathfindingResult?
-function this:FindPath(start, destination, options)
-    local startNode = self:FindNearestNode(start, options and options.nearestWeights)
-    local destinationNode = self:FindNearestNode(destination, options and options.nearestWeights)
-    if not startNode or not destinationNode then
-        self.logger:debug("Pathfinding skipped because a start or destination node is unavailable.")
-        return nil
-    end
+function this:FindPathBetweenNodes(startNode, destinationNode, options)
     local nodeCount = table.size(self.nodes)
     local open = table.new(table.size(self.edges) + 1, 0)
     ---@cast open MCP.PathfindingOpenEntry[]
@@ -944,7 +977,7 @@ function this:FindPath(start, destination, options)
             end
             for neighborId, edgeId in pairs(self.edgeIdByNeighborId[current.nodeId] or {}) do
                 local edge = self.edges[edgeId]
-                if edge and not edge.blocked then
+                if edge and not edge.blocked and (not options or not options.walkOnly or edge.kind == edgeKind.walk) then
                     if not closed[neighborId] then
                         local nextCost = costs[current.nodeId] + self:EdgeCost(edge, options)
                         if not costs[neighborId] or nextCost < costs[neighborId] then
@@ -959,6 +992,84 @@ function this:FindPath(start, destination, options)
     end
     self.logger:debug("No path found: startNodeId=%d destinationNodeId=%d", startNode.id, destinationNode.id)
     return nil
+end
+
+--- Find a route over the stored graph with A*, returning nil when no route is known.
+---@param start MCP.PathfindingLocator
+---@param destination MCP.PathfindingLocator
+---@param options MCP.PathfindingOptions?
+---@return MCP.PathfindingResult?
+function this:FindPath(start, destination, options)
+    local startNode = self:FindNearestNode(start, options and options.nearestWeights)
+    local destinationNode = self:FindNearestNode(destination, options and options.nearestWeights)
+    if not startNode or not destinationNode then
+        self.logger:debug("Pathfinding skipped because a start or destination node is unavailable.")
+        return nil
+    end
+    return self:FindPathBetweenNodes(startNode, destinationNode, options)
+end
+
+--- List loaded-cell travel nodes reachable without crossing a travel edge.
+---@param start MCP.PathfindingLocator
+---@param destination MCP.PathfindingLocator?
+---@return MCP.PathfindingTravelNode[]
+function this:FindReachableTravelNodes(start, destination)
+    local startNode = self:FindNearestNode(start)
+    if not startNode then
+        return {}
+    end
+
+    local nodesByKey = {}
+    local nodes = table.new(0, 0)
+    local destinationNode = destination and self:FindNearestNode(destination) or nil
+    for sourceCellId, travelDestinations in pairs(self.travelDestinationsByCellId) do
+        for _, travelDestination in ipairs(travelDestinations) do
+            local position = travelDestination.doorPosition
+            local key = string.format("%s|%s|%.6f|%.6f|%.6f", sourceCellId, travelDestination.referenceId, position.x,
+                position.y, position.z)
+            local node = nodesByKey[key]
+            if not node then
+                local doorNode = self:FindNearestNodeByPosition(sourceCellId, position)
+                local path = doorNode and self:FindPathBetweenNodes(startNode, doorNode, { walkOnly = true }) or nil
+                if path then
+                    node = {
+                        referenceId = travelDestination.referenceId,
+                        kind = travelDestination.kind,
+                        sourceCellId = sourceCellId,
+                        position = CopyPosition(position),
+                        destinations = table.new(1, 0),
+                        walkDistance = self:PathDistance(path),
+                        routeNodeCount = table.size(path.nodeIds),
+                    }
+                    nodesByKey[key] = node
+                    table.insert(nodes, node)
+                end
+            end
+            if node then
+                local markerNode = self:FindNearestNodeByPosition(travelDestination.destinationCellId,
+                    travelDestination.markerPosition)
+                local targetRelation = nil
+                if destination then
+                    if not destinationNode or not markerNode then
+                        targetRelation = "unknown"
+                    elseif self:FindPathBetweenNodes(markerNode, destinationNode, { walkOnly = true }) then
+                        targetRelation = "known_route"
+                    else
+                        targetRelation = "no_known_route"
+                    end
+                end
+                table.insert(node.destinations, {
+                    cellId = travelDestination.destinationCellName,
+                    markerPosition = CopyPosition(travelDestination.markerPosition),
+                    targetRelation = targetRelation,
+                })
+            end
+        end
+    end
+    table.sort(nodes, function(first, second)
+        return first.walkDistance < second.walkDistance
+    end)
+    return nodes
 end
 
 --- Register cell activation updates and retain the callback for server shutdown.

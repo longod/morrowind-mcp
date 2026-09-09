@@ -39,7 +39,7 @@ function this.new(params)
         description =
             "Perform direct player input such as movement keys, activation, jumping, sneaking, combat preparation, " ..
             "or other short manual actions. Use this for interaction, immediate input, or fine movement adjustment. " ..
-            "For intentional travel toward a known world destination, mw-player-navigate may be more suitable." ..
+            "For intentional travel toward a known world destination, mw-route-navigate may be more suitable. " ..
             "For managing inventory items such as equip/unequip items, barter items with a merchant, transfer items between container and drop item, mw-inventory-action may be more suitable."
             ,
         inputSchema = jsonrpc.InputSchema(

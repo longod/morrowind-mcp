@@ -13,6 +13,7 @@ SUITE = Suite(
         Run("reference-fetch-active"),
         Run("reference-fetch-minimal"),
         Run("reference-fetch-standard"),
+        Run("route-fetch"),
         Run("target-fetch"),
         Run("world-fetch"),
         Run("memory-player-index-read"),

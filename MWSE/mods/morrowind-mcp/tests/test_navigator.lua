@@ -11,15 +11,33 @@ function this.Test()
 
     --- Build the minimal graph data used to snapshot a route.
     local function Graph(edgeKind)
-        return {
+        local graph = {
             edgeKind = edgeKind,
             nodes = {
                 [1] = { position = { x = 0, y = 0, z = 0 } },
                 [2] = { position = { x = 100, y = 0, z = 0 } },
             },
             edges = { [1] = { kind = edgeKind.walk } },
-            FindPath = function() return { nodeIds = { 1, 2 }, edgeIds = { 1 } } end,
         }
+        function graph:FindPath(_, _, options)
+            if options and options.walkOnly and self.edges[1].kind ~= self.edgeKind.walk then
+                return nil
+            end
+            return { nodeIds = { 1, 2 }, edgeIds = { 1 } }
+        end
+        function graph:FindReachableTravelNodes()
+            return {
+                {
+                    referenceId = "door",
+                    kind = "door",
+                    position = { x = 100, y = 0, z = 0 },
+                    destinations = {},
+                    walkDistance = 100,
+                    routeNodeCount = 2,
+                },
+            }
+        end
+        return graph
     end
 
     unitwind:start("morrowind-mcp.navigation.navigator")
@@ -67,17 +85,35 @@ function this.Test()
         unitwind:expect(result.waypointCount).toBe(2)
     end)
 
-    unitwind:test("Start rejects a path requiring travel activation", function()
+    unitwind:test("Start returns requires_travel_activation without moving when only a travel route exists", function()
         unitwind:mock(tes3, "player", { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } })
         local graph = Graph({ walk = 1 })
         graph.edges[1].kind = 2
         local instance = navigator.new({ pathfinding = graph })
 
-        local ok, message = instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })
+        local pushed = false
+        unitwind:mock(tes3, "getInputBinding", function() return { device = 0, code = 17 } end)
+        unitwind:mock(tes3, "pushKey", function() pushed = true end)
+        local ok, message, _, failure = instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })
         unitwind:expect(ok).toBe(false)
         unitwind:expect(message ~= nil).toBe(true)
-        message = message or ""
-        unitwind:expect(message:find("travel activation", 1, true) ~= nil).toBe(true)
+        unitwind:expect(failure.reason).toBe("requires_travel_activation")
+        unitwind:expect(table.size(failure.travelNodes)).toBe(1)
+        unitwind:expect(instance.isActive).toBe(false)
+        unitwind:expect(pushed).toBe(false)
+    end)
+
+    unitwind:test("Start returns no_path when no graph route exists", function()
+        unitwind:mock(tes3, "player", { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } })
+        local graph = Graph({ walk = 1 })
+        graph.FindPath = function() return nil end
+        local instance = navigator.new({ pathfinding = graph })
+
+        local ok, _, _, failure = instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })
+
+        unitwind:expect(ok).toBe(false)
+        unitwind:expect(failure.reason).toBe("no_path")
+        unitwind:expect(table.size(failure.travelNodes)).toBe(1)
     end)
 
     unitwind:test("Only Escape cancels an active navigation", function()

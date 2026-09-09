@@ -232,16 +232,16 @@ end
 ---@return boolean
 ---@return string?
 ---@return MCP.NavigatorStartResult?
+---@return MCP.NavigatorStartFailure?
 function this:StartPlayerNavigation(destination)
-    if self.activeNavigator then
-        self.activeNavigator:Release()
-        self.activeNavigator = nil
-    end
     local instance = navigator.new({ pathfinding = self.pathfinding })
-    local ok, message, navigation = instance:Start(destination)
+    local ok, message, navigation, failure = instance:Start(destination)
     if not ok then
         instance:Release()
-        return false, message
+        return false, message, nil, failure
+    end
+    if self.activeNavigator then
+        self.activeNavigator:Release()
     end
     self.activeNavigator = instance
     return true, nil, navigation
@@ -1101,6 +1101,12 @@ function this:OnToolsCall(params, request)
         end,
         HasActivePlayerNavigation = function()
             return self:HasActivePlayerNavigation()
+        end,
+        IsDestinationWalkable = function(start, destination)
+            return self.pathfinding:FindPath(start, destination, { walkOnly = true }) ~= nil
+        end,
+        FindReachableTravelNodes = function(start, destination)
+            return self.pathfinding:FindReachableTravelNodes(start, destination)
         end,
     }
 

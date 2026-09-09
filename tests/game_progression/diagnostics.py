@@ -8,7 +8,7 @@ from typing import Any
 DIAGNOSTIC_PROBES = {
     "mw-menu-action": ("mw-menu-fetch", "mw-player-fetch"),
     "mw-player-action": ("mw-player-fetch", "mw-target-fetch", "mw-reference-fetch"),
-    "mw-player-navigate": ("mw-player-fetch", "mw-world-fetch", "mw-reference-fetch"),
+    "mw-route-navigate": ("mw-player-fetch", "mw-world-fetch", "mw-reference-fetch"),
 }
 
 MEMORY_DEBUG_DUMP_OPERATION = {

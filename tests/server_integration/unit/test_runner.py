@@ -16,7 +16,7 @@ sys.path.insert(0, str(TESTS))
 
 from case_api import CaseDefinition, CaseDefinitionError, Run, Scenario, Suite, Wait
 from mwmcp_test_support.inspector import InspectorResponse
-from mwmcp_test_support.lifecycle import SetTestContext
+from mwmcp_test_support.lifecycle import ActivateMorrowindWindow, SetTestContext
 from runner import CaseExecutionError, ExecuteSuite, GenerateSummary, IntegrationError, ListSaveNames, ReadinessFailed, ReadinessTimeout, WaitForReady
 from suite_loader import LoadCases, LoadSuites
 import run as integration_run
@@ -158,6 +158,23 @@ class IntegrationRunnerTests(unittest.TestCase):
             SetTestContext(Path("C:/repo"), "skip", True, "run-1", "Nerevar's Test")
         command = invoke.call_args.args[1]
         self.assertIn("-ServerIntegrationSaveName 'Nerevar''s Test'", command)
+
+    def test_foreground_activation_requests_client_input_capture(self) -> None:
+        completed = type("Completed", (), {"returncode": 0})()
+        with patch("mwmcp_test_support.lifecycle._InvokePowerShell", return_value=completed) as invoke:
+            self.assertTrue(ActivateMorrowindWindow(Path("C:/repo"), capture_input=True))
+        command = invoke.call_args.args[1]
+        self.assertIn("GetClientRect", command)
+        self.assertIn("ClientToScreen", command)
+        self.assertIn("mouse_event(2", command)
+        self.assertIn("mouse_event(4", command)
+
+    def test_foreground_activation_avoids_input_capture_by_default(self) -> None:
+        completed = type("Completed", (), {"returncode": 0})()
+        with patch("mwmcp_test_support.lifecycle._InvokePowerShell", return_value=completed) as invoke:
+            self.assertTrue(ActivateMorrowindWindow(Path("C:/repo")))
+        command = invoke.call_args.args[1]
+        self.assertNotIn("mouse_event", command)
 
     def test_runner_reports_suite_loading_errors_without_traceback(self) -> None:
         with patch.object(sys, "argv", ["run.py"]), patch("run.LoadCases", side_effect=CaseDefinitionError("invalid suite")), patch("builtins.print") as print:

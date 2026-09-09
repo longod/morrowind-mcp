@@ -19,8 +19,8 @@ description: "Start Morrowind from NEW GAME, discover how far current Morrowind 
 3. 観測したメニューからNEW GAMEを選ぶ。saveをloadしない。利用可能なtoolまたはresourceを変え得る状態変更操作の前には、`-WatchSeconds` のdiscovery watcherを実行する。watcherが使えない場合は、操作後に新しいdiscovery snapshotを取得して記録する。
 4. NEW GAMEでゲーム状態が生成されたら、現在のUIと状態を観測し、候補toolに対して `mw-capabilities-fetch` を呼び、`morrowind://memory/index.json` を読む。関連するplayer、journal、quest、actor、dialogue、notification、objectiveの `links` を辿る。根拠、指示、目的、候補、判断をassessmentに記録する。Memory、UI、状態、capabilityは相互に補う証拠として扱い、空または取得不能なMemoryも黙って無視せず記録する。
 5. 観測、assessment、操作、再観測を一手ずつ繰り返す。各assessmentでは、現在の目的・進行状態・未達milestoneをSituation、観測事実と推論を分けた根拠をEvidence、現在観測できる対象・場所・公開toolに限った複数の候補をCandidate actions、選んだ候補と期待するmilestone・再観測条件をDecisionとして記録する。操作の待機条件は、その操作で期待する状態変化に対応させる。NPC発話、notification、questまたはcellの変化、曖昧な結果の後は、関連する証拠を再読する。notificationの`text`は意味のある根拠として扱うが、`source_menu`と`event`は出所情報としてのみ扱う。subscriptionが利用可能な場合は、現在必要なresourceだけを購読する。
-	- プレイヤーをNPC、reference、または観測済み座標へ移動させる場合は、まず`mw-player-navigate`を候補にし、到達後の位置・距離・対象を再観測する。`mw-player-action`による前後左右移動を第一候補にしてはならない。
-	- `mw-player-action`は、メニュー操作・activateなどの入力、`mw-player-navigate`が公開されていない場合、navigateが失敗または経路未解決になった場合、または最後の微調整に限定する。fallbackを選んだ理由をassessmentに記録する。
+	- プレイヤーをNPC、reference、または観測済み座標へ移動させる場合は、まず`mw-route-navigate`を候補にし、到達後の位置・距離・対象を再観測する。`mw-player-action`による前後左右移動を第一候補にしてはならない。
+	- `mw-player-action`は、メニュー操作・activateなどの入力、`mw-route-navigate`が公開されていない場合、navigateが失敗または経路未解決になった場合、または最後の微調整に限定する。fallbackを選んだ理由をassessmentに記録する。
 6. 状態変更操作の後は、操作結果だけで完了・失敗を判断せず、関連するfetch tool/resourceを再取得して操作前との差分と期待した状態変化を確認する。UI、notification、player、actor、reference、world、cell、inventory、journal、questなど、操作に関係する複数の観測を組み合わせる。
 7. 意味のある状態変化後と、危険・曖昧・終端の操作前に `mw-screenshot-save capture_with_ui=true` を取得する。成功した操作を、intent、operation、assertions、wait、observations、assessment、screenshots、notesを含むschema version 1 JSONとして `tests/logs/game_progression/` に記録する。
 

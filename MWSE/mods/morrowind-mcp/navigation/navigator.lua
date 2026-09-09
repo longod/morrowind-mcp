@@ -22,6 +22,10 @@ local stuckMovementDistance = 16
 ---@field routeNodeCount integer
 ---@field waypointCount integer
 
+---@class MCP.NavigatorStartFailure
+---@field reason "requires_travel_activation"|"no_path"
+---@field travelNodes MCP.PathfindingTravelNode[]
+
 ---@class MCP.Navigator
 ---@field logger mwseLogger
 ---@field pathfinding MCP.Pathfinding
@@ -131,6 +135,7 @@ end
 ---@return boolean
 ---@return string?
 ---@return MCP.NavigatorStartResult?
+---@return MCP.NavigatorStartFailure?
 function this:Start(destination)
     self:Cancel("replaced by a new navigation request")
     local player = tes3.player
@@ -138,20 +143,29 @@ function this:Start(destination)
         return false, "Player or current cell is unavailable."
     end
 
-    local path = self.pathfinding:FindPath({ cell = player.cell, position = player.position }, destination)
+    local start = { cell = player.cell, position = player.position }
+    local path = self.pathfinding:FindPath(start, destination, { walkOnly = true })
     if not path then
-        self.logger:warn("Navigation start rejected: no path from player position to destination")
-        return false, "No pathgrid route is available for the requested destination."
+        local fullPath = self.pathfinding:FindPath(start, destination)
+        local reason = fullPath and "requires_travel_activation" or "no_path"
+        local travelNodes = self.pathfinding.FindReachableTravelNodes and
+            self.pathfinding:FindReachableTravelNodes(start, destination) or {}
+        if reason == "requires_travel_activation" then
+            self.logger:warn("Navigation start rejected: requested route requires travel activation")
+            return false,
+                "No walk-only route reaches the requested destination from the current position; the known route passes through a travel transition. Navigation remains available for other destinations. See travel_nodes or call mw-route-fetch.",
+                nil, { reason = reason, travelNodes = travelNodes }
+        end
+        self.logger:warn("Navigation start rejected: no known path from player position to destination")
+        return false,
+            "No known route reaches the requested destination from the current position. Navigation remains available for other destinations. See travel_nodes or call mw-route-fetch.",
+            nil, { reason = reason, travelNodes = travelNodes }
     end
 
     local waypoints = table.new(table.size(path.nodeIds) + 1, 0)
     for index, nodeId in ipairs(path.nodeIds) do
         local node = self.pathfinding.nodes[nodeId]
         local edge = index > 1 and self.pathfinding.edges[path.edgeIds[index - 1]] or nil
-        if edge and edge.kind ~= self.pathfinding.edgeKind.walk then
-            self.logger:warn("Navigation start rejected: edgeId=%s requires travel activation", tostring(edge.id))
-            return false, "The path requires travel activation, which navigation does not support yet."
-        end
         if node then
             table.insert(waypoints, { position = CopyPosition(node.position), edge = edge })
         end

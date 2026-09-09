@@ -116,6 +116,7 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(FormatToolArgument("mouseClick"), "mouseClick")
         self.assertEqual(FormatToolArgument(True), "true")
         self.assertEqual(FormatToolArgument({"menu": "new"}), '{"menu":"new"}')
+        self.assertEqual(FormatToolArgument(["actors"]), '["actors"]')
 
     def test_accepts_agent_assessment_and_screenshot_reference(self) -> None:
         scenario = NewScenario()
@@ -302,6 +303,14 @@ class DiagnosticProbeTests(unittest.TestCase):
         probes = SuggestDiagnosticProbes({"method": "tools/call", "tool_name": "mw-menu-action"})
 
         self.assertEqual([probe["tool_name"] for probe in probes], ["mw-menu-fetch", "mw-player-fetch"])
+
+    def test_route_navigate_selects_route_diagnostics(self) -> None:
+        probes = SuggestDiagnosticProbes({"method": "tools/call", "tool_name": "mw-route-navigate"})
+
+        self.assertEqual(
+            [probe["tool_name"] for probe in probes],
+            ["mw-player-fetch", "mw-world-fetch", "mw-reference-fetch"],
+        )
 
     def test_read_only_operation_does_not_select_diagnostic_probes(self) -> None:
         self.assertEqual(SuggestDiagnosticProbes({"method": "tools/call", "tool_name": "mw-menu-fetch"}), [])

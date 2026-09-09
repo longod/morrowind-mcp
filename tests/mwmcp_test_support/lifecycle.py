@@ -76,15 +76,44 @@ def WaitForServer(host: str, port: int, timeout_seconds: int) -> None:
     raise LifecycleError(f"Server did not become reachable at {host}:{port}.")
 
 
-def ActivateMorrowindWindow(repo_root: Path) -> bool:
-    """Best-effort foreground activation for input-driven integration cases."""
+def ActivateMorrowindWindow(repo_root: Path, capture_input: bool = False) -> bool:
+    """Best-effort foreground activation with optional client input capture."""
+    capture_command = ""
+    if capture_input:
+        capture_command = (
+            "if (-not ('MorrowindMcpInputCapture' -as [type])) { Add-Type @'\n"
+            "using System;\n"
+            "using System.Runtime.InteropServices;\n"
+            "public static class MorrowindMcpInputCapture {\n"
+            "[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }\n"
+            "[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }\n"
+            "[DllImport(\"user32.dll\")] public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);\n"
+            "[DllImport(\"user32.dll\")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);\n"
+            "[DllImport(\"user32.dll\")] public static extern bool GetCursorPos(out POINT lpPoint);\n"
+            "[DllImport(\"user32.dll\")] public static extern bool SetCursorPos(int X, int Y);\n"
+            "[DllImport(\"user32.dll\")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);\n"
+            "}\n"
+            "'@ }; "
+            "$rect = [MorrowindMcpInputCapture+RECT]::new(); "
+            "if ([MorrowindMcpInputCapture]::GetClientRect($process.MainWindowHandle, [ref]$rect)) { "
+            "$point = [MorrowindMcpInputCapture+POINT]::new(); "
+            "$point.X = [int](($rect.Right - $rect.Left) / 2); $point.Y = [int](($rect.Bottom - $rect.Top) / 2); "
+            "if ([MorrowindMcpInputCapture]::ClientToScreen($process.MainWindowHandle, [ref]$point)) { "
+            "$original = [MorrowindMcpInputCapture+POINT]::new(); "
+            "$restore = [MorrowindMcpInputCapture]::GetCursorPos([ref]$original); "
+            "if ([MorrowindMcpInputCapture]::SetCursorPos($point.X, $point.Y)) { "
+            "[MorrowindMcpInputCapture]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); "
+            "[MorrowindMcpInputCapture]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero); "
+            "if ($restore) { [MorrowindMcpInputCapture]::SetCursorPos($original.X, $original.Y) | Out-Null } "
+            "} } } "
+        )
     command = (
         "$deadline = (Get-Date).AddSeconds(10); "
         "do { "
         "$process = Get-Process -Name Morrowind -ErrorAction SilentlyContinue | "
         "Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; "
         "if ($process) { "
-        "try { if ((New-Object -ComObject WScript.Shell).AppActivate($process.Id)) { exit 0 } } catch {} "
+        "try { if ((New-Object -ComObject WScript.Shell).AppActivate($process.Id)) { " + capture_command + "exit 0 } } catch {} "
         "}; Start-Sleep -Milliseconds 500 "
         "} while ((Get-Date) -lt $deadline); exit 1"
     )

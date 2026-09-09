@@ -28,7 +28,9 @@ SUITE = Suite(
 
 Reusable Inspector operations belong in `tests/server_integration/cases/`. `CaseDefinition` declares operation templates, required parameters, and JSON-pointer assertions. `Run` supplies parameters for each reuse.
 
-`main-menu-read-only` covers discovery and menu-safe cases. `initial-read-only` covers player, world, player Memory, and prompt retrieval cases. Prompts and tools that require an active loaded game, such as `mw-role`, belong in a saved-game suite rather than a main-menu suite.
+`main-menu-read-only` covers discovery and menu-safe cases. `initial-read-only` covers player, world, player Memory, prompt retrieval, and read-only route discovery. `door0000` verifies door travel-node data and non-moving unavailable-route responses. `initial-navigate` verifies walking routes, including an exterior cell boundary crossing, without activating a discovered door. Prompts and tools that require an active loaded game, such as `mw-role`, belong in a saved-game suite rather than a main-menu suite.
+
+Read-only suites may use `--no-foreground`. Navigation suites require foreground activation and explicitly request client input capture immediately before movement begins. They must cancel navigation in cleanup and must not select or activate travel nodes automatically.
 
 Lua writes `server-integration-status.json` beside the logical test context after the matching `loaded` event and one-frame delay. Its physical runtime location is `<Paths.modDataDir>/tests/`. It is retained intentionally; each run replaces it with a new `run_id` before launch.
 
@@ -62,7 +64,7 @@ Acceptance: a suite can retain visual and Memory evidence without relying on ad 
 
 ### Priority 4: Input and Interaction Cases
 
-- Add wrappers for `mw-menu-action`, `mw-player-action`, `mw-player-look`, and `mw-player-navigate` after capture/context support exists.
+- Add reusable wrappers for `mw-menu-action`, `mw-player-action`, `mw-player-look`, and `mw-route-navigate` when their existing scenario-specific handling becomes repetitive.
 - Add suite-specific inventory, container, dialogue, merchant, and item-drop probes. These remain opt-in because their prerequisites and state changes vary by save.
 
 Acceptance: input suites require foreground activation, record before/after state, and leave a clear cleanup or expected-state contract.

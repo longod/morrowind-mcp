@@ -707,9 +707,10 @@ try {
         (New-ServerTestCase -Name "tools list" -Arguments @("--method", "tools/list") -Validate {
             param($result)
             $names = @($result.tools | ForEach-Object { $_.name })
-            foreach ($name in @("mw-capabilities-fetch", "mw-menu-fetch", "mw-player-fetch", "mw-player-look", "mw-screenshot-save", "mw-debug-action", "mw-inventory-action")) {
+            foreach ($name in @("mw-capabilities-fetch", "mw-menu-fetch", "mw-player-fetch", "mw-player-look", "mw-screenshot-save", "mw-debug-action", "mw-inventory-action", "mw-route-fetch", "mw-route-navigate")) {
                 if ($names -notcontains $name) { throw "Missing tool: $name" }
             }
+            if ($names -contains "mw-player-navigate") { throw "Legacy mw-player-navigate must not be published." }
             if (@($result.tools | Where-Object { $_.name -notmatch '^mw-' }).Count -gt 0) { throw "Tool name is missing the mw- prefix." }
             foreach ($name in @("mw-reference-fetch", "mw-target-fetch")) {
                 $tool = @($result.tools | Where-Object { $_.name -eq $name } | Select-Object -First 1)[0]
@@ -759,7 +760,7 @@ try {
                 "Related tool: ``mw-reference-fetch`` reports matching references in active cells."
             )
         }),
-        (New-ToolCallTestCase -Name "player navigate unavailable guidance" -ToolName "mw-player-navigate" -ToolArguments @{ action = "navigate"; position_x = 0; position_y = 0; position_z = 0 } -When { param($context) $context.ToolNames -contains "mw-player-navigate" } -AllowToolError $true -Validate {
+        (New-ToolCallTestCase -Name "route navigate unavailable guidance" -ToolName "mw-route-navigate" -ToolArguments @{ action = "navigate"; position_x = 0; position_y = 0; position_z = 0 } -When { param($context) $context.ToolNames -contains "mw-route-navigate" } -AllowToolError $true -Validate {
             param($result)
             Assert-ToolGuidance $result @(
                 "Unavailable because: The game is on the main menu."
@@ -1151,22 +1152,49 @@ try {
             $after = Get-InventoryItemCount -Inventory @($result.structuredContent.inventory) -ItemId $context.InventoryStackItemId
             Write-Host "[INFO] Player $($context.InventoryStackItemId): before=$($context.InventoryStackBeforeCount) after=$after" -ForegroundColor Cyan
         }),
-        (New-ServerTestCase -Name "player navigate reachable location" -Arguments {
+        (New-ToolCallTestCase -Name "route fetch" -ToolName "mw-route-fetch" -When { param($context) $context.ToolNames -contains "mw-route-fetch" } -Validate {
+            param($result)
+            Assert-ToolSuccess $result
+            if ($null -eq $result.structuredContent -or $null -eq $result.structuredContent.travel_nodes) { throw "Route fetch did not return travel_nodes." }
+        }),
+        (New-ServerTestCase -Name "route navigate reachable location" -Arguments {
             param($context)
-            New-ToolCallArguments -ToolName "mw-player-navigate" -ToolArguments @{
+            Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
+            Invoke-ClientClickForMouseCapture -ProcessName "Morrowind" | Out-Null
+            New-ToolCallArguments -ToolName "mw-route-navigate" -ToolArguments @{
                 action = "navigate"
                 position_x = 456
                 position_y = 484
                 position_z = -256
                 cell_id = $context.PlayerNavigationCellId
             }
-        } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-navigate" -and -not [string]::IsNullOrWhiteSpace($context.PlayerNavigationCellId) } -Validate {
+        } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-route-navigate" -and -not [string]::IsNullOrWhiteSpace($context.PlayerNavigationCellId) } -Validate {
             param($result)
             Assert-ToolSuccess $result
             if ($result.structuredContent.route_node_count -lt 2) { throw "Navigation route did not contain multiple pathgrid nodes." }
             $text = @($result.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1)[0].text
-            if ($text -ne "Player navigation started.") { throw "Navigation did not report a successful start." }
+            if ($text -ne "Route navigation started.") { throw "Navigation did not report a successful start." }
         }),
+        (New-ServerTestCase -Name "route navigate moves player" -Arguments (New-ToolCallArguments -ToolName "mw-player-fetch" -ToolArguments @{ detail_level = "minimal" }) -When {
+            param($context)
+            -not $ExclusiveProbe -and $context.ToolNames -contains "mw-route-navigate" -and $null -ne $context.PlayerNavigationPosition
+        } -Validate {
+            param($result, $context)
+            Assert-ToolSuccess $result
+            if ($null -eq $result.structuredContent.player.position) { throw "Navigation movement observation is missing player position." }
+        } -Capture {
+            param($result, $context)
+            $position = $result.structuredContent.player.position
+            $initial = $context.PlayerNavigationPosition
+            $dx = [double]$position.x - [double]$initial.x
+            $dy = [double]$position.y - [double]$initial.y
+            $dz = [double]$position.z - [double]$initial.z
+            $context.RouteNavigationMovementDistance = [math]::Sqrt($dx * $dx + $dy * $dy + $dz * $dz)
+            Write-Host "[INFO] Route navigation movement distance=$($context.RouteNavigationMovementDistance)" -ForegroundColor Cyan
+        } -RetryUntil {
+            param($result, $context)
+            return $context.RouteNavigationMovementDistance -ge 16
+        } -RetryAttempts 5 -RetryIntervalSeconds 2),
         (New-ToolCallTestCase -Name "player look cancels active navigation" -ToolName "mw-player-look" -ToolArguments @{ mode = "angles"; yaw = 90; pitch = 0 } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-look" } -Validate {
             param($result)
             Assert-ToolSuccess $result
@@ -1176,6 +1204,16 @@ try {
             if ($text -ne "Player view updated.") { throw "Player look did not report success." }
         }),
         (New-ToolCallTestCase -Name "menu mode on" -ToolName "mw-player-action" -ToolArguments @{ action = "menuMode"; how = "tap" } -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-player-action" } -Validate { param($result) Assert-ToolSuccess $result }),
+        (New-ToolCallTestCase -Name "route fetch unavailable in menu mode" -ToolName "mw-route-fetch" -When {
+            param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-route-fetch"
+        } -AllowToolError $true -Validate {
+            param($result)
+            Assert-ToolGuidance $result @(
+                "Unavailable because: The game is in menu mode."
+                "Available when: The game is outside menu mode."
+                "Related tool: ``mw-player-fetch`` reports whether the active game is in menu mode."
+            )
+        }),
         (New-ToolCallTestCase -Name "inventory fetch" -ToolName "mw-inventory-fetch" -When { param($context) -not $ExclusiveProbe -and $context.ToolNames -contains "mw-inventory-fetch" } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } }),
         (New-ToolCallTestCase -Name "menu fetch in game" -ToolName "mw-menu-fetch" -When { param($context) -not $ExclusiveProbe } -Validate { param($result) Assert-ToolSuccess $result; if ($null -eq $result.structuredContent) { throw "Missing structuredContent." } } -Capture {
             param($result, $context)

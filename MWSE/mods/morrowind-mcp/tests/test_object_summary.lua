@@ -101,9 +101,130 @@ function this.Test()
 
         local result = serializerModule.new({ detailLevel = "standard" }):Reference(reference)
 
-        unitwind:expect(result.lockNode.locked).toBe(true)
+        unitwind:expect(result.lockState).toBe("locked")
+        unitwind:expect(result.lockNode.locked).toBe(nil)
         unitwind:expect(result.lockNode.level).toBe(50)
         unitwind:expect(result.destination.cell.id).toBe("Seyda Neen")
+    end)
+
+    unitwind:test("Minimal reference reports destinationCellId and lockState", function()
+        local cell = {
+            id = "Seyda Neen",
+            objectType = tes3.objectType.cell,
+            isValid = function() return true end,
+        }
+        local door = {
+            id = "Door",
+            objectType = tes3.objectType.door,
+            isValid = function() return true end,
+        }
+        local reference = {
+            id = "DoorRef",
+            objectType = tes3.objectType.reference,
+            isValid = function() return true end,
+            baseObject = door,
+            destination = { cell = cell },
+            lockNode = { locked = false },
+        }
+
+        local result = serializerModule.new({ detailLevel = "minimal" }):Reference(reference)
+
+        unitwind:expect(result.destinationCellId).toBe("Seyda Neen")
+        unitwind:expect(result.lockState).toBe("unlocked")
+        unitwind:expect(result.hasDestination).toBe(nil)
+        unitwind:expect(result.locked).toBe(nil)
+    end)
+
+    unitwind:test("Locked container reports lockState without destination", function()
+        local container = {
+            id = "Container",
+            objectType = tes3.objectType.container,
+            isValid = function() return true end,
+        }
+        local reference = {
+            id = "ContainerRef",
+            objectType = tes3.objectType.reference,
+            isValid = function() return true end,
+            baseObject = container,
+            lockNode = { locked = true },
+        }
+
+        local result = serializerModule.new({ detailLevel = "minimal" }):Reference(reference)
+
+        unitwind:expect(result.lockState).toBe("locked")
+        unitwind:expect(result.destinationCellId).toBe(nil)
+    end)
+
+    unitwind:test("Reference without lockNode omits lockState", function()
+        local reference = {
+            id = "Reference",
+            objectType = tes3.objectType.reference,
+            isValid = function() return true end,
+        }
+
+        local result = serializerModule.new({ detailLevel = "minimal" }):Reference(reference)
+
+        unitwind:expect(result.lockState).toBe(nil)
+    end)
+
+    unitwind:test("Door action flags are listed by name when set", function()
+        local door = {
+            id = "Door",
+            objectType = tes3.objectType.door,
+            isValid = function() return true end,
+        }
+        local reference = {
+            id = "DoorRef",
+            objectType = tes3.objectType.reference,
+            isValid = function() return true end,
+            baseObject = door,
+            testActionFlag = function(_, flag)
+                return flag == tes3.actionFlag.doorOpening
+            end,
+        }
+
+        local result = serializerModule.new({ detailLevel = "minimal" }):Reference(reference)
+
+        unitwind:expect(table.size(result.actionFlags)).toBe(1)
+        unitwind:expect(result.actionFlags[1]).toBe("doorOpening")
+    end)
+
+    unitwind:test("Door without action flags omits actionFlags", function()
+        local door = {
+            id = "Door",
+            objectType = tes3.objectType.door,
+            isValid = function() return true end,
+        }
+        local reference = {
+            id = "DoorRef",
+            objectType = tes3.objectType.reference,
+            isValid = function() return true end,
+            baseObject = door,
+            testActionFlag = function() return false end,
+        }
+
+        local result = serializerModule.new({ detailLevel = "minimal" }):Reference(reference)
+
+        unitwind:expect(result.actionFlags).toBe(nil)
+    end)
+
+    unitwind:test("Non-door reference omits actionFlags", function()
+        local container = {
+            id = "Container",
+            objectType = tes3.objectType.container,
+            isValid = function() return true end,
+        }
+        local reference = {
+            id = "ContainerRef",
+            objectType = tes3.objectType.reference,
+            isValid = function() return true end,
+            baseObject = container,
+            testActionFlag = function() return true end,
+        }
+
+        local result = serializerModule.new({ detailLevel = "minimal" }):Reference(reference)
+
+        unitwind:expect(result.actionFlags).toBe(nil)
     end)
 
     unitwind:test("Full object serializer includes reference item and lock state", function()

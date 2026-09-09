@@ -13,7 +13,7 @@ This section tracks work identified during implementation review. A listed item 
 | TD-01 | Define the route-provider policy between pathgrid and terrain grid. | Terrain grids are generated but player navigation only uses pathgrid. | Representative destinations with missing, disconnected, and complete pathgrids; expected provider and fallback behavior for each. | The selection, fallback, and result contract are normative and covered by server tests. |
 | TD-02 | Define active-cell boundary traversal. | Terrain queries reject start and destination locators in different cells. Remote-cell planning is out of scope. | Boundary-crossing route examples, active-cell activation timing, and a rule for unavailable neighbor grids. | The manager can return an ordered multi-cell route or an explicit boundary handoff result, with UnitWind coverage. |
 | TD-03 | Define the final quality gate and default interval. | `128` is provisional from height-only comparison. | An independent land-root ray reference, fixed route pairs, and thresholds for error, reachability, route length, and frame cost. | The quality command reports agreed metrics and the accepted interval is recorded as normative. |
-| TD-04 | Define persistent-obstacle policy for stateful references. | Static and unattributed ray hits become learned blocked edges; doors have not been measured. | Runtime captures for closed/open doors, activators, moving platforms, and actors across state changes. | Classification and invalidation rules prevent stateful obstacles from being permanently learned as static. |
+| TD-04 | Define persistent-obstacle policy for stateful references. | Static and unattributed ray hits become learned blocked edges. A closed local door was observed through open and close activation without any exposed action flags. | Runtime captures for additional doors, activators, moving platforms, and actors across state changes. | Classification and invalidation rules prevent stateful obstacles from being permanently learned as static. |
 
 ### Implementation and Validation Follow-Up
 
@@ -33,6 +33,14 @@ Use exterior cells as a coarse grid graph outside the active area. Plan to the n
 ## Pathgrid Integration
 
 Pathgrids may provide preferred corridors, authored links, and teleport-door topology. Terrain grids may provide destination coverage and alternatives. Future integration could merge both into one hierarchical graph or compare route costs from independent providers.
+
+## Travel Nodes
+
+`mw-route-fetch` reports travel nodes that are reachable through walk-only pathgrid edges without moving the player. Current nodes are teleport doors and include a reference ID, position, destination cell, destination marker, and walk distance. `mw-route-navigate` returns the same candidates when the requested destination has no walk-only route, but does not select or activate a candidate.
+
+Future travel nodes may include NPC travel services. Those services can require dialogue, payment, and time passage, so route tools must continue to report them as candidates rather than using them automatically.
+
+Door action flags are exposed as raw names when set. In `door0000.ess`, no door action flag was observed before, during, or after one open and one close activation, so absent flags do not indicate an open or closed state.
 
 ## Storage Optimization
 

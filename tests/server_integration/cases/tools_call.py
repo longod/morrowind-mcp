@@ -54,6 +54,13 @@ CASES = {
         operation={"method": "tools/call", "tool_name": "mw-reference-fetch", "arguments": {"detail_level": "standard"}},
         assertions=({"pointer": "/result/structuredContent/serialization/detailLevel", "operator": "equals", "value": "standard"},),
     ),
+    "route-fetch": CaseDefinition(
+        id="route-fetch",
+        operation={"method": "tools/call", "tool_name": "mw-route-fetch", "arguments": {}},
+        assertions=(
+            {"pointer": "/result/structuredContent/travel_nodes", "operator": "exists"},
+        ),
+    ),
     "target-fetch": CaseDefinition(
         id="target-fetch",
         operation={"method": "tools/call", "tool_name": "mw-target-fetch", "arguments": {}},
