@@ -13,7 +13,16 @@ from typing import Any
 
 from diagnostics import IsToolPublished, MEMORY_DEBUG_DUMP_OPERATION, SuggestDiagnosticProbes
 from inspector import InspectorError, InvokeInspector
-from lifecycle import GetConfiguration, LifecycleError, RemoveTestContext, SetTestContext, StartServer, StopServer, WaitForServer
+from lifecycle import (
+    ActivateMorrowindWindow,
+    GetConfiguration,
+    LifecycleError,
+    RemoveTestContext,
+    SetTestContext,
+    StartServer,
+    StopServer,
+    WaitForServer,
+)
 from scenario import EvaluateAssertions, LoadScenario, ResolveTerminationPolicy, ScenarioValidationError
 
 
@@ -31,6 +40,7 @@ def ParseArguments() -> argparse.Namespace:
     )
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--no-stop", action="store_true")
+    parser.add_argument("--no-foreground", action="store_true")
     parser.add_argument("--max-elapsed-seconds", type=int)
     parser.add_argument("--max-stalled-cycles", type=int)
     parser.add_argument("--final-wait-seconds", type=int)
@@ -172,6 +182,10 @@ def Main() -> int:
         StartServer(repo_root)
         connection = configuration["Connection"]
         WaitForServer(connection["host"], int(connection["port"]), 60)
+        if arguments.no_foreground:
+            print("[INFO] Skipping foreground activation (--no-foreground).")
+        elif not ActivateMorrowindWindow(repo_root):
+            raise LifecycleError("Failed to activate Morrowind window in foreground.")
         endpoint = connection["url"]
 
         for step in scenario["steps"]:

@@ -15,6 +15,7 @@ from diagnostics import IsToolPublished, SuggestDiagnosticProbes
 from inspector import FormatToolArgument, InspectorError, InspectorResponse
 from run import (
     DEFAULT_SCENARIO_PATH,
+    Main,
     ParseArguments,
     RecordDiagnosticProbes,
     RecordMemoryDebugDump,
@@ -40,6 +41,13 @@ class ScenarioTests(unittest.TestCase):
             arguments = ParseArguments()
 
         self.assertEqual(arguments.scenario, DEFAULT_SCENARIO_PATH)
+        self.assertFalse(arguments.no_foreground)
+
+    def test_accepts_no_foreground_option(self) -> None:
+        with patch.object(sys, "argv", ["run.py", "--no-foreground"]):
+            arguments = ParseArguments()
+
+        self.assertTrue(arguments.no_foreground)
 
     def test_accepts_minimal_new_game_scenario(self) -> None:
         ValidateScenario(NewScenario())
@@ -159,6 +167,68 @@ class ScenarioTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ScenarioValidationError, "at most one"):
             ValidateScenario(scenario)
+
+
+class LifecycleTests(unittest.TestCase):
+    """Verify replay prepares the game window before executing MCP operations."""
+
+    def test_activates_foreground_after_server_ready(self) -> None:
+        events: list[str] = []
+        configuration = {
+            "Connection": {"host": "127.0.0.1", "port": 8765, "url": "http://127.0.0.1:8765"},
+            "Paths": {"morrowindInstallDir": "C:/missing-morrowind"},
+        }
+        scenario = {
+            "steps": [
+                {
+                    "id": "list-tools",
+                    "intent": "List tools.",
+                    "operation": {"method": "tools/list"},
+                }
+            ]
+        }
+        response = InspectorResponse(
+            arguments=[],
+            exit_code=0,
+            stdout="",
+            stderr="",
+            document={"result": {"tools": []}},
+        )
+
+        def record(name: str):
+            def callback(*args, **kwargs):
+                events.append(name)
+
+            return callback
+
+        def activate(*args, **kwargs) -> bool:
+            events.append("foreground")
+            return True
+
+        def invoke(*args, **kwargs) -> InspectorResponse:
+            events.append("invoke")
+            return response
+
+        with (
+            patch.object(sys, "argv", ["run.py"]),
+            patch("run.LoadScenario", return_value=scenario),
+            patch("run.GetConfiguration", return_value=configuration),
+            patch("run.SetTestContext", side_effect=record("context")),
+            patch("run.StartServer", side_effect=record("start")),
+            patch("run.WaitForServer", side_effect=record("wait")),
+            patch("run.ActivateMorrowindWindow", side_effect=activate) as activate_window,
+            patch("run.InvokeInspector", side_effect=invoke),
+            patch("run.WriteJson"),
+            patch("run.StopServer", side_effect=record("stop")),
+            patch("run.RemoveTestContext", side_effect=record("remove")),
+            patch("run.Path.mkdir"),
+        ):
+            result = Main()
+
+        self.assertEqual(result, 0)
+        activate_window.assert_called_once()
+        self.assertLess(events.index("wait"), events.index("foreground"))
+        self.assertLess(events.index("foreground"), events.index("invoke"))
 
 
 class InspectorResponseTests(unittest.TestCase):
