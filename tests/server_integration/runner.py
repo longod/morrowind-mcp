@@ -159,15 +159,21 @@ def ExecuteSuite(endpoint: str, suite: Suite, cases: dict[str, CaseDefinition], 
     return records
 
 
-def CopyMwseLog(configuration: dict[str, Any], destination: Path) -> None:
-    """Copy the final MWSE log as timestamped evidence without reading a live file later."""
+def CopyMwseLog(configuration: dict[str, Any], destination: Path) -> dict[str, str]:
+    """Copy the final MWSE log and report the actual evidence state."""
     source = Path(configuration["Paths"]["morrowindInstallDir"]) / "MWSE.log"
-    if source.is_file():
+    if not source.is_file():
+        return {"state": "missing", "path": str(destination), "source": str(source)}
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+    except OSError as error:
+        return {"state": "copy_failed", "path": str(destination), "source": str(source), "error": str(error)}
+    return {"state": "saved", "path": str(destination)}
 
 
 def GenerateSummary(repo_root: Path, timestamp: str) -> dict[str, Any]:
-    """Generate a summary without forwarding its JSON output to the integration runner."""
+    """Generate a summary while retaining the generator output for diagnostics."""
     summary_path = repo_root / "tests" / "logs" / "server_integration" / f"summary_{timestamp}.json"
     completed = subprocess.run(
         ["powershell.exe", "-NoProfile", "-File", str(repo_root / "tests" / "summarize_test_runs.ps1"),
@@ -178,10 +184,14 @@ def GenerateSummary(repo_root: Path, timestamp: str) -> dict[str, Any]:
         encoding="utf-8",
         errors="replace",
     )
+    output = {
+        "stdout": getattr(completed, "stdout", "") or "",
+        "stderr": getattr(completed, "stderr", "") or "",
+    }
     if completed.returncode != 0:
         return {"available": False, "path": summary_path, "should_read": False,
-                "warning": f"Summary generator exited with code {completed.returncode}."}
+                "warning": f"Summary generator exited with code {completed.returncode}.", **output}
     if not summary_path.is_file():
         return {"available": False, "path": summary_path, "should_read": False,
-                "warning": "Test summary was not created."}
-    return {"available": True, "path": summary_path, "should_read": True, "warning": None}
+                "warning": "Test summary was not created.", **output}
+    return {"available": True, "path": summary_path, "should_read": True, "warning": None, **output}

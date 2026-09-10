@@ -8,11 +8,14 @@ param(
     [string[]]$RequirePattern = @(),
     [string[]]$ForbidPattern = @(),
     [string]$ArtifactsRoot,
-    [string]$MwsePolicyPath = (Join-Path $PSScriptRoot "mwse_log_policy.json")
+    [string]$MwsePolicyPath
 )
 
 $ErrorActionPreference = "Stop"
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
+if (-not $MwsePolicyPath) {
+    $MwsePolicyPath = Join-Path $PSScriptRoot "mwse_log_policy.json"
+}
 
 # Only saved, timestamped artifacts are inputs to a summary.
 if (-not $ArtifactsRoot) {

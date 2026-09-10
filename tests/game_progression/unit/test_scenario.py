@@ -171,9 +171,9 @@ class ScenarioTests(unittest.TestCase):
 
 
 class LifecycleTests(unittest.TestCase):
-    """Verify replay prepares the game window before executing MCP operations."""
+    """Verify replay prepares Morrowind input before executing operations."""
 
-    def test_activates_foreground_after_server_ready(self) -> None:
+    def test_prepares_input_after_server_ready(self) -> None:
         events: list[str] = []
         configuration = {
             "Connection": {"host": "127.0.0.1", "port": 8765, "url": "http://127.0.0.1:8765"},
@@ -202,9 +202,8 @@ class LifecycleTests(unittest.TestCase):
 
             return callback
 
-        def activate(*args, **kwargs) -> bool:
-            events.append("foreground")
-            return True
+        def prepare(*args, **kwargs) -> None:
+            events.append("prepare")
 
         def invoke(*args, **kwargs) -> InspectorResponse:
             events.append("invoke")
@@ -217,7 +216,7 @@ class LifecycleTests(unittest.TestCase):
             patch("run.SetTestContext", side_effect=record("context")),
             patch("run.StartServer", side_effect=record("start")),
             patch("run.WaitForServer", side_effect=record("wait")),
-            patch("run.ActivateMorrowindWindow", side_effect=activate) as activate_window,
+            patch("run.PrepareMorrowindInput", side_effect=prepare) as prepare_input,
             patch("run.InvokeInspector", side_effect=invoke),
             patch("run.WriteJson"),
             patch("run.StopServer", side_effect=record("stop")),
@@ -227,9 +226,9 @@ class LifecycleTests(unittest.TestCase):
             result = Main()
 
         self.assertEqual(result, 0)
-        activate_window.assert_called_once()
-        self.assertLess(events.index("wait"), events.index("foreground"))
-        self.assertLess(events.index("foreground"), events.index("invoke"))
+        prepare_input.assert_called_once()
+        self.assertLess(events.index("wait"), events.index("prepare"))
+        self.assertLess(events.index("prepare"), events.index("invoke"))
 
 
 class InspectorResponseTests(unittest.TestCase):

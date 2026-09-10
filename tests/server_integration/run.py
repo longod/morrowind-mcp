@@ -14,7 +14,7 @@ sys.path.insert(0, str(TESTS_DIR))
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from mwmcp_test_support.inspector import InspectorError, InvokeInspector
-from mwmcp_test_support.lifecycle import ActivateMorrowindWindow, GetConfiguration, LifecycleError, RemoveTestContext, SetTestContext, StartServer, StopServer, WaitForServer
+from mwmcp_test_support.lifecycle import FileUri, GetConfiguration, LifecycleError, PrepareMorrowindInput, RemoveTestContext, SetTestContext, StartServer, StopServer, WaitForServer
 from mwmcp_test_support.assertions import EvaluateAssertions
 from case_api import CaseDefinitionError
 from runner import CaseExecutionError, CopyMwseLog, ExecuteSuite, GenerateSummary, IntegrationError, ListSaveNames, ReadinessFailed, ReadinessTimeout, WaitForReady, WriteJson
@@ -108,12 +108,11 @@ def Main() -> int:
         started = True
         connection = configuration["Connection"]
         WaitForServer(connection["host"], int(connection["port"]), arguments.readiness_timeout)
-        if not arguments.no_foreground:
-            if not ActivateMorrowindWindow(repo_root):
-                Log("[WARN] Failed to activate Morrowind window in foreground.")
-        else:
-            Log("[INFO] Skipping foreground activation (--no-foreground).")
         result["ready"] = WaitForReady(status_path, run_id, arguments.readiness_timeout)
+        if arguments.no_foreground:
+            Log("[INFO] Skipping Morrowind input preparation (--no-foreground).")
+        else:
+            PrepareMorrowindInput(repo_root)
         result["cases"] = ExecuteSuite(connection["url"], suite, cases, arguments.case_timeout,
                                        InvokeInspector, _EvaluateAssertions, Log)
         result["state"] = "passed"
@@ -137,12 +136,16 @@ def Main() -> int:
         if arguments.no_stop:
             result["mwse_log"] = {"state": "live-not-copied"}
         else:
-            CopyMwseLog(configuration, mwse_path)
-            result["mwse_log"] = {"state": "saved", "path": str(mwse_path)}
+            result["mwse_log"] = CopyMwseLog(configuration, mwse_path)
         WriteJson(result_path, result)
         summary = GenerateSummary(repo_root, timestamp)
+        if not summary["available"]:
+            for stream in ("stderr", "stdout"):
+                output = summary.get(stream, "")
+                if output:
+                    Log(f"[SUMMARY {stream.upper()}]\n{output.rstrip()}")
         if summary["available"]:
-            Log(f"[INFO] Test summary: {summary['path']}; read this file for status and evidence.")
+            Log(f"[INFO] Test summary: {FileUri(Path(summary['path']))}; read this file for status and evidence.")
         else:
             Log(f"[WARN] Failed to generate server integration summary: {summary['warning']}")
         RemoveTestContext(repo_root)

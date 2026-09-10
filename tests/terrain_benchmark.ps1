@@ -45,26 +45,6 @@ function Test-MorrowindRunning {
     return $null -ne (Get-Process -Name "Morrowind" -ErrorAction SilentlyContinue | Select-Object -First 1)
 }
 
-function Set-WindowForegroundBestEffort {
-    param([Parameter(Mandatory = $true)][string]$ProcessName)
-
-    for ($attempt = 1; $attempt -le 20; $attempt++) {
-        $process = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
-            Where-Object { $_.MainWindowHandle -ne 0 } |
-            Select-Object -First 1
-        if ($process) {
-            $activated = (New-Object -ComObject WScript.Shell).AppActivate($process.Id)
-            if ($activated) {
-                Write-Host "[INFO] Activated $ProcessName window in foreground." -ForegroundColor Green
-                return $true
-            }
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    Write-Host "[WARN] Failed to activate $ProcessName window in foreground." -ForegroundColor Yellow
-    return $false
-}
-
 function Invoke-MCPInspector {
     param(
         [Parameter(Mandatory = $true)]
@@ -253,7 +233,8 @@ try {
         }
         $StartedServer = $true
         if (-not $NoForeground) {
-            Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
+            & (Join-Path $ScriptDir "prepare_morrowind_input.ps1")
+            if ($LASTEXITCODE -ne 0) { throw "Failed to prepare Morrowind input." }
         }
         Invoke-MainMenuContinue
     }

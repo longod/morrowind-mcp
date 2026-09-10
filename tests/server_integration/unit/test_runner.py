@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT.parents[1]
@@ -16,8 +16,8 @@ sys.path.insert(0, str(TESTS))
 
 from case_api import CaseDefinition, CaseDefinitionError, Run, Scenario, Suite, Wait
 from mwmcp_test_support.inspector import InspectorResponse
-from mwmcp_test_support.lifecycle import ActivateMorrowindWindow, SetTestContext
-from runner import CaseExecutionError, ExecuteSuite, GenerateSummary, IntegrationError, ListSaveNames, ReadinessFailed, ReadinessTimeout, WaitForReady
+from mwmcp_test_support.lifecycle import LifecycleError, PrepareMorrowindInput, SetTestContext
+from runner import CaseExecutionError, CopyMwseLog, ExecuteSuite, GenerateSummary, IntegrationError, ListSaveNames, ReadinessFailed, ReadinessTimeout, WaitForReady
 from suite_loader import LoadCases, LoadSuites
 import run as integration_run
 
@@ -144,6 +144,47 @@ class IntegrationRunnerTests(unittest.TestCase):
         self.assertFalse(result["should_read"])
         self.assertEqual(result["warning"], "Test summary was not created.")
 
+    def test_generate_summary_retains_generator_output(self) -> None:
+        completed = type("Completed", (), {"returncode": 1, "stdout": "stdout", "stderr": "stderr"})()
+        with tempfile.TemporaryDirectory() as directory, patch("runner.subprocess.run", return_value=completed):
+            result = GenerateSummary(Path(directory), "20260825_123456")
+        self.assertEqual(result["stdout"], "stdout")
+        self.assertEqual(result["stderr"], "stderr")
+
+    def test_copy_mwse_log_reports_saved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_dir = root / "morrowind"
+            source_dir.mkdir()
+            source = source_dir / "MWSE.log"
+            source.write_text("log", encoding="utf-8")
+            destination = root / "artifacts" / "mwse.log"
+            result = CopyMwseLog({"Paths": {"morrowindInstallDir": str(source_dir)}}, destination)
+            self.assertEqual(result, {"state": "saved", "path": str(destination)})
+            self.assertEqual(destination.read_text(encoding="utf-8"), "log")
+
+    def test_copy_mwse_log_reports_missing_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            destination = root / "artifacts" / "mwse.log"
+            result = CopyMwseLog({"Paths": {"morrowindInstallDir": str(root / "morrowind")}}, destination)
+        self.assertEqual(result["state"], "missing")
+        self.assertEqual(result["path"], str(destination))
+        self.assertFalse(destination.exists())
+
+    def test_copy_mwse_log_reports_copy_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_dir = root / "morrowind"
+            source_dir.mkdir()
+            (source_dir / "MWSE.log").write_text("log", encoding="utf-8")
+            destination = root / "artifacts" / "mwse.log"
+            with patch("runner.shutil.copy2", side_effect=OSError("locked")):
+                result = CopyMwseLog({"Paths": {"morrowindInstallDir": str(source_dir)}}, destination)
+        self.assertEqual(result["state"], "copy_failed")
+        self.assertEqual(result["path"], str(destination))
+        self.assertEqual(result["error"], "locked")
+
     def test_main_menu_context_uses_explicit_switch(self) -> None:
         completed = type("Completed", (), {"returncode": 0, "stderr": ""})()
         with patch("mwmcp_test_support.lifecycle._InvokePowerShell", return_value=completed) as invoke:
@@ -159,22 +200,83 @@ class IntegrationRunnerTests(unittest.TestCase):
         command = invoke.call_args.args[1]
         self.assertIn("-ServerIntegrationSaveName 'Nerevar''s Test'", command)
 
-    def test_foreground_activation_requests_client_input_capture(self) -> None:
+    def test_prepare_morrowind_input_uses_shared_script(self) -> None:
         completed = type("Completed", (), {"returncode": 0})()
-        with patch("mwmcp_test_support.lifecycle._InvokePowerShell", return_value=completed) as invoke:
-            self.assertTrue(ActivateMorrowindWindow(Path("C:/repo"), capture_input=True))
-        command = invoke.call_args.args[1]
-        self.assertIn("GetClientRect", command)
-        self.assertIn("ClientToScreen", command)
-        self.assertIn("mouse_event(2", command)
-        self.assertIn("mouse_event(4", command)
+        with patch("mwmcp_test_support.lifecycle.subprocess.run", return_value=completed) as invoke:
+            PrepareMorrowindInput(Path("C:/repo"))
+        command = invoke.call_args.args[0]
+        self.assertEqual(Path(command[-1]), Path("C:/repo/tests/prepare_morrowind_input.ps1"))
+        self.assertNotIn("mouse_event", " ".join(command))
 
-    def test_foreground_activation_avoids_input_capture_by_default(self) -> None:
-        completed = type("Completed", (), {"returncode": 0})()
-        with patch("mwmcp_test_support.lifecycle._InvokePowerShell", return_value=completed) as invoke:
-            self.assertTrue(ActivateMorrowindWindow(Path("C:/repo")))
-        command = invoke.call_args.args[1]
-        self.assertNotIn("mouse_event", command)
+    def test_prepare_morrowind_input_rejects_script_failure(self) -> None:
+        completed = type("Completed", (), {"returncode": 1, "stdout": "", "stderr": "input unavailable"})()
+        with patch("mwmcp_test_support.lifecycle.subprocess.run", return_value=completed):
+            with self.assertRaisesRegex(LifecycleError, "input unavailable"):
+                PrepareMorrowindInput(Path("C:/repo"))
+
+    def test_runner_prepares_input_once_after_readiness(self) -> None:
+        events: list[str] = []
+        configuration = {
+            "Connection": {"host": "127.0.0.1", "port": 8765, "url": "http://127.0.0.1:8765"},
+            "Paths": {"modDataDir": "C:/mod-data", "morrowindInstallDir": "C:/morrowind"},
+        }
+        suite = Suite("suite", None, ())
+
+        def record(name: str):
+            def callback(*args, **kwargs):
+                events.append(name)
+
+            return callback
+
+        with (
+            patch.object(sys, "argv", ["run.py", "--suite", "suite", "--no-stop"]),
+            patch("run.GetConfiguration", return_value=configuration),
+            patch("run.LoadCases", return_value={}),
+            patch("run.LoadSuites", return_value={"suite": suite}),
+            patch("run.WriteJson"),
+            patch("run.SetTestContext", side_effect=record("context")),
+            patch("run.StartServer", side_effect=record("start")),
+            patch("run.WaitForServer", side_effect=record("server-ready")),
+            patch("run.WaitForReady", side_effect=record("game-ready")),
+            patch("run.PrepareMorrowindInput", side_effect=record("prepare")) as prepare_input,
+            patch("run.ExecuteSuite", side_effect=record("execute")),
+            patch("run.GenerateSummary", return_value={"available": False, "warning": "not needed"}),
+            patch("run.RemoveTestContext", side_effect=record("remove")),
+            patch("pathlib.Path.open", mock_open()),
+        ):
+            result = integration_run.Main()
+
+        self.assertEqual(result, 0)
+        prepare_input.assert_called_once()
+        self.assertLess(events.index("game-ready"), events.index("prepare"))
+        self.assertLess(events.index("prepare"), events.index("execute"))
+
+    def test_runner_skips_input_preparation_when_requested(self) -> None:
+        configuration = {
+            "Connection": {"host": "127.0.0.1", "port": 8765, "url": "http://127.0.0.1:8765"},
+            "Paths": {"modDataDir": "C:/mod-data", "morrowindInstallDir": "C:/morrowind"},
+        }
+        suite = Suite("suite", None, ())
+        with (
+            patch.object(sys, "argv", ["run.py", "--suite", "suite", "--no-stop", "--no-foreground"]),
+            patch("run.GetConfiguration", return_value=configuration),
+            patch("run.LoadCases", return_value={}),
+            patch("run.LoadSuites", return_value={"suite": suite}),
+            patch("run.WriteJson"),
+            patch("run.SetTestContext"),
+            patch("run.StartServer"),
+            patch("run.WaitForServer"),
+            patch("run.WaitForReady"),
+            patch("run.PrepareMorrowindInput") as prepare_input,
+            patch("run.ExecuteSuite"),
+            patch("run.GenerateSummary", return_value={"available": False, "warning": "not needed"}),
+            patch("run.RemoveTestContext"),
+            patch("pathlib.Path.open", mock_open()),
+        ):
+            result = integration_run.Main()
+
+        self.assertEqual(result, 0)
+        prepare_input.assert_not_called()
 
     def test_runner_reports_suite_loading_errors_without_traceback(self) -> None:
         with patch.object(sys, "argv", ["run.py"]), patch("run.LoadCases", side_effect=CaseDefinitionError("invalid suite")), patch("builtins.print") as print:

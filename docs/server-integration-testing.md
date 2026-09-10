@@ -10,7 +10,7 @@ Set `paths.morrowindProfileDir` in `mwmcp.local.json`, or set `MWMCP_MORROWIND_P
 .\tests\server_integration_test.ps1 -Suite main-menu
 ```
 
-Morrowind is activated in the foreground by default after the server is reachable. Use `--no-foreground` for read-only suites that do not send game input.
+After readiness, the runner runs `tests/prepare_morrowind_input.ps1` once to foreground Morrowind and capture client input. Use `--no-foreground` for read-only suites that do not send game input.
 
 Saved artifacts, `summary_<timestamp>.json`, and MWSE log severity handling follow [Test Run Summaries](test-run-summaries.md). This document covers only server integration suite behavior.
 

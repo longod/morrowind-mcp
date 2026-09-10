@@ -51,135 +51,17 @@ function Convert-ToFileUri {
     }
 }
 
-function Set-WindowForegroundBestEffort {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ProcessName,
-        [int]$MaxTry = 20,
-        [int]$IntervalMilliseconds = 500
-    )
-
-    for ($i = 0; $i -lt $MaxTry; $i++) {
-        $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
-            Where-Object { $_.MainWindowHandle -ne 0 } |
-            Select-Object -First 1
-
-        if ($proc) {
-            try {
-                $activated = (New-Object -ComObject WScript.Shell).AppActivate($proc.Id)
-            }
-            catch {
-                $activated = $false
-            }
-
-            if ($activated) {
-                Write-Host "[INFO] Activated $ProcessName window in foreground." -ForegroundColor Green
-                return $true
-            }
-        }
-
-        Start-Sleep -Milliseconds $IntervalMilliseconds
-    }
-
-    Write-Host "[WARN] Failed to activate $ProcessName window in foreground." -ForegroundColor Yellow
-    return $false
-}
-
-function Invoke-ClientClickForMouseCapture {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ProcessName
-    )
-
-    if (-not ("MorrowindMcpUser32" -as [type])) {
-        Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class MorrowindMcpUser32 {
-    [StructLayout(LayoutKind.Sequential)]
-    public struct POINT {
-        public int X;
-        public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [DllImport("user32.dll")]
-    public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
-
-    [DllImport("user32.dll")]
-    public static extern bool GetCursorPos(out POINT lpPoint);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetCursorPos(int X, int Y);
-
-    [DllImport("user32.dll")]
-    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
-}
-"@
-    }
-
-    $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
-        Where-Object { $_.MainWindowHandle -ne 0 } |
-        Select-Object -First 1
-    if (-not $proc) {
-        Write-Host "[WARN] Failed to find $ProcessName window for capture click." -ForegroundColor Yellow
-        return $false
-    }
-
-    $clientRect = [MorrowindMcpUser32+RECT]::new()
-    if (-not [MorrowindMcpUser32]::GetClientRect($proc.MainWindowHandle, [ref]$clientRect)) {
-        Write-Host "[WARN] Failed to get $ProcessName client rectangle for capture click." -ForegroundColor Yellow
-        return $false
-    }
-
-    $clientCenter = [MorrowindMcpUser32+POINT]::new()
-    $clientCenter.X = [int](($clientRect.Right - $clientRect.Left) / 2)
-    $clientCenter.Y = [int](($clientRect.Bottom - $clientRect.Top) / 2)
-    if (-not [MorrowindMcpUser32]::ClientToScreen($proc.MainWindowHandle, [ref]$clientCenter)) {
-        Write-Host "[WARN] Failed to resolve $ProcessName client coordinates for capture click." -ForegroundColor Yellow
-        return $false
-    }
-
-    $originalCursor = [MorrowindMcpUser32+POINT]::new()
-    $restoreCursor = [MorrowindMcpUser32]::GetCursorPos([ref]$originalCursor)
-    if (-not [MorrowindMcpUser32]::SetCursorPos($clientCenter.X, $clientCenter.Y)) {
-        Write-Host "[WARN] Failed to move cursor to $ProcessName client area for capture click." -ForegroundColor Yellow
-        return $false
-    }
-
-    $leftDown = 0x0002
-    $leftUp = 0x0004
-    [MorrowindMcpUser32]::mouse_event($leftDown, 0, 0, 0, [UIntPtr]::Zero)
-    [MorrowindMcpUser32]::mouse_event($leftUp, 0, 0, 0, [UIntPtr]::Zero)
-    if ($restoreCursor) {
-        [MorrowindMcpUser32]::SetCursorPos($originalCursor.X, $originalCursor.Y) | Out-Null
-    }
-
-    Write-Host "[INFO] Sent client click to $ProcessName to request mouse capture." -ForegroundColor Green
-    return $true
-}
-
 try {
     $null = New-Item -Path $LogsRoot -ItemType Directory -Force
     $InspectorVersion = (& npm.cmd view $InspectorPackage version 2>&1 | Out-String).Trim()
     if ([string]::IsNullOrWhiteSpace($InspectorVersion)) {
         $InspectorVersion = "unavailable"
     }
-    if ($InspectorVersion -notmatch '^(\d+)\.\d+\.\d+') {
+    $inspectorVersionMatch = [regex]::Match($InspectorVersion, '^(\d+)\.\d+\.\d+')
+    if (-not $inspectorVersionMatch.Success) {
         throw "Unable to determine Inspector version: $InspectorVersion"
     }
-    if ([int]$Matches[1] -lt $InspectorMinimumMajorVersion) {
+    if ([int]$inspectorVersionMatch.Groups[1].Value -lt $InspectorMinimumMajorVersion) {
         throw "Inspector version $InspectorVersion is unsupported; version $InspectorMinimumMajorVersion or later is required."
     }
     Write-Host "[INFO] Inspector: $InspectorPackage ($InspectorVersion)" -ForegroundColor Cyan
@@ -409,13 +291,13 @@ function Find-UniqueMenuActionPathByName {
         [Parameter(Mandatory = $true)][string]$Action
     )
 
-    $matches = @($Actions | Where-Object {
+    $matchingActions = @($Actions | Where-Object {
         $_.name -match $NamePattern -and @($_.actions) -contains $Action
     })
-    if ($matches.Count -ne 1) {
+    if ($matchingActions.Count -ne 1) {
         return $null
     }
-    return $matches[0].path
+    return $matchingActions[0].path
 }
 
 function Measure-JsonPayloadSize {
@@ -469,8 +351,8 @@ function Get-ReferenceItemCount {
         [Parameter(Mandatory = $true)][string]$ItemId
     )
 
-    $matches = @($References.activators) + @($References.actors) + @($References.statics)
-    return @($matches | Where-Object { $_.id -eq $ItemId }).Count
+    $matchingReferences = @($References.activators) + @($References.actors) + @($References.statics)
+    return @($matchingReferences | Where-Object { $_.id -eq $ItemId }).Count
 }
 
 function Write-ReferenceDetailSizeComparison {
@@ -686,8 +568,8 @@ try {
     }
 
     if (-not $NoForeground) {
-        Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
-        Invoke-ClientClickForMouseCapture -ProcessName "Morrowind" | Out-Null
+        & (Join-Path $ScriptDir "prepare_morrowind_input.ps1")
+        if ($LASTEXITCODE -ne 0) { throw "Failed to prepare Morrowind input." }
     }
     else {
         Write-Host "[INFO] Skipping foreground activation (-NoForeground)." -ForegroundColor DarkCyan
@@ -1159,8 +1041,6 @@ try {
         }),
         (New-ServerTestCase -Name "route navigate reachable location" -Arguments {
             param($context)
-            Set-WindowForegroundBestEffort -ProcessName "Morrowind" | Out-Null
-            Invoke-ClientClickForMouseCapture -ProcessName "Morrowind" | Out-Null
             New-ToolCallArguments -ToolName "mw-route-navigate" -ToolArguments @{
                 action = "navigate"
                 position_x = 456

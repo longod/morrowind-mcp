@@ -14,9 +14,10 @@ from typing import Any
 from diagnostics import IsToolPublished, MEMORY_DEBUG_DUMP_OPERATION, SuggestDiagnosticProbes
 from inspector import InspectorError, InvokeInspector
 from lifecycle import (
-    ActivateMorrowindWindow,
+    FileUri,
     GetConfiguration,
     LifecycleError,
+    PrepareMorrowindInput,
     RemoveTestContext,
     SetTestContext,
     StartServer,
@@ -165,7 +166,7 @@ def Main() -> int:
         return 2
 
     if arguments.validate_only:
-        print(f"[PASSED] Scenario is valid: {arguments.scenario}")
+        print(f"[PASSED] Scenario is valid: {FileUri(arguments.scenario)}")
         return 0
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -183,9 +184,9 @@ def Main() -> int:
         connection = configuration["Connection"]
         WaitForServer(connection["host"], int(connection["port"]), 60)
         if arguments.no_foreground:
-            print("[INFO] Skipping foreground activation (--no-foreground).")
-        elif not ActivateMorrowindWindow(repo_root):
-            raise LifecycleError("Failed to activate Morrowind window in foreground.")
+            print("[INFO] Skipping Morrowind input preparation (--no-foreground).")
+        else:
+            PrepareMorrowindInput(repo_root)
         endpoint = connection["url"]
 
         for step in scenario["steps"]:
@@ -223,11 +224,11 @@ def Main() -> int:
         if mwse_log and mwse_log.exists():
             try:
                 shutil.copy2(mwse_log, output_dir / "MWSE.log")
-                print(f"[INFO] Saved MWSE.log copy: {output_dir / 'MWSE.log'}")
+                print(f"[INFO] Saved MWSE.log copy: {FileUri(output_dir / 'MWSE.log')}")
             except OSError as error:
                 print(f"[WARN] Failed to copy MWSE.log: {error}", file=sys.stderr)
         elif mwse_log:
-            print(f"[WARN] MWSE.log not found: {mwse_log}", file=sys.stderr)
+            print(f"[WARN] MWSE.log not found: {FileUri(mwse_log)}", file=sys.stderr)
         RemoveTestContext(repo_root)
 
 

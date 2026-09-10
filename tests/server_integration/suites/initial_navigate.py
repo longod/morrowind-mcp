@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from typing import Any
 
 from case_api import Scenario, Suite
-from mwmcp_test_support.lifecycle import ActivateMorrowindWindow
 
 
 def CallTool(endpoint: str, timeout: int, invoke, log, tool_name: str, arguments: dict[str, Any],
@@ -125,8 +123,6 @@ def VerifyWalkOnlyRouteMovesPlayer(endpoint: str, timeout: int, invoke, evaluate
     node = FindWalkingNode(endpoint, timeout, invoke, log, 1800, 3500)
     before = CallTool(endpoint, timeout, invoke, log, "mw-player-fetch", {"detail_level": "minimal"})
     before_position = before["result"]["structuredContent"]["player"]["position"]
-    if not ActivateMorrowindWindow(Path(__file__).resolve().parents[3], capture_input=True):
-        raise RuntimeError("Could not foreground Morrowind for route navigation.")
     NavigateToNode(endpoint, timeout, invoke, log, node)
     try:
         distance = WaitForMovement(endpoint, timeout, invoke, log, before_position)
@@ -139,8 +135,6 @@ def VerifyWalkOnlyRouteMovesPlayer(endpoint: str, timeout: int, invoke, evaluate
             "how": "push",
             "seconds": 1,
         })
-        if not ActivateMorrowindWindow(Path(__file__).resolve().parents[3], capture_input=True):
-            raise RuntimeError("Could not foreground Morrowind after lateral recovery.")
         NavigateToNode(endpoint, timeout, invoke, log, node)
         distance = WaitForMovement(endpoint, timeout, invoke, log, before_position)
         if distance >= 16:
@@ -159,8 +153,6 @@ def VerifyWalkOnlyRouteCrossesExteriorCell(endpoint: str, timeout: int, invoke, 
     source_cell_id = node.get("source_cell_id")
     if not isinstance(source_cell_id, str):
         raise RuntimeError(f"Cross-cell travel node did not include source_cell_id: {node}")
-    if not ActivateMorrowindWindow(Path(__file__).resolve().parents[3], capture_input=True):
-        raise RuntimeError("Could not foreground Morrowind for cross-cell route navigation.")
     NavigateToNode(endpoint, timeout, invoke, log, node)
     try:
         player = WaitForCell(endpoint, timeout, invoke, log, source_cell_id)

@@ -21,7 +21,7 @@ description: |
 引数で foreground 制御を切り替えられる。
 
 ```powershell
-# 既定: サーバー接続確認後に Morrowind を foreground 化する
+# 既定: サーバー接続確認後に Morrowind を foreground 化して入力を準備する
 .\tests\server_test.ps1
 
 # 従来挙動: foreground 化を行わない
@@ -31,7 +31,7 @@ description: |
 .\tests\server_test.ps1 -Unpretty
 ```
 
-`-NoForeground` を指定すると、接続確認後のフォアグラウンド化ステップをスキップする。
+`-NoForeground` を指定すると、接続確認後の `prepare_morrowind_input.ps1` 実行をスキップする。
 バックグラウンドではキーボードのキー入力やマウスのボタン入力（mw-player-action など）が送られないため、入力を使う検証ではフォアグラウンド化する必要がある。入力送信が不要な検証では `-NoForeground` で実行してよい。
 Inspector集約ログのJSONは既定でpretty-printされる。エージェントが機械的にログを処理する必要がある場合のみ、`-Unpretty` を指定してInspectorの1行JSONを保存してよい。
 自動 foreground 化は best effort であり、ロードされるセーブ内容や実際のウィンドウ状態に依存するため、`tests/server_test.ps1` は target/activate/MenuDialog への到達を必須にしない。会話 actor まで到達したかは、実行後の `MWSE.log` と `tests/validate_memory_dump.ps1` の `conversationActors` 集計で判断する。

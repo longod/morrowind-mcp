@@ -97,7 +97,9 @@ function this.Test()
         local ok, message, _, failure = instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })
         unitwind:expect(ok).toBe(false)
         unitwind:expect(message ~= nil).toBe(true)
+        ---@diagnostic disable-next-line: need-check-nil
         unitwind:expect(failure.reason).toBe("requires_travel_activation")
+        ---@diagnostic disable-next-line: need-check-nil
         unitwind:expect(table.size(failure.travelNodes)).toBe(1)
         unitwind:expect(instance.isActive).toBe(false)
         unitwind:expect(pushed).toBe(false)
@@ -112,7 +114,9 @@ function this.Test()
         local ok, _, _, failure = instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })
 
         unitwind:expect(ok).toBe(false)
+        ---@diagnostic disable-next-line: need-check-nil
         unitwind:expect(failure.reason).toBe("no_path")
+        ---@diagnostic disable-next-line: need-check-nil
         unitwind:expect(table.size(failure.travelNodes)).toBe(1)
     end)
 

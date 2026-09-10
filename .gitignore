@@ -56,3 +56,4 @@ mwmcp.local.json
 .agents/mcp_config.json
 .mcp.json
 .codex/config.toml
+test-context.json

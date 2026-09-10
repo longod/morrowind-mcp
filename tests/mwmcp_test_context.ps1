@@ -6,11 +6,26 @@ $script:LegacySentinelPaths = @(
     (Join-Path $PSScriptRoot "..\MWSE\mods\morrowind-mcp\.server-test-running")
 )
 
+function Convert-ToFileUri {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+        return ([System.Uri]::new($fullPath)).AbsoluteUri
+    }
+    catch {
+        return $Path
+    }
+}
+
 function Remove-MwmcpTestContext {
     # Cleanup is deliberately unconditional because test runners are serialized.
     if (Test-Path -LiteralPath $script:TestContextPath) {
         Remove-Item -LiteralPath $script:TestContextPath -Force -ErrorAction SilentlyContinue
-        Write-Host "[INFO] Removed test context: $script:TestContextPath" -ForegroundColor DarkCyan
+        Write-Host "[INFO] Removed test context: $(Convert-ToFileUri -Path $script:TestContextPath)" -ForegroundColor DarkCyan
     }
 }
 
@@ -50,7 +65,7 @@ function Invoke-MwmcpTestRunSummary {
                 }
         }
 
-            Write-Host "[INFO] Test summary: $summaryPath; read this file for status and evidence." -ForegroundColor DarkCyan
+            Write-Host "[INFO] Test summary: $(Convert-ToFileUri -Path $summaryPath); read this file for status and evidence." -ForegroundColor DarkCyan
             return [pscustomobject]@{
                 available = $true
                 path = $summaryPath
@@ -86,13 +101,13 @@ function Set-MwmcpTestContext {
     if (Test-Path -LiteralPath $script:TestContextPath) {
         $existing = Get-Content -LiteralPath $script:TestContextPath -Raw -ErrorAction SilentlyContinue
         $singleLineContent = ($existing -replace "\s+", " ").Trim()
-        Write-Host "[WARN] Stale test context detected and replaced: $script:TestContextPath; content=$singleLineContent" -ForegroundColor Yellow
+        Write-Host "[WARN] Stale test context detected and replaced: $(Convert-ToFileUri -Path $script:TestContextPath); content=$singleLineContent" -ForegroundColor Yellow
         Remove-Item -LiteralPath $script:TestContextPath -Force -ErrorAction SilentlyContinue
     }
 
     foreach ($legacyPath in $script:LegacySentinelPaths) {
         if (Test-Path -LiteralPath $legacyPath) {
-            Write-Host "[WARN] Legacy test sentinel detected and removed: $legacyPath" -ForegroundColor Yellow
+            Write-Host "[WARN] Legacy test sentinel detected and removed: $(Convert-ToFileUri -Path $legacyPath)" -ForegroundColor Yellow
             Remove-Item -LiteralPath $legacyPath -Force -ErrorAction SilentlyContinue
         }
     }
@@ -119,5 +134,5 @@ function Set-MwmcpTestContext {
     }
     $json = $context | ConvertTo-Json -Depth 4
     [System.IO.File]::WriteAllText($script:TestContextPath, $json, [System.Text.UTF8Encoding]::new($false))
-    Write-Host "[INFO] Created test context: $script:TestContextPath; unit_test.mode=$UnitTestMode" -ForegroundColor DarkCyan
+    Write-Host "[INFO] Created test context: $(Convert-ToFileUri -Path $script:TestContextPath); unit_test.mode=$UnitTestMode" -ForegroundColor DarkCyan
 }
