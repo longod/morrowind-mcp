@@ -1,7 +1,6 @@
 param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
     [string[]]$TestTargets,
-    [switch]$NoForeground,
     [switch]$VerifyRuntimeAfterTests,
     [ValidateRange(1, 300)]
     [int]$CompletionTimeoutSeconds = 60,

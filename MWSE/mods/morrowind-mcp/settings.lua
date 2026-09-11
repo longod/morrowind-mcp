@@ -30,13 +30,15 @@ this.defaultConfig = {
 
     notification = {
         showSubtitles = true,
-        navigation = false, -- TODO notification start end
+        navigation = false,
         toolsCall = false,
         resourcesRead = false,
         resourcesSubscribe = false,
         resourcesUnsubscribe = false,
         promptsGet = false,
-        errors = false,
+        httpErrors = false,
+        jsonErrors = false,
+        -- TODO tools and prompts errors? (isError)
     },
 
     autoplay = {

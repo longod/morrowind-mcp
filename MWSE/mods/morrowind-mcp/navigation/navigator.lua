@@ -34,6 +34,7 @@ local stuckMovementDistance = 16
 ---@field waypointIndex integer
 ---@field isActive boolean
 ---@field result MCP.NavigatorResult?
+---@field onFinished fun(result: MCP.NavigatorResult)?
 ---@field simulateCallback fun(e: simulateEventData)?
 ---@field keyDownCallback fun(e: keyDownEventData)?
 ---@field lastProgressPosition MCP.PathfindingPosition?
@@ -75,7 +76,7 @@ local function ProjectOntoSegment(point, first, second)
 end
 
 --- Create a navigator that uses a shared pathfinding graph but owns its controller and event handlers.
----@param params { pathfinding: MCP.Pathfinding }
+---@param params { pathfinding: MCP.Pathfinding, onFinished: fun(result: MCP.NavigatorResult)? }
 ---@return MCP.Navigator
 function this.new(params)
     local instance = {
@@ -86,6 +87,7 @@ function this.new(params)
         waypointIndex = 1,
         isActive = false,
         result = nil,
+        onFinished = params.onFinished,
         simulateCallback = nil,
         keyDownCallback = nil,
         lastProgressPosition = nil,
@@ -113,6 +115,10 @@ function this:Finish(status, message)
     self.stuckElapsedSeconds = 0
     self.result = { status = status, message = message }
     self.logger:info("Navigation %s: %s", status, message)
+    -- The owner handles terminal side effects after Navigator has released its game input and callbacks.
+    if self.onFinished then
+        self.onFinished(self.result)
+    end
 end
 
 --- Cancel the active route because a caller or the player interrupted it.

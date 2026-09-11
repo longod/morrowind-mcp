@@ -72,7 +72,7 @@ local function OnModConfigReady(e)
     do
         local notification = page:createCategory({
             label = "Notification",
-            description = "Features for notifications.",
+            description = "Controls in-game notifications.",
         })
         notification:createOnOffButton({
             label = "Show Subtitles (Recommended)",
@@ -87,7 +87,7 @@ local function OnModConfigReady(e)
         notification:createOnOffButton({
             label = "Navigation",
             description =
-            "Notifies when navigation starts, ends, or is canceled. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when navigation starts, ends, or is canceled. Agents may misinterpret this player-facing message.",
             variable = mwse.mcm.createTableVariable({
                 id = "navigation",
                 table = config.notification,
@@ -96,7 +96,7 @@ local function OnModConfigReady(e)
         notification:createOnOffButton({
             label = "Tools Call",
             description =
-            "Notifies when a tool is called and executed. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when a tool is called. Agents may misinterpret this player-facing message.",
             variable = mwse.mcm.createTableVariable({
                 id = "toolsCall",
                 table = config.notification,
@@ -105,7 +105,7 @@ local function OnModConfigReady(e)
         notification:createOnOffButton({
             label = "Resources Read",
             description =
-            "Notifies when a resource is read. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when a resource is read. Agents may misinterpret this player-facing message.",
             variable = mwse.mcm.createTableVariable({
                 id = "resourcesRead",
                 table = config.notification,
@@ -114,7 +114,7 @@ local function OnModConfigReady(e)
         notification:createOnOffButton({
             label = "Resources Subscribe",
             description =
-            "Notifies when a resource is subscribed. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when a resource is subscribed to. Agents may misinterpret this player-facing message.",
             variable = mwse.mcm.createTableVariable({
                 id = "resourcesSubscribe",
                 table = config.notification,
@@ -123,7 +123,7 @@ local function OnModConfigReady(e)
         notification:createOnOffButton({
             label = "Resources Unsubscribe",
             description =
-            "Notifies when a resource is unsubscribed. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when a resource is unsubscribed from. Agents may misinterpret this player-facing message.",
             variable = mwse.mcm.createTableVariable({
                 id = "resourcesUnsubscribe",
                 table = config.notification,
@@ -132,18 +132,27 @@ local function OnModConfigReady(e)
         notification:createOnOffButton({
             label = "Prompts Get",
             description =
-            "Notifies when a prompt is got. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when a prompt is retrieved. Agents may misinterpret this player-facing message.",
             variable = mwse.mcm.createTableVariable({
                 id = "promptsGet",
                 table = config.notification,
             }),
         })
         notification:createOnOffButton({
-            label = "Errors",
+            label = "HTTP Errors",
             description =
-            "Notifies the client of request errors or internal server errors. While this is meaningful to the player, agents may misinterpret it.",
+            "Shows an in-game notification when an HTTP transport error occurs without an MCP error.",
             variable = mwse.mcm.createTableVariable({
-                id = "errors",
+                id = "httpErrors",
+                table = config.notification,
+            }),
+        })
+        notification:createOnOffButton({
+            label = "MCP Errors",
+            description =
+            "Shows an in-game notification when the server encounters an MCP protocol error.",
+            variable = mwse.mcm.createTableVariable({
+                id = "jsonErrors",
                 table = config.notification,
             }),
         })

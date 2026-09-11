@@ -145,6 +145,46 @@ function this.Test()
         unitwind:expect(instance.result.message).toBe("Cancelled by local Escape key.")
     end)
 
+    unitwind:test("Finish reports the terminal result to its owner once", function()
+        local finished = {}
+        local instance = navigator.new({
+            pathfinding = Graph({ walk = 1 }),
+            onFinished = function(result)
+                table.insert(finished, result)
+            end,
+        })
+
+        instance.isActive = true
+        instance:Finish("completed", "Reached the requested destination.")
+        instance:Release()
+
+        unitwind:expect(table.size(finished)).toBe(1)
+        unitwind:expect(finished[1].status).toBe("completed")
+        unitwind:expect(finished[1].message).toBe("Reached the requested destination.")
+    end)
+
+    unitwind:test("StartForward failure reports one terminal failure before Start returns", function()
+        local finished = {}
+        unitwind:mock(tes3, "player", { position = { x = 0, y = 0, z = 0 }, cell = { id = "Test", isInterior = true } })
+        unitwind:mock(event, "register", function() end)
+        unitwind:mock(event, "unregister", function() end)
+        local instance = navigator.new({
+            pathfinding = Graph({ walk = 1 }),
+            onFinished = function(result)
+                table.insert(finished, result)
+            end,
+        })
+        instance.controller.StartForward = function() return false end
+
+        local ok, message = instance:Start({ cell = tes3.player.cell, position = { x = 200, y = 0, z = 0 } })
+        instance:Release()
+
+        unitwind:expect(ok).toBe(false)
+        unitwind:expect(message).toBe("Unable to hold the configured forward action.")
+        unitwind:expect(table.size(finished)).toBe(1)
+        unitwind:expect(finished[1].status).toBe("failed")
+    end)
+
     unitwind:test("Navigation fails after the configured duration without sufficient movement", function()
         local registered = {}
         local released = 0

@@ -61,6 +61,32 @@ local function FormatJsonRpcError(error)
     return string.format("%s:%s", tostring(error.code), tostring(error.message))
 end
 
+--- Show a configured notification for an HTTP error response.
+---@param responseCode Http.ResponseStatusCodes
+local function NotifyHttpError(responseCode)
+    if config.notification.httpErrors then
+        mcpui.showNotifyMenu("HTTP Error %d: %s", responseCode.code, responseCode.message)
+    end
+end
+
+--- Show a configured notification for a JSON-RPC error produced by this server.
+---@param error MCP.Error
+local function NotifyJsonRpcError(error)
+    if config.notification.jsonErrors then
+        mcpui.showNotifyMenu("MCP Error %d: %s", error.code, error.message)
+    end
+end
+
+--- Notify exactly one error category, preferring JSON-RPC when the response carries both layers.
+---@param response MCP.ServerResponse
+local function NotifyServerResponseError(response)
+    if response.json_error then
+        NotifyJsonRpcError(response.json_error)
+    elseif http.IsFailureHttpStatus(response.http_response) then
+        NotifyHttpError(response.http_response)
+    end
+end
+
 
 local function spairs(t, order)
     local keys = table.new(table.size(t), 0)
@@ -234,16 +260,35 @@ end
 ---@return MCP.NavigatorStartResult?
 ---@return MCP.NavigatorStartFailure?
 function this:StartPlayerNavigation(destination)
-    local instance = navigator.new({ pathfinding = self.pathfinding })
-    local ok, message, navigation, failure = instance:Start(destination)
-    if not ok then
-        instance:Release()
-        return false, message, nil, failure
-    end
     if self.activeNavigator then
         self.activeNavigator:Release()
     end
+    local instance = nil ---@type MCP.Navigator?
+    instance = navigator.new({
+        pathfinding = self.pathfinding,
+        onFinished = function(result)
+            -- Ignore an older navigator that finished after a replacement already became active.
+            if self.activeNavigator == instance then
+                self.activeNavigator = nil
+            end
+            if config.notification.navigation then
+                mcpui.showNotifyMenu("Navigation %s: %s", result.status, result.message)
+            end
+        end,
+    })
     self.activeNavigator = instance
+    local ok, message, navigation, failure = instance:Start(destination)
+    if not ok then
+        -- Start can synchronously invoke onFinished; Release must not create a second terminal notification.
+        instance:Release()
+        if self.activeNavigator == instance then
+            self.activeNavigator = nil
+        end
+        return false, message, nil, failure
+    end
+    if config.notification.navigation and navigation then
+        mcpui.showNotifyMenu("Navigation started: following %d waypoints.", navigation.waypointCount)
+    end
     return true, nil, navigation
 end
 
@@ -841,21 +886,25 @@ function this:OnInitialize(params)
     if not supportedProtocolVersions[clientProtocolVersion] then
         -- TODO test
         self.logger:warn("Client protocol version mismatch: %s", clientProtocolVersion)
-        ---@type MCP.MethodResult
-        local result = {
-            http_response = http.response_code.bad_request, -- what correct code?
-            error = jsonrpc.error_code.invalid_params,
-        }
-        result.error.message = "Unsupported protocol version"
         local supported = jsonrpc.array(table.size(supportedProtocolVersions))
         for key, _ in pairs(supportedProtocolVersions) do
             table.insert(supported, key)
         end
-        result.error.data = {
-            ["supported"] = supported,
-            ["requested"] = clientProtocolVersion,
+        --- Avoid mutating the shared invalid_params definition used by later requests.
+        ---@type MCP.Error
+        local protocolError = {
+            code = jsonrpc.error_code.invalid_params.code,
+            message = "Unsupported protocol version",
+            data = {
+                supported = supported,
+                requested = clientProtocolVersion,
+            },
         }
-        return result
+        ---@type MCP.MethodResult
+        return {
+            http_response = http.response_code.bad_request, -- what correct code?
+            error = protocolError,
+        }
     end
 
     local settings = require("morrowind-mcp.settings")
@@ -1616,6 +1665,7 @@ end
 ---@return boolean keepOpen
 function this:SendServerResponse(client, response, requestId)
     if not response then
+        NotifyJsonRpcError(jsonrpc.error_code.internal_error)
         local result = http.SendResponse(client, http.response_code.internal_server_error,
             http.PrepareResponseHeaders(nil, false),
             jsonrpc.error(requestId, jsonrpc.error_code.internal_error))
@@ -1623,6 +1673,9 @@ function this:SendServerResponse(client, response, requestId)
             FormatResponseForLog(result.response))
         return false
     end
+
+    -- Classify before response_sent because an SSE header write can fail after taking ownership of the socket.
+    NotifyServerResponseError(response)
 
     if response.response_sent then
         -- SSE handlers write their own response headers before returning.
@@ -1701,6 +1754,7 @@ function this:Listen(e)
                     self.logger:debug("Partial data received: %s", partial)
                 end
 
+                NotifyHttpError(http.response_code.bad_request)
                 local result = http.SendResponse(client, http.response_code.bad_request,
                     http.PrepareResponseHeaders(nil, false)) -- TODO add json?
                 self.logger:error("bad request: %d%s", http.response_code.bad_request.code,
